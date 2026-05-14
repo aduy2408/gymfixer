@@ -26,6 +26,11 @@ router = APIRouter(prefix="/posture", tags=["posture"])
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 POSTURE_LLM_MAX_LOG_FRAMES = int(os.getenv("POSTURE_LLM_MAX_LOG_FRAMES", "120"))
+SUBJECT_READY_MIN_FRAMES = int(os.getenv("POSTURE_SUBJECT_READY_MIN_FRAMES", "3"))
+SUBJECT_MIN_BBOX_AREA = float(os.getenv("POSTURE_SUBJECT_MIN_BBOX_AREA", "0.035"))
+SUBJECT_MIN_BBOX_WIDTH = float(os.getenv("POSTURE_SUBJECT_MIN_BBOX_WIDTH", "0.12"))
+SUBJECT_MIN_BBOX_HEIGHT = float(os.getenv("POSTURE_SUBJECT_MIN_BBOX_HEIGHT", "0.20"))
+
 
 
 class SessionFrame(BaseModel):
@@ -75,6 +80,8 @@ def analyze_posture_session(
     rep_count = 0
     preview_frames: list[dict[str, Any]] = []
     preview_stride = max(1, len(encoded_frames) // max(1, preview_max_frames))
+    subject_ready_streak = 0
+
 
     for index, session_frame in enumerate(encoded_frames):
         frame = _decode_base64_frame(session_frame.frame)
@@ -108,6 +115,44 @@ def analyze_posture_session(
             }
             frame_log.append(entry)
             issue_counts.update(entry["feedback"])
+            continue
+
+        subject_ready, subject_reason = _subject_ready_for_analysis(
+            smoothed_landmarks,
+            exercise,
+        )
+        if subject_ready:
+            subject_ready_streak += 1
+        else:
+            subject_ready_streak = 0
+
+        if not subject_ready or subject_ready_streak < SUBJECT_READY_MIN_FRAMES:
+            if subject_ready:
+                feedback = [
+                    f"Hold still - starting analysis in "
+                    f"{SUBJECT_READY_MIN_FRAMES - subject_ready_streak} frames."
+                ]
+            else:
+                feedback = [f"Move fully into frame - {subject_reason}."]
+                visibility_failures.update([subject_reason])
+            entry = {
+                "frame_index": index,
+                "timestamp_ms": session_frame.timestamp_ms,
+                "status": "waiting_for_subject",
+                "visibility_ok": False,
+                "feedback": feedback,
+            }
+            frame_log.append(entry)
+            _maybe_add_preview_frame(
+                preview_frames,
+                frame=frame,
+                pose_landmarks=pose_landmarks,
+                entry=entry,
+                include_preview=include_preview,
+                preview_max_frames=preview_max_frames,
+                preview_stride=preview_stride,
+                force=not subject_ready,
+            )
             continue
 
         visibility_ok, missing_keypoints = mediapipe_utils.check_visibility(
@@ -285,26 +330,57 @@ def build_gemini_posture_prompt(
     summary: dict[str, Any],
     frame_log: list[dict[str, Any]],
 ) -> str:
-    phase_segments = _build_phase_segments(frame_log)
-    compact_log = _compact_log_for_llm(frame_log, max_frames=POSTURE_LLM_MAX_LOG_FRAMES)
+    coaching_log = [entry for entry in frame_log if entry.get("status") == "ok"]
+    log_for_llm = coaching_log or frame_log
+    summary_for_llm = _summary_for_llm(summary, coaching_log)
+    phase_segments = _build_phase_segments(log_for_llm)
+    compact_log = _compact_log_for_llm(
+        log_for_llm,
+        max_frames=POSTURE_LLM_MAX_LOG_FRAMES,
+    )
 
     return (
         "You are a strength and conditioning coach reviewing a computer-vision "
-        "posture log. Give practical recommendations based only on the data. "
-        "Do not diagnose injuries. If visibility or camera setup limits the "
-        "analysis, say that clearly.\n\n"
-        "Return concise Markdown with these sections:\n"
-        "1. Overall assessment\n"
-        "2. Main form issues\n"
-        "3. Corrective cues\n"
-        "4. What to change next set\n\n"
-        f"Session summary JSON:\n{json.dumps(summary, ensure_ascii=False)}\n\n"
-        "Phase segments JSON:\n"
+        "posture log. Give practical recommendations based only on analyzed "
+        "exercise frames. The provided log has already removed setup/walk-in "
+        "frames where the subject was not ready. Do not call the session "
+        "fragmented because of missing setup frames. Do not discuss camera angle, "
+        "visibility, waiting frames, no-pose frames, or data quality unless "
+        "there are zero analyzed_frames. Do not diagnose injuries.\n\n"
+        "Return detailed Markdown with these sections:\n"
+        "1. Overall assessment - explain rep count, phase quality, and main pattern.\n"
+        "2. Main form issues - explain why each issue was detected using phases, angles, or repeated feedback counts.\n"
+        "3. Corrective cues - give practical short cues the user can apply immediately.\n"
+        "4. What to change next set - give concrete changes for the next set.\n"
+        "5. Notes from the analyzed frames - mention important phase/rep observations only from ok frames.\n\n"
+        f"Session summary JSON:\n{json.dumps(summary_for_llm, ensure_ascii=False)}\n\n"
+        "Phase segments JSON, analyzed frames only:\n"
         f"{json.dumps(phase_segments, ensure_ascii=False)}\n\n"
-        f"Important frame samples JSON, capped at {POSTURE_LLM_MAX_LOG_FRAMES} frames:\n"
+        f"Important analyzed frame samples JSON, capped at {POSTURE_LLM_MAX_LOG_FRAMES} frames:\n"
         f"{json.dumps(compact_log, ensure_ascii=False)}"
     )
 
+
+
+def _summary_for_llm(
+    summary: dict[str, Any],
+    coaching_log: list[dict[str, Any]],
+) -> dict[str, Any]:
+    top_feedback = summary.get("top_feedback", {})
+    return {
+        "exercise": summary.get("exercise"),
+        "analyzed_frames": len(coaching_log),
+        "rep_count": summary.get("rep_count", 0),
+        "phase_counts": summary.get("phase_counts", {}),
+        "top_form_feedback": top_feedback,
+        "angle_stats": summary.get("angle_stats", {}),
+        "processing_ms": summary.get("processing_ms"),
+        "note": (
+            "This summary intentionally contains only frames that passed the "
+            "subject-ready gate. Setup/walk-in/waiting/no-pose frames are "
+            "excluded from coaching."
+        ),
+    }
 
 def call_gemini_posture_coach(prompt: str) -> str:
     if not GEMINI_API_KEY:
@@ -319,7 +395,7 @@ def call_gemini_posture_coach(prompt: str) -> str:
         "generationConfig": {
             "temperature": 0.3,
             "topP": 0.9,
-            "maxOutputTokens": 900,
+            "maxOutputTokens": 3000,
         },
     }
     body = json.dumps(payload).encode("utf-8")
@@ -345,6 +421,60 @@ def call_gemini_posture_coach(prompt: str) -> str:
     except (KeyError, IndexError, TypeError) as exc:
         raise RuntimeError("Gemini response did not contain text output.") from exc
 
+
+
+def _subject_ready_for_analysis(landmarks, exercise: str) -> tuple[bool, str]:
+    """Reject setup/walk-in frames before phase detection.
+
+    MediaPipe can hallucinate plausible arm landmarks on partial people or
+    background objects. This gate requires a real subject anchor and enough
+    body extent before any frame can update phase/rep state.
+    """
+    if not landmarks or len(landmarks) < 33:
+        return False, "no subject detected"
+
+    vis_threshold = float(os.getenv("MP_VIS_THRESHOLD", "0.5"))
+
+    def visible(idx: int) -> bool:
+        try:
+            return getattr(landmarks[idx], "visibility", 0.0) >= vis_threshold
+        except (IndexError, ValueError):
+            return False
+
+    pose = mediapipe_utils.mp_pose.PoseLandmark
+    face_indices = [
+        pose.NOSE.value,
+        pose.LEFT_EYE.value,
+        pose.RIGHT_EYE.value,
+        pose.LEFT_EAR.value,
+        pose.RIGHT_EAR.value,
+    ]
+    if sum(1 for idx in face_indices if visible(idx)) < 2:
+        return False, "face is not visible yet"
+
+    visible_points = [lm for lm in landmarks if getattr(lm, "visibility", 0.0) >= vis_threshold]
+    if len(visible_points) < 8:
+        return False, "not enough body keypoints are visible"
+
+    xs = [float(lm.x) for lm in visible_points]
+    ys = [float(lm.y) for lm in visible_points]
+    bbox_width = max(xs) - min(xs)
+    bbox_height = max(ys) - min(ys)
+    bbox_area = bbox_width * bbox_height
+    if bbox_width < SUBJECT_MIN_BBOX_WIDTH or bbox_height < SUBJECT_MIN_BBOX_HEIGHT:
+        return False, "body is too small or only partly in frame"
+    if bbox_area < SUBJECT_MIN_BBOX_AREA:
+        return False, "body is too small in frame"
+
+    if exercise == "bicep_curl":
+        side_sets = [
+            [pose.LEFT_SHOULDER.value, pose.LEFT_ELBOW.value, pose.LEFT_WRIST.value],
+            [pose.RIGHT_SHOULDER.value, pose.RIGHT_ELBOW.value, pose.RIGHT_WRIST.value],
+        ]
+        if not any(all(visible(idx) for idx in side) for side in side_sets):
+            return False, "working arm is not fully visible"
+
+    return True, "subject ready"
 
 def _decode_base64_frame(encoded: str):
     if "," in encoded:
@@ -593,6 +723,9 @@ def _build_session_summary(
     visibility_failed_frames = sum(
         1 for entry in frame_log if entry.get("status") == "visibility_failed"
     )
+    waiting_for_subject_frames = sum(
+        1 for entry in frame_log if entry.get("status") == "waiting_for_subject"
+    )
     decode_errors = sum(1 for entry in frame_log if entry.get("status") == "decode_error")
 
     angle_stats = {}
@@ -612,6 +745,7 @@ def _build_session_summary(
         "analysis_quality": _build_analysis_quality(frame_log),
         "no_pose_frames": no_pose_frames,
         "visibility_failed_frames": visibility_failed_frames,
+        "waiting_for_subject_frames": waiting_for_subject_frames,
         "decode_errors": decode_errors,
         "rep_count": rep_count,
         "phase_counts": dict(phase_counts),

@@ -11,6 +11,7 @@ type VideoAnalysisResult = {
   summary: {
     frames_received: number;
     frames_analyzed: number;
+    waiting_for_subject_frames?: number;
     rep_count: number;
     processing_ms: number;
     top_feedback?: Record<string, number>;
@@ -204,6 +205,7 @@ export function VideoAnalysisPanel({ selectedExercise }: VideoAnalysisPanelProps
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <Metric label="Reps" value={result.summary.rep_count} />
             <Metric label="Usable" value={result.summary.frames_analyzed} />
+            <Metric label="Waiting" value={result.summary.waiting_for_subject_frames || 0} />
             <Metric label="Frames" value={result.summary.frames_received} />
             <Metric label="Time" value={`${Math.round(result.summary.processing_ms / 1000)}s`} />
           </div>
