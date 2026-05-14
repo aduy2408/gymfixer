@@ -1,200 +1,91 @@
-# LLM.md — Gym Posture Correction System: Findings & Architecture
+# LLM.md - Gym Posture Correction System
 
-> Summary of technical findings, design decisions, and improvement directions
-> for the **An Automated System for Gym Exercise Posture Correction Using Computer Vision** project.
+Technical notes for the current session-analysis implementation.
 
----
+## 1. Current Product Flow
 
-## 1. System Architecture
+The frontend is now focused on after-session video analysis instead of live webcam feedback.
 
-### Overall Design: Server-Side Processing, Client-Side Camera
+```text
+Browser
+  -> select exercise: squat | bicep_curl
+  -> upload video
+  -> POST /posture/analyze-video multipart/form-data
 
-```
-┌─────────────────────────────────────┐        ┌─────────────────────────────────────────┐
-│           CLIENT (Browser)          │        │         SERVER (Host Machine)            │
-│                                     │        │                                         │
-│  Webcam → capture frame (JPEG)      │──────▶│  WebSocket /ws/posture                  │
-│                                     │  WS   │  ├── MediaPipe Heavy (model_complexity=2)│
-│  Receive JSON response:             │◀──────│  ├── EMA Landmark Smoother              │
-│  {                                  │       │  ├── Visibility Gate                    │
-│    feedback: [...],                 │       │  ├── Angle Extractor                    │
-│    phase: "BOTTOM",                 │       │  ├── Phase Detector (state machine)      │
-│    rep_count: 5,                    │       │  └── Feedback Generator (phase-aware)   │
-│    visibility_ok: true,             │       │                                         │
-│    skeleton_frame: "<b64-jpeg>"     │       │  All compute runs here.                 │
-│  }                                  │       │  Camera never touches the server.       │
-└─────────────────────────────────────┘        └─────────────────────────────────────────┘
+Backend
+  -> sample video frames with OpenCV
+  -> run MediaPipe Pose
+  -> apply subject-ready gate
+  -> apply exercise visibility gate
+  -> compute angles
+  -> update phase detector and rep count
+  -> generate rule feedback
+  -> send analyzed-frame log to Gemini
+  -> return summary + LLM coaching + skeleton preview frames
 ```
 
-**Why server-side?**
-- Pose estimation models are heavy (MediaPipe Heavy ~30MB, runs on server CPU/GPU)
-- Client devices (phones, laptops) have variable compute — offloading to server = consistent latency
-- Server can scale (GPU, multi-worker) without requiring the user to have capable hardware
-- Privacy note: raw frames travel over WebSocket; use WSS (TLS) in production
+The old WebSocket path still exists in backend code, but the active frontend Dashboard no longer uses live realtime posture detection.
 
-**Frame transport:**
-- **Binary mode** (preferred): client sends raw JPEG bytes → lower CPU overhead (~30% less than base64)
-- **Base64 mode** (legacy fallback): client sends `{"frame": "<base64>", "exercise": "squat"}`
+## 2. Main Endpoints
 
----
+### `POST /posture/analyze-video`
 
-## 2. Pose Estimation: MediaPipe Heavy
+Multipart upload endpoint for normal video files.
 
-### Why MediaPipe over YOLOv8?
+Form fields:
 
-| Aspect | MediaPipe Lite (old) | MediaPipe Heavy (current) | YOLOv8n-pose |
-|--------|----------------------|--------------------------|--------------|
-| Model complexity | 0 | 2 | — |
-| Keypoints | 33 | 33 | 17 (COCO) |
-| Accuracy (partial occlusion) | Low | High | Medium-High |
-| Inference speed (CPU) | ~15ms | ~50ms | ~35ms |
-| GPU (Linux) | CPU only | CPU only | CUDA via PyTorch |
-| Install size | ~100MB | ~100MB | ~200MB + PyTorch |
-| Named landmarks | ✅ | ✅ | ❌ (remap needed) |
-
-**Decision:** MediaPipe **Lite** (`model_complexity=0`) is used as the default — not because of accuracy, but because MediaPipe Python on Linux has **no CUDA support** (GPU accel is OpenGL ES / Metal, unavailable via pip on Linux). Heavy model would run at ~50ms/frame (CPU-only), capping throughput at ~18 FPS. Lite runs at ~15ms/frame, allowing a comfortable **30 FPS** target — better for smooth phase detection and rep counting.
-
-Jitter from the Lite model is compensated by the EMA smoother (`α=0.4`) and the median-filter angle buffer inside the phase detector.
-
-To use a heavier model on a GPU-capable host (e.g., with MediaPipe built from source), set `MP_MODEL_COMPLEXITY=2` in `.env`.
-
----
-
-## 3. EMA Landmark Smoothing
-
-**Problem:** Raw MediaPipe output jitters frame-to-frame (±3–5° in angles) causing noisy feedback.
-
-**Solution:** Exponential Moving Average (EMA) applied to each landmark's (x, y, z):
-```
-smoothed[t] = α × raw[t] + (1 − α) × smoothed[t−1]
-```
-- `α = 0.4` (configurable via `MP_EMA_ALPHA` env var)
-- MediaPipe's own `smooth_landmarks=True` is also enabled (complementary)
-- Additionally, a **median filter** (window=4) on the computed angle values inside the phase detector suppresses outlier spikes before state transitions
-
-**Effect:** Angle jitter reduced from ~5° to ~1–2°, preventing spurious phase transitions.
-
----
-
-## 4. Visibility Gating
-
-**Problem:** Feedback was generated even when critical joints were occluded (e.g., camera angle cutting off ankles), leading to incorrect angle calculations.
-
-**Solution:** Before computing angles, check visibility scores of *critical keypoints per exercise*:
-
-| Exercise | Critical Keypoints |
-|----------|--------------------|
-| squat | hips, knees, ankles |
-| bicep_curl | shoulders, elbows, wrists |
-
-If any critical keypoint has `visibility < 0.5`, return a targeted warning instead of feedback:
-> `"Move into frame — can't see: left ankle, right ankle."`
-
----
-
-## 5. Phase Detection State Machines
-
-### Why phase detection?
-
-Static threshold checks fire on every frame regardless of context:
-- "Bend your knees more" fires when the user is standing between reps
-- No rep counting possible without knowing movement direction
-
-### Squat State Machine
-
-```
-            avg_knee > 150°            avg_knee > 150°
-               ┌──────────────────────────────────────┐
-               │                              rep++    │
-        STANDING → DESCENDING → BOTTOM → ASCENDING → STANDING
-                  knee↓≤110°   knee↑≥110°
+```text
+exercise=squat | bicep_curl
+file=@video.mp4
+call_llm=true | false
+sample_fps=8
+max_frames=360
+include_preview=true | false
+preview_max_frames=24
 ```
 
-Angle buffers: **median of last 4 frames** before transition check.
+Example:
 
-| Phase | Feedback focus |
-|-------|---------------|
-| DESCENDING | Back angle, knee valgus |
-| BOTTOM | Depth check, knee valgus, spine neutral |
-| ASCENDING | Valgus, chest up |
-| STANDING | Rep celebration, brace cue |
-
-### Bicep Curl State Machine
-
-```
-             avg_elbow > 150°              avg_elbow > 150°
-               ┌────────────────────────────────────────────┐
-               │                                   rep++    │
-        EXTENDED → CURLING → CONTRACTED → LOWERING → EXTENDED
-                  elbow↓≤60°  elbow↑≥60°
+```bash
+curl -X POST http://127.0.0.1:5000/posture/analyze-video \
+  -F "exercise=bicep_curl" \
+  -F "file=@/path/to/curl.mp4" \
+  -F "call_llm=true" \
+  -F "sample_fps=8" \
+  -F "max_frames=360" \
+  -F "include_preview=true" \
+  -F "preview_max_frames=24"
 ```
 
-| Phase | Feedback focus |
-|-------|---------------|
-| CURLING | Elbow drift (swinging) |
-| CONTRACTED | Full contraction squeeze |
-| LOWERING | Eccentric control, no drift |
-| EXTENDED | Full extension check |
+Response includes:
 
-**Elbow drift detection:** computed as `|elbow.z − shoulder.z| / shoulder_width`. Positive drift = upper arm swinging forward for momentum.
-
-### Knee Valgus Detection (Squat)
-
-```
-valgus_ratio = knee_width / ankle_width
-```
-- `< 0.80` → knees caving in → "Push your knees out"
-- Computed in image-space x-coordinates; meaningful for front-facing camera only
-- May give false positives for side/angled camera; could gate by camera angle in future
-
----
-
-## 6. WebSocket Response Schema
-
-Every frame response includes:
 ```json
 {
-  "feedback":      ["string cue 1", "string cue 2"],
-  "phase":         "BOTTOM" | "DESCENDING" | "ASCENDING" | "STANDING"
-                   | "EXTENDED" | "CURLING" | "CONTRACTED" | "LOWERING"
-                   | null,
-  "rep_count":     5,
-  "visibility_ok": true,
-  "skeleton_binary": true,
-  "skeleton_frame": null
+  "exercise": "bicep_curl",
+  "summary": {
+    "frames_received": 341,
+    "frames_analyzed": 59,
+    "waiting_for_subject_frames": 36,
+    "rep_count": 1,
+    "phase_counts": {},
+    "top_feedback": {},
+    "angle_stats": {},
+    "processing_ms": 8000
+  },
+  "llm": {
+    "enabled": true,
+    "model": "gemini-3-flash-preview",
+    "recommendations": "...",
+    "error": null
+  },
+  "frame_log": [],
+  "preview_frames": []
 }
 ```
 
----
+### `POST /posture/analyze-session`
 
-## 7. Future Improvements
-
-### 7.1 LLM-Powered Coaching Feedback
-
-Replace hardcoded string cues with an LLM that receives structured context:
-
-```python
-prompt = f"""
-You are a professional strength and conditioning coach.
-Exercise: {exercise}
-Current phase: {phase}
-Rep number: {rep_count}
-Angles: knee={avg_knee:.0f}°, hip={avg_hip:.0f}°
-Issues detected: {', '.join(rule_violations) or 'none'}
-
-Give one concise coaching cue (max 12 words). Be encouraging but specific.
-"""
-```
-
-**Candidates:**
-- **Gemini Flash / GPT-4o-mini**: low latency (~200ms), cost-effective per-frame is not feasible but per-rep is fine
-- **Local LLM (Ollama + Llama 3)**: zero cost, ~500ms on CPU, runs entirely on the host machine
-- **Trigger**: call LLM once per completed rep (on rep_count increment), not every frame
-
-**Implemented batch option:** `POST /posture/analyze-session`
-
-This endpoint is the slower, after-session path. The frontend can record frames
-during a set, then send them together:
+JSON endpoint for clients that already captured frame images.
 
 ```json
 {
@@ -207,53 +98,241 @@ during a set, then send them together:
 }
 ```
 
-The backend runs the same MediaPipe + phase detector + feedback rules over the
-whole set, stores a per-frame posture log, aggregates repeated issues, and sends
-a compact log to Gemini. Configure:
+## 3. Pose Estimation
 
-```bash
-GEMINI_API_KEY=your-key
-GEMINI_MODEL=gemini-1.5-flash
-POSTURE_LLM_MAX_LOG_FRAMES=120
+MediaPipe Pose is the current pose backend.
+
+- Default model complexity is `0` (Lite) for CPU speed.
+- Use `MP_MODEL_COMPLEXITY=2` to try Heavy if CPU latency is acceptable.
+- MediaPipe Python on Linux does not use CUDA through the normal pip package.
+- YOLO pose is a future backend candidate, mainly because it can provide person bbox/confidence and CUDA acceleration via PyTorch.
+
+Relevant config:
+
+```env
+MP_MODEL_COMPLEXITY=0
+MP_MIN_DET_CONF=0.5
+MP_MIN_TRACK_CONF=0.5
+MP_EMA_ALPHA=0.4
+MP_VIS_THRESHOLD=0.5
 ```
 
-If `GEMINI_API_KEY` is not set or the Gemini request fails, the endpoint still
-returns a rule-based summary so the feature remains usable in local development.
+## 4. Subject-Ready Gate
 
-### 7.2 Rep Tempo Analysis
+MediaPipe can hallucinate body landmarks when the user is not fully in frame. To prevent false `ok` frames and fake phases, session analysis now gates frames before phase detection.
 
-Track timestamps of each phase transition to compute:
-- **Eccentric duration** (time in DESCENDING / LOWERING)
-- **Concentric duration** (time in ASCENDING / CURLING)
-- Alert if eccentric < 1s (too fast, reduced muscle activation)
+A frame must pass:
 
-### 7.3 Multi-Camera / Depth Camera
+- enough face anchor visibility (`NOSE`/eyes/ears)
+- enough visible body keypoints
+- body bbox large enough in normalized image coordinates
+- exercise-specific working-limb visibility
+- `POSTURE_SUBJECT_READY_MIN_FRAMES` consecutive ready frames
 
-- Side-view camera would enable accurate torso lean measurement for squats/deadlifts
-- RGB-D (Intel RealSense / Kinect) would make valgus and elbow drift detection 3D-accurate instead of image-space estimates
+Frames that fail this gate are logged as:
 
-### 7.4 Per-User Baseline Calibration
+```text
+waiting_for_subject
+```
 
-First 5 reps → compute personal baseline angles → adaptive thresholds instead of universal fixed values. Accounts for individual anatomy (hip mobility, limb proportions).
+They do not update phase, rep count, angle stats, or LLM coaching.
 
-### 7.5 Exercise Auto-Detection
+Config:
 
-Use a sequence classifier (e.g., 1D CNN on angle time-series) to detect which exercise the user is performing, removing the need for manual exercise selection.
+```env
+POSTURE_SUBJECT_READY_MIN_FRAMES=3
+POSTURE_SUBJECT_MIN_BBOX_AREA=0.035
+POSTURE_SUBJECT_MIN_BBOX_WIDTH=0.12
+POSTURE_SUBJECT_MIN_BBOX_HEIGHT=0.20
+```
 
-### 7.6 YOLOv8 as Object Detector (not pose)
+If early walk-in frames still leak into analysis, increase `POSTURE_SUBJECT_READY_MIN_FRAMES` or bbox thresholds. If valid frames are rejected too aggressively, lower them.
 
-Use YOLOv8 to detect gym equipment (barbell, dumbbell) to:
-- Confirm exercise (barbell = squat/deadlift, dumbbells = curls)
-- Detect if weight is being held (affects center of gravity cues)
+## 5. Visibility Gate
 
----
+After the subject-ready gate, exercise-specific visibility is checked.
 
-## 8. Known Limitations
+| Exercise | Required visibility |
+|---|---|
+| squat | hips, knees, ankles |
+| bicep_curl | at least one complete arm side: shoulder, elbow, wrist |
 
-| Limitation | Impact | Mitigation |
-|-----------|--------|-----------|
-| Camera angle sensitivity | Valgus/drift metrics only valid for frontal camera | Document in UI |
-| MediaPipe no CUDA on Linux | ~50ms/frame on CPU Heavy model | Acceptable at 18 FPS target |
-| Phase thresholds are universal | Short/tall users may need different thresholds | Future: per-user calibration |
-| No temporal context in LLM cues | Each cue is stateless | Future: per-rep LLM call |
-| z-coordinate in MediaPipe is estimated | Elbow drift via z is an approximation | Warn in docs |
+Bicep curls support one-arm videos. If both arms are visible, both are used. If only one arm is visible, analysis uses that arm.
+
+## 6. Angle Extraction
+
+### Squat
+
+Computed values include:
+
+- `left_knee`, `right_knee`
+- `left_hip`, `right_hip`
+- `knee_valgus_ratio`
+
+Valgus is image-space only and is most meaningful with a front-facing camera.
+
+### Bicep Curl
+
+Computed values include:
+
+- `left_elbow`, `right_elbow` when visible
+- `left_elbow_drift`, `right_elbow_drift` when visible
+
+Elbow drift currently uses MediaPipe `z` as an approximate depth signal, normalized by shoulder width. This is useful but not physically exact.
+
+## 7. Phase Detection
+
+Phase detection uses median angle buffers to reduce frame jitter.
+
+### Squat phases
+
+```text
+STANDING -> DESCENDING -> BOTTOM -> ASCENDING -> STANDING
+```
+
+Rep count increments when the user returns from `ASCENDING` to `STANDING`.
+
+### Bicep curl phases
+
+```text
+EXTENDED -> CURLING -> CONTRACTED -> LOWERING -> EXTENDED
+```
+
+Rep count increments when the user returns from `LOWERING` to `EXTENDED`.
+
+Mid-range direction is inferred from angle deltas:
+
+- elbow angle decreasing means `CURLING`
+- elbow angle increasing means `LOWERING`
+- knee angle decreasing means `DESCENDING`
+- knee angle increasing means `ASCENDING`
+
+This avoids sticking in `LOWERING` or `ASCENDING` solely because of the previous phase.
+
+## 8. Skeleton Preview
+
+`/posture/analyze-video` can return preview frames with skeleton overlays.
+
+Frontend options:
+
+```text
+Skeleton preview: on/off
+Preview frames: default 24
+```
+
+Each preview item includes:
+
+```json
+{
+  "frame_index": 207,
+  "timestamp_ms": 12345,
+  "width": 576,
+  "height": 1024,
+  "status": "ok",
+  "phase": "LOWERING",
+  "rep_count": 1,
+  "feedback": ["..."],
+  "image": "data:image/jpeg;base64,..."
+}
+```
+
+The frontend displays preview images with `object-contain`, so vertical videos are not cropped.
+
+## 9. LLM Coaching
+
+Gemini is called only after the session has been processed.
+
+Important behavior:
+
+- The LLM receives only `status == "ok"` analyzed frames.
+- Setup/walk-in/no-pose/waiting frames are excluded from the coaching prompt.
+- This prevents the model from calling a session fragmented just because the user walked into frame.
+- UI/debug still shows `waiting_for_subject_frames` separately.
+
+Prompt sections requested from Gemini:
+
+1. Overall assessment
+2. Main form issues
+3. Corrective cues
+4. What to change next set
+5. Notes from the analyzed frames
+
+Config:
+
+```env
+GEMINI_API_KEY=your-key
+GEMINI_MODEL=gemini-3-flash-preview
+POSTURE_LLM_MAX_LOG_FRAMES=300
+```
+
+The Gemini request currently sets `maxOutputTokens` in `backend/posture/session_analysis.py`.
+
+## 10. Frontend State
+
+The Dashboard has been simplified to session analysis only.
+
+Kept:
+
+- exercise selector
+- upload video panel
+- sample FPS / max frames controls
+- Gemini toggle
+- skeleton preview toggle
+- result metrics: reps, usable frames, waiting frames, total frames, processing time
+- top feedback and LLM coaching
+
+Removed from Dashboard:
+
+- live camera feed
+- live WebSocket connection status
+- Start/Stop realtime session buttons
+- live realtime feedback panel
+
+## 11. Future Improvements
+
+### YOLO Pose Backend
+
+Add a pluggable backend instead of duplicating the whole session-analysis pipeline:
+
+```text
+backend/posture/pose_backends/
+  base.py
+  mediapipe_backend.py
+  yolo_backend.py
+```
+
+The common session pipeline should stay shared:
+
+```text
+pose backend -> normalized landmarks/person box -> gates -> angles -> phase -> feedback -> LLM
+```
+
+YOLO pose advantages:
+
+- CUDA support through PyTorch
+- person bbox and confidence
+- better rejection of background/partial-person frames
+
+Tradeoffs:
+
+- YOLOv8 pose uses 17 COCO keypoints, while MediaPipe has 33
+- no MediaPipe-style `z` depth estimate
+- heavier dependency stack (`torch`, `ultralytics`, CUDA setup)
+
+### Rep Tempo
+
+Use timestamps of phase transitions to compute eccentric/concentric duration.
+
+### Calibration
+
+Use first few valid reps to tune thresholds per user and camera setup.
+
+## 12. Known Limitations
+
+| Limitation | Impact | Current mitigation |
+|---|---|---|
+| MediaPipe hallucination on partial subjects | False phases before user is ready | Subject-ready gate + ready-frame streak |
+| Camera angle sensitivity | Valgus/drift can be noisy | Skeleton preview + visibility gate |
+| MediaPipe `z` is estimated | Elbow drift is approximate | Treat as coaching cue, not precise measurement |
+| Universal phase thresholds | Some bodies/reps may misclassify | Future calibration |
+| CPU-only MediaPipe on Linux | Heavy model is slower | Lite default, optional Heavy |

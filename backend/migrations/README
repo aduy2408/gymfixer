@@ -1,1 +1,32 @@
-Generic single-database configuration.
+# Backend Migrations
+
+This directory is the Alembic migration workspace for the FastAPI backend database.
+
+Current notes:
+
+- Runtime posture analysis does not depend on database migrations.
+- Authentication/database tables are initialized by the backend startup path.
+- The video posture analysis flow lives in `backend/posture/session_analysis.py`.
+- The active frontend flow is session/video analysis, not live webcam analysis.
+
+Common commands from `backend/`:
+
+```bash
+../p1_env/bin/alembic current
+../p1_env/bin/alembic revision --autogenerate -m "message"
+../p1_env/bin/alembic upgrade head
+```
+
+Run the backend with the repo virtualenv:
+
+```bash
+cd backend
+../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000 --reload
+```
+
+Do not commit local secrets or runtime database files such as:
+
+```text
+backend/.env
+backend/backend.db
+```
