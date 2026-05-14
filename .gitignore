@@ -1,0 +1,84 @@
+################################
+# FRONTEND (frontend/)
+################################
+
+# Logs
+frontend/logs/
+frontend/*.log
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/lerna-debug.log*
+
+# Build outputs
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+
+# Editor / OS files
+frontend/.vscode/*
+!frontend/.vscode/extensions.json
+frontend/.idea/
+frontend/.DS_Store
+frontend/*.suo
+frontend/*.ntvs*
+frontend/*.njsproj
+frontend/*.sln
+frontend/*.sw?
+
+
+################################
+# BACKEND (backend/)
+################################
+
+# Python cache
+backend/__pycache__/
+backend/**/*.pyc
+
+# Environment variables
+backend/.env
+backend/*.env
+backend/req_env/
+.env
+*.env
+
+p1_env/
+# Databases
+backend/*.db
+backend/**/*.db
+
+# Alembic
+backend/migrations/__pycache__/
+
+# Logs
+backend/logs/
+backend/*.log
+
+
+################################
+# GENERAL
+################################
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Python virtual environments
+backend/req_env/pyvenv.cfg
+venv/pyvenv.cfg
+req_env/
+venv/
+env/
+*.egg-info/
+.eggs/
+.env/
+.venv/
+__pycache__/
+*.pyc
+node_modules

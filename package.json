@@ -1,0 +1,19 @@
+{
+  "name": "project1-monorepo",
+  "private": true,
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  },
+  "scripts": {
+    "start": "concurrently \"npm:backend\" \"npm:frontend\" --names BACKEND,FRONTEND --kill-others-on-fail",
+    "build:frontend": "npm --prefix frontend run build",
+    "backend": "cd backend && ../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000 --reload",
+    "backend:single": "cd backend && ../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000",
+    "frontend": "cd frontend && npm start",
+    "tunnel:cloudflare": "cloudflared tunnel --config cloudflared-quick.yml --url http://127.0.0.1:5000",
+    "tunnel:ngrok": "ngrok http 5000",
+    "share:cloudflare": "npm run build:frontend && concurrently \"npm:backend:single\" \"npm:tunnel:cloudflare\" --names BACKEND,CLOUDFLARE --kill-others-on-fail",
+    "share:ngrok": "npm run build:frontend && concurrently \"npm:backend:single\" \"npm:tunnel:ngrok\" --names BACKEND,NGROK --kill-others-on-fail",
+    "install:all": "npm install --prefix frontend && npm install --prefix . && pip install -r backend/requirements.txt"
+  }
+}
