@@ -1,702 +1,262 @@
-# Posture Analysis and Exercise Feedback System
+# GymFixer
 
-## Abstract
+AI-assisted workout posture analysis. The active product flow is after-session video analysis: upload a squat or bicep-curl video, the backend samples frames, runs MediaPipe pose estimation, computes angles and reps, returns skeleton previews, and optionally calls Gemini for coaching.
 
-This project presents an integrated system for real-time posture analysis and exercise form correction using computer vision and deep learning techniques. The system leverages MediaPipe's pose estimation models to detect human body keypoints from webcam feeds and provides real-time feedback on exercise execution form. The architecture employs a modern full-stack design with a React-based frontend for user interaction and a FastAPI backend for robust processing and WebSocket-based real-time communication. The system supports multiple exercise types including squats, lunges, deadlifts, push-ups, shoulder presses, and bicep curls, with exercise-specific biomechanical rules for form validation.
+## Current Stack
 
-## Project Description
+| Layer | Tech |
+|---|---|
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS, Recharts |
+| Backend | FastAPI, SQLAlchemy, SQLite, MediaPipe, OpenCV |
+| Auth | Email/password registration and login, JWT token generation |
+| LLM coaching | Gemini API, disabled by default in dev |
 
-The Posture Analysis and Exercise Feedback System is designed to assist fitness enthusiasts and rehabilitation patients by providing AI-driven feedback on their exercise execution. The system processes video frames in real-time, extracts skeletal information using pose estimation, calculates joint angles, and compares them against established biomechanical rules to generate corrective feedback. This enables users to improve their form and prevent injury during physical training.
+## Repository Layout
 
-### Key Features
-
-- **Real-time Pose Estimation**: Utilizes MediaPipe's pose detection to identify 33 body landmarks in real-time
-- **Exercise-Specific Analysis**: Implements biomechanical rules for multiple exercise types
-- **Interactive Web Interface**: Modern React-based UI with real-time feedback visualization
-- **WebSocket Communication**: Bidirectional WebSocket protocol for low-latency frame processing and feedback delivery
-- **User Authentication**: Secure user registration and login system with JWT-based tokens
-- **Skeleton Visualization**: Optional overlay of detected skeletal joints and connections on video frames
-- **Configurable Processing**: Environment variables for fine-tuning detection confidence, frame rates, and visualization options
-
-## System Architecture
-
-### High-Level Overview
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Frontend (React + TypeScript)               │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │ Authentication | Dashboard | Camera Feed | Feedback Panel│   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                            ↕ WebSocket                          │
-├─────────────────────────────────────────────────────────────────┤
-│                   Backend (FastAPI + Python)                    │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │ Authentication Module  │  Posture Analysis Module        │   │
-│  │ ├─ User Registration   │  ├─ MediaPipe Integration       │   │
-│  │ ├─ JWT Token Auth      │  ├─ Angle Calculation           │   │
-│  │ ├─ Password Hashing    │  ├─ Exercise Rules Engine       │   │
-│  │ └─ Session Management  │  ├─ Real-time Feedback          │   │
-│  │                        │  └─ Skeleton Visualization      │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                            ↕ SQLAlchemy ORM                     │
-├─────────────────────────────────────────────────────────────────┤
-│                   Data Layer (SQLite / PostgreSQL)              │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │ User Table: {id, name, email, hashed_password, created_at}   │
-│  └──────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
+```text
+gymfixer/
+├── frontend/                 # Main frontend: Next.js app
+│   ├── src/app/              # App Router pages
+│   ├── src/components/       # Dashboard nav and UI pieces
+│   ├── src/lib/api.ts        # Frontend API client for FastAPI
+│   └── package.json
+├── backend/                  # FastAPI backend
+│   ├── main.py               # App setup, CORS, routers
+│   ├── authentication/       # Register/login/JWT/database code
+│   └── posture/              # Pose analysis, phase detection, feedback
+├── package.json              # Root helper scripts
+├── LLM.md                    # Technical notes for posture + Gemini flow
+└── RUNNING.md                # Older run notes; prefer this README for current flow
 ```
 
-### Component Breakdown
+The old Vite frontend has been removed. `frontend/` is now the former `web/` Next app and is the only supported frontend.
 
-#### Frontend Architecture
+## Quick Start
 
-- **App.tsx**: Main application entry point with route configuration and authentication context provider
-- **Authentication**: Login, signup, and password recovery pages with form validation
-- **Dashboard**: Central hub for exercise selection, session management, and settings
-- **Camera Feed**: Real-time webcam capture and frame transmission to backend
-- **Feedback Panel**: Displays real-time posture corrections and exercise guidance
-- **WebSocket Hook**: Manages bidirectional communication with the backend
+Use two terminals.
 
-#### Backend Architecture
+**Terminal 1: backend**
 
-- **main.py**: FastAPI application initialization with CORS middleware and route configuration
-- **Authentication Module** (`authentication/`):
-  - `models.py`: SQLAlchemy User model
-  - `routes.py`: Registration and login endpoints
-  - `schemas.py`: Pydantic data validation models
-  - `utils.py`: Password hashing, JWT token generation
-  - `database.py`: SQLAlchemy session management
-- **Posture Analysis Module** (`posture/`):
-  - `websocket.py`: WebSocket endpoint for real-time frame processing
-  - `mediapipe_utils.py`: PoseProcessor class for efficient pose detection
-  - `exercise_rules.py`: Biomechanical validation rules for each exercise
-  - `feedback.py`: Feedback generation engine
-  - `visualizer.py`: Skeleton drawing and JPEG frame encoding
+```bash
+cd /mnt/data/gymfixer/backend
+../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000 --reload
+```
 
-## Technologies Used
+**Terminal 2: frontend**
 
-### Frontend
+```bash
+cd /mnt/data/gymfixer/frontend
+npm run dev
+```
 
-| Technology | Version | Purpose |
-|-----------|---------|---------|
-| React | 18+ | UI framework |
-| TypeScript | 5+ | Type-safe development |
-| Vite | 5+ | Build tool and dev server |
-| Tailwind CSS | 3+ | Utility-first CSS framework |
-| Shadcn/ui | Latest | Pre-built accessible UI components |
-| React Query (@tanstack/react-query) | 5+ | Server state management |
-| React Router | 6+ | Client-side routing |
-| Lucide React | 0.46+ | Icon library |
-| Radix UI | Latest | Unstyled, accessible component primitives |
+Open:
+
+```text
+http://localhost:3000
+```
+
+The frontend talks to the backend at `http://localhost:5000` by default. You can override this with:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:5000
+```
+
+## Setup
 
 ### Backend
 
-| Technology | Version | Purpose |
-|-----------|---------|---------|
-| FastAPI | ≥0.95.0 | Modern web framework |
-| Uvicorn | ≥0.22.0 | ASGI server |
-| SQLAlchemy | Latest | ORM for database abstraction |
-| Alembic | 1.17+ | Database migration tool |
-| MediaPipe | Latest | Pose estimation and keypoint detection |
-| OpenCV (cv2) | 4+ | Image processing and frame encoding |
-| Pydantic | Latest | Data validation |
-| Python-multipart | Latest | Form data handling |
-| Bcrypt | 4+ | Password hashing |
-| Python-jose | Latest | JWT token handling |
-
-### Database
-
-| Technology | Purpose |
-|-----------|---------|
-| SQLite | Default development database |
-| PostgreSQL | Production-ready alternative (via environment variable) |
-
-### Infrastructure
-
-| Component | Purpose |
-|-----------|---------|
-| Docker | Containerization (optional) |
-| Concurrently | Parallel process management for development |
-
-## Installation
-
-### Prerequisites
-
-- **Python 3.11+**: Required for backend
-- **Node.js 18+ / Bun**: Required for frontend
-- **Git**: For cloning the repository
-- **Webcam**: Required for posture analysis
-- **Modern browser**: Chrome, Firefox, Safari, or Edge for frontend
-
-### Setup Instructions
-
-#### 1. Clone Repository
-
 ```bash
-git clone  https://github.com/SuyashBhavalkar3/An-Automated-System-for-Gym-Exercise-Posture-Correction-Using-Computer-Vision.git
-cd project1
-```
-
-#### 2. Backend Setup
-
-```bash
-# Create Python virtual environment
 python -m venv p1_env
-
-# Activate virtual environment
-# Windows:
-p1_env\Scripts\activate
-# macOS/Linux:
 source p1_env/bin/activate
-
-# Install dependencies
 pip install -r backend/requirements.txt
-
-# Create .env file for configuration
-echo DATABASE_URL=sqlite:///./backend.db > backend/.env
-echo JWT_SECRET_KEY=dev-secret-key-change-before-production >> backend/.env
 ```
 
-#### 3. Frontend Setup
+Create `backend/.env`:
 
-```bash
-cd frontend
-
-# Install dependencies with npm
-npm install
-# OR with bun
-bun install
-
-cd ..
-```
-
-#### 4. (Optional) Complete Setup with NPM Script
-
-From the root directory:
-
-```bash
-npm install:all
-```
-
-This will install all frontend and backend dependencies simultaneously.
-
-### Environment Variables
-
-#### Backend (`backend/.env`)
-
-```bash
-# Database Configuration
+```env
 DATABASE_URL=sqlite:///./backend.db
-# For PostgreSQL: postgresql://user:password@localhost/dbname
+JWT_SECRET_KEY=change-this-for-real-use
 
-# JWT Configuration
-JWT_SECRET_KEY=your-secret-key-change-in-production
-ACCESS_TOKEN_EXPIRE_MINUTES=30
+# Optional Gemini coaching
+GEMINI_API_KEY=your-key
+GEMINI_MODEL=gemini-3-flash-preview
+GEMINI_MAX_OUTPUT_TOKENS=1024
+POSTURE_LLM_MAX_LOG_FRAMES=60
 
-# MediaPipe Configuration
-MP_MIN_DET_CONF=0.5              # Minimum detection confidence (0.0-1.0)
-MP_MIN_TRACK_CONF=0.5            # Minimum tracking confidence (0.0-1.0)
-
-# WebSocket Configuration
-WS_TARGET_FPS=18                 # Target frames per second (higher = more processing)
-FRAME_MAX_WIDTH=640              # Maximum frame width for processing
-ENABLE_SKELETON=true             # Enable/disable skeleton visualization
-
-# Logging
-VERBOSE_LOGGING=false            # Enable debug logging
+# Pose/session analysis
+POSTURE_SUBJECT_READY_MIN_FRAMES=10
+POSTURE_SUBJECT_MIN_BBOX_AREA=0.035
+POSTURE_SUBJECT_MIN_BBOX_WIDTH=0.12
+POSTURE_SUBJECT_MIN_BBOX_HEIGHT=0.20
+MP_MIN_DET_CONF=0.5
+MP_MIN_TRACK_CONF=0.5
+MP_VIS_THRESHOLD=0.5
 ```
 
-#### Frontend (`frontend/.env`)
+### Frontend
 
-```bash
-# API Configuration
-VITE_API_URL=http://localhost:8000
-VITE_WS_URL=ws://localhost:8000
-```
-
-## Usage Instructions
-
-### Starting the Application
-
-#### Option 1: Concurrent Development (Recommended)
-
-From the root directory:
-
-```bash
-npm start
-```
-
-This starts both frontend and backend servers concurrently.
-
-- **Frontend**: http://localhost:5173 or http://localhost:8080 (check terminal output)
-- **Backend**: http://localhost:8000
-
-#### Option 2: Manual Startup
-
-**Terminal 1 - Backend:**
-```bash
-cd backend
-source p1_env/bin/activate  # or p1_env\Scripts\activate on Windows
-python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-**Terminal 2 - Frontend:**
 ```bash
 cd frontend
+npm install
+```
+
+## Root Scripts
+
+From repo root:
+
+```bash
 npm start
 ```
 
-### Using the Application
+This runs backend and frontend concurrently.
 
-1. **Register/Login**:
-   - Navigate to the authentication page
-   - Create new account or login with existing credentials
-   - JWT token automatically stored in browser session
+Useful scripts:
 
-2. **Select Exercise**:
-   - Choose from available exercises (squat, lunge, deadlift, push-up, shoulder press, bicep curl)
-   - Read exercise-specific form guidelines
+```bash
+npm run backend
+npm run frontend
+npm run build:frontend
+npm run install:all
+```
 
-3. **Start Session**:
-   - Click "Start" button to enable webcam access
-   - Ensure proper lighting and camera angle
+## Product Flow
 
-4. **Receive Feedback**:
-   - System processes frames in real-time
-   - Feedback displayed on side panel
-   - Skeleton overlay shows detected joints (optional)
-
-5. **End Session**:
-   - Click "Stop" to end the analysis
-   - Review session summary
+1. Register or log in.
+2. Open the dashboard.
+3. Upload a workout video.
+4. Choose `squat` or `bicep_curl`.
+5. Tune sample FPS, max frames, and preview frame count if needed.
+6. Leave `Gemini coaching` off for normal dev usage. Turn it on only when you intentionally want to spend Gemini API quota.
+7. Review the analysis page:
+   - rep count
+   - analyzed frame count
+   - angle chart
+   - skeleton preview frames
+   - per-frame feedback
+   - rule-based or Gemini coaching
 
 ## API Endpoints
 
-### Authentication Endpoints
+### Auth
 
-#### Register User
 ```http
 POST /auth/register
-Content-Type: application/json
-
-{
-  "name": "John Doe",
-  "email": "john@example.com",
-  "password": "secure_password"
-}
-
-Response (201 Created):
-{
-  "id": 1,
-  "name": "John Doe",
-  "email": "john@example.com",
-  "created_at": "2024-01-28T10:30:00"
-}
-```
-
-#### Login User
-```http
 POST /auth/login
+```
+
+### Video Analysis
+
+```http
+POST /posture/analyze-video
+Content-Type: multipart/form-data
+```
+
+Form fields:
+
+```text
+exercise=squat | bicep_curl
+file=@video.mp4
+call_llm=false
+sample_fps=8
+max_frames=360
+include_preview=true
+preview_max_frames=24
+```
+
+Example:
+
+```bash
+curl -X POST http://127.0.0.1:5000/posture/analyze-video \
+  -F "exercise=squat" \
+  -F "file=@/path/to/squat.mp4" \
+  -F "call_llm=false" \
+  -F "sample_fps=8" \
+  -F "max_frames=360" \
+  -F "include_preview=true" \
+  -F "preview_max_frames=24"
+```
+
+### Frame Session Analysis
+
+```http
+POST /posture/analyze-session
 Content-Type: application/json
-
-{
-  "email": "john@example.com",
-  "password": "secure_password"
-}
-
-Response (200 OK):
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer"
-}
 ```
 
-### WebSocket Endpoints
+For clients that already captured frames locally.
 
-#### Posture Analysis WebSocket
-```
+### WebSocket
+
+```text
 WS /ws/posture
-Connection: upgrade
-Authorization: Bearer {access_token}
 ```
 
-**Client → Server Messages:**
+The backend still includes the realtime WebSocket posture endpoint, but the current Next frontend does not use it.
 
-Binary JPEG frame:
-```
-[JPEG binary data]
-```
+## Gemini Behavior
 
-JSON metadata:
-```json
-{
-  "type": "meta",
-  "exercise": "squat",
-  "skeleton": true,
-  "verbose": false
-}
-```
+Gemini is disabled by default:
 
-**Server → Client Messages:**
+- backend request models default `call_llm=false`
+- `/posture/analyze-video` defaults `call_llm=false`
+- frontend dashboard checkbox defaults off
 
-```json
-{
-  "feedback": [
-    "Bend your knees more to reach proper squat depth.",
-    "Keep your back straighter to protect your spine."
-  ],
-  "skeleton_frame": "data:image/jpeg;base64,...",
-  "exercise": "squat",
-  "timestamp": 1706430601.234
-}
-```
+When Gemini is enabled, backend sends a compact posture log to Gemini. If the Gemini API key has no quota, the request fails clearly instead of silently falling back. Keep it off during normal development unless you are explicitly testing LLM coaching.
 
-## Model Details
+## Supported Analysis
 
-### Pose Estimation Model
+The active session-analysis flow supports:
 
-**Model**: MediaPipe Pose (BlazePose)
-- **Input**: RGB video frames (640×480 typical)
-- **Output**: 33 body landmarks with (x, y, z, visibility) coordinates
-- **Landmarks**: Includes head, torso, arms, hands, legs, and feet
-- **Performance**: ~30 FPS on CPU, optimized for real-time inference
+- `squat`
+- `bicep_curl`
 
-### Landmark Indices
+The backend still contains some rules/utilities for other exercises, but the Next dashboard only exposes the two exercises currently supported by the batch video-analysis flow.
 
-Key landmarks used for exercise analysis:
+## Development Checks
 
-| Index | Joint | Usage |
-|-------|-------|-------|
-| 11, 12 | Shoulders | Posture reference |
-| 13, 14 | Elbows | Arm angle calculations |
-| 15, 16 | Wrists | Hand position |
-| 23, 24 | Hips | Hip angle, squat depth |
-| 25, 26 | Knees | Knee angle, leg positioning |
-| 27, 28 | Ankles | Foot position, balance |
+Frontend:
 
-### Angle Calculations
-
-Joint angles calculated using landmark coordinates:
-
-```
-angle(A, B, C) = arccos((BA · BC) / (|BA| × |BC|))
-```
-
-Where:
-- A, B, C = three consecutive body joints
-- B = vertex of the angle
-- Result in degrees (0-180)
-
-## Supported Exercises
-
-### 1. Squat
-**Biomechanical Rules**:
-- Knee angle: 60° - 100° at bottom
-- Hip angle: > 70° (prevents slouching)
-- **Feedback**: Form correction for depth and back position
-
-### 2. Lunge
-**Biomechanical Rules**:
-- Front knee: 70° - 120°
-- Back knee: 20° - 60°
-- **Feedback**: Balance and alignment guidance
-
-### 3. Deadlift
-**Biomechanical Rules**:
-- Back angle: > 20° from vertical
-- Knee angle: > 60°
-- **Feedback**: Spine safety and hip hinge mechanics
-
-### 4. Push-up
-**Biomechanical Rules**:
-- Elbow angle: 45° - 90°
-- Body alignment: Straight line from head to heels
-- **Feedback**: Depth and body positioning
-
-### 5. Shoulder Press
-**Biomechanical Rules**:
-- Elbow angle: 0° - 90° (extension)
-- Shoulder stability: Tracked throughout motion
-- **Feedback**: Range of motion and shoulder health
-
-### 6. Bicep Curl
-**Biomechanical Rules**:
-- Elbow angle: 20° - 160°
-- Shoulder stability: Fixed position
-- **Feedback**: Form isolation and controlled motion
-
-## Dataset & Evaluation
-
-### Training Data
-- MediaPipe Pose trained on multiple large-scale pose estimation datasets
-- Model generalizes well across body types, clothing, lighting conditions
-
-### Evaluation Metrics
-- **Pose Detection Accuracy**: ~95% on standard benchmarks (COCO, OpenPose)
-- **Latency**: ~50-100ms per frame on CPU
-- **Robustness**: Works with partial occlusion and multiple persons (single-person optimization)
-
-### Real-world Performance
-- Tested with diverse user demographics
-- Effective in various lighting conditions
-- Accuracy improves with proper camera angle and positioning
-
-## Folder Structure
-
-```
-project1/
-├── README.md                          # Project documentation (this file)
-├── package.json                       # Root package manifest with concurrently script
-│
-├── frontend/                          # React TypeScript frontend application
-│   ├── src/
-│   │   ├── App.tsx                   # Main application component
-│   │   ├── main.tsx                  # ReactDOM entry point
-│   │   ├── index.css                 # Global styles
-│   │   ├── App.css                   # Application-specific styles
-│   │   │
-│   │   ├── pages/                    # Page components (route handlers)
-│   │   │   ├── Index.tsx            # Homepage/dashboard redirect
-│   │   │   ├── DashboardPage.tsx    # Main posture analysis interface
-│   │   │   ├── LoginPage.tsx        # User login page
-│   │   │   ├── SignupPage.tsx       # User registration page
-│   │   │   ├── ForgotPasswordPage.tsx # Password recovery
-│   │   │   └── NotFound.tsx         # 404 error page
-│   │   │
-│   │   ├── components/               # Reusable UI components
-│   │   │   ├── NavLink.tsx          # Navigation link component
-│   │   │   ├── auth/                # Authentication components
-│   │   │   ├── layout/              # Layout wrapper components
-│   │   │   │   └── Navbar.tsx       # Navigation bar
-│   │   │   ├── posture/             # Posture analysis components
-│   │   │   │   ├── CameraFeed.tsx   # Webcam feed display
-│   │   │   │   ├── ExerciseSelector.tsx # Exercise selection
-│   │   │   │   ├── FeedbackPanel.tsx # Feedback display
-│   │   │   │   └── ConnectionStatus.tsx # WebSocket status
-│   │   │   └── ui/                  # Shadcn UI components
-│   │   │       ├── button.tsx
-│   │   │       ├── toast.tsx
-│   │   │       └── ... (other UI primitives)
-│   │   │
-│   │   ├── contexts/                 # React Context providers
-│   │   │   └── AuthContext.tsx       # Authentication state management
-│   │   │
-│   │   ├── hooks/                    # Custom React hooks
-│   │   │   ├── useWebSocket.ts      # WebSocket connection management
-│   │   │   ├── useCamera.ts         # Webcam access and frame capture
-│   │   │   ├── use-toast.ts         # Toast notification hook
-│   │   │   └── use-mobile.tsx       # Mobile detection hook
-│   │   │
-│   │   ├── lib/                      # Utility functions
-│   │   │   └── utils.ts             # Helper functions (classnames, etc.)
-│   │   │
-│   │   └── vite-env.d.ts            # Vite type definitions
-│   │
-│   ├── public/
-│   │   ├── posture_test.html        # Standalone posture testing page
-│   │   └── robots.txt               # SEO robots directive
-│   │
-│   ├── index.html                   # HTML entry point
-│   ├── vite.config.ts               # Vite build configuration
-│   ├── tailwind.config.ts           # Tailwind CSS configuration
-│   ├── postcss.config.js            # PostCSS configuration
-│   ├── tsconfig.json                # TypeScript base configuration
-│   ├── tsconfig.app.json            # TypeScript app-specific config
-│   ├── tsconfig.node.json           # TypeScript Node config
-│   ├── eslint.config.js             # ESLint rules
-│   ├── components.json              # Shadcn component metadata
-│   ├── package.json                 # Frontend dependencies
-│   ├── bun.lockb                    # Bun package lock (if using Bun)
-│   ├── README.md                    # Frontend-specific documentation
-│   └── .env                         # Environment variables (not in repo)
-│
-├── backend/                          # FastAPI backend application
-│   ├── main.py                       # FastAPI app initialization & routes
-│   ├── requirements.txt              # Python package dependencies
-│   ├── alembic.ini                  # Alembic database migration config
-│   │
-│   ├── authentication/               # Authentication module
-│   │   ├── __init__.py
-│   │   ├── models.py                # SQLAlchemy User model
-│   │   ├── routes.py                # Auth endpoints (register, login)
-│   │   ├── schemas.py               # Pydantic request/response schemas
-│   │   ├── utils.py                 # Password hashing, JWT generation
-│   │   ├── database.py              # Database engine & session management
-│   │   └── __pycache__/
-│   │
-│   ├── posture/                      # Posture analysis module
-│   │   ├── __init__.py
-│   │   ├── websocket.py             # WebSocket endpoint for real-time processing
-│   │   ├── mediapipe_utils.py       # PoseProcessor class & angle calculations
-│   │   ├── exercise_rules.py        # Biomechanical validation rules
-│   │   ├── feedback.py              # Feedback generation engine
-│   │   ├── visualizer.py            # Skeleton drawing & frame encoding
-│   │   └── __pycache__/
-│   │
-│   ├── migrations/                   # Alembic database migration scripts
-│   │   ├── env.py                   # Migration environment config
-│   │   ├── script.py.mako           # Migration template
-│   │   ├── README                   # Migration documentation
-│   │   └── versions/                # Version-specific migration files
-│   │
-│   ├── __pycache__/
-│   ├── .env                         # Environment variables (not in repo)
-│   └── backend.db                   # SQLite database (development only)
-│
-├── p1_env/                           # Python virtual environment
-│   ├── Include/
-│   ├── Lib/
-│   │   └── site-packages/           # Installed Python packages
-│   │       ├── fastapi/
-│   │       ├── uvicorn/
-│   │       ├── sqlalchemy/
-│   │       ├── mediapipe/
-│   │       ├── opencv/
-│   │       └── ... (other dependencies)
-│   ├── Scripts/ (Windows) / bin/ (Unix)
-│   └── pyvenv.cfg
-│
-└── .gitignore                        # Git ignore rules
-```
-
-## Development Workflow
-
-### Running Tests (Placeholder for future implementation)
-
-```bash
-# Frontend tests
-cd frontend
-npm test
-
-# Backend tests
-cd backend
-pytest
-```
-
-### Building for Production
-
-**Frontend:**
-```bash
-cd frontend
-npm run build
-# Output: dist/ directory with optimized static assets
-```
-
-**Backend:**
-```bash
-# Build Docker image
-docker build -f backend/Dockerfile -t posture-api:latest .
-
-# Or run directly with Gunicorn
-gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:8000
-```
-
-### Code Quality
-
-**Frontend Linting:**
 ```bash
 cd frontend
 npm run lint
+npm run build
 ```
 
-**Backend Code Style:**
+Backend syntax check:
+
 ```bash
 cd backend
-# Format with Black
-black .
-
-# Check with Pylint
-pylint **/*.py
+../p1_env/bin/python -m py_compile posture/session_analysis.py
 ```
 
-## Future Work
+## Common Commands
 
-### Short-term Enhancements
+Kill local dev servers:
 
-1. **Additional Exercises**: Support for more exercise types (lateral raises, rows, planks, lunges variations)
-2. **Progress Tracking**: User session history and performance metrics over time
-3. **Mobile Support**: Native mobile app using React Native or Flutter
-4. **Video Upload**: Analyze pre-recorded videos for form correction
-5. **Customizable Rules**: Allow users to adjust biomechanical thresholds for personal needs
-
-### Medium-term Improvements
-
-6. **Multi-person Detection**: Simultaneous analysis for group classes
-7. **Exercise Recognition**: Automatic exercise type detection instead of manual selection
-8. **Performance Analytics**: Metrics dashboard with charts (range of motion, consistency, improvements)
-9. **Coaching Integration**: Export session data for personal trainer review
-10. **Mobile-optimized Interface**: Responsive design for tablets and smartphones
-
-### Long-term Research Directions
-
-11. **Advanced Pose Estimation**: Integration of more sophisticated models (OpenPose, DeepPose) for higher accuracy
-12. **Movement Quality Assessment**: Machine learning classification of movement quality beyond angle thresholds
-13. **Injury Prevention ML**: Predictive model to identify high-injury-risk form patterns
-14. **Biomechanics Database**: Research-grade database of exercise-specific biomechanical norms
-15. **Integration with Wearables**: Combine pose data with IMU/accelerometer data from smartwatches
-16. **Voice Feedback**: Text-to-speech integration for hands-free coaching
-17. **AR Visualization**: Augmented reality overlay of proper form for guidance
-
-### Infrastructure & DevOps
-
-18. **Docker Containerization**: Complete containerization for cloud deployment
-19. **CI/CD Pipeline**: Automated testing and deployment workflows
-20. **Scalability**: Load balancing for concurrent user sessions
-21. **Database Optimization**: Query optimization and caching strategies for production scale
-
-## License
-
-This project is provided as-is for educational and research purposes. See [LICENSE](LICENSE) file for details.
-
-*Note: Placeholder for specific license type. Recommended: MIT, Apache 2.0, or institutional license.*
-
-## Citation
-
-If you use this project in academic research, please cite as follows:
-
-### BibTeX
-
-```bibtex
-@software{posture_analysis_2024,
-  author = {VIT Freelance Project Team},
-  title = {Posture Analysis and Exercise Feedback System: 
-           Real-time Form Correction using Computer Vision},
-  year = {2024},
-  url = {https://github.com/yourusername/project1},
-  version = {1.0.0}
-}
+```bash
+lsof -ti :3000 | xargs -r kill
+lsof -ti :5000 | xargs -r kill
 ```
 
-### APA Format
+Run backend:
 
-VIT Freelance Project Team. (2024). Posture Analysis and Exercise Feedback System: Real-time form correction using computer vision (Version 1.0.0) [Software]. Retrieved from https://github.com/yourusername/project1
+```bash
+cd backend
+../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000 --reload
+```
 
-### MLA Format
+Run frontend:
 
-"Posture Analysis and Exercise Feedback System." VIT Freelance Project Team, 2024, https://github.com/yourusername/project1.
+```bash
+cd frontend
+npm run dev
+```
 
-### Chicago Format
+## Docker
 
-VIT Freelance Project Team. "Posture Analysis and Exercise Feedback System: Real-time form correction using computer vision." Accessed January 28, 2024. https://github.com/yourusername/project1.
+`docker-compose.yml` builds:
 
-## Related Publications & Resources
+- `frontend`: Next.js app on port `3000`
+- `backend`: FastAPI app on port `5000`
 
-- Cao, Z., et al. (2017). "OpenPose: Realtime Multi-Person 2D Pose Estimation using Part Affinity Fields." *CVPR*.
-- Lugaresi, C., et al. (2019). "MediaPipe: A Framework for Building Multimodal Machine Learning Pipelines." *arXiv preprint arXiv:1906.08172*.
-- Winter, D. A. (2009). *Biomechanics and Motor Control of Human Movement*. John Wiley & Sons.
-
-## Contact & Support
-
-For inquiries, bug reports, or feature requests, please:
-
-1. Open an issue on GitHub
-2. Contact the development team at [email placeholder]
-3. Check existing documentation and FAQs
-
----
-
-**Last Updated**: January 28, 2024
-**Project Version**: 1.0.0
-**Status**: Active Development
+The frontend container uses `NEXT_PUBLIC_API_BASE_URL` for backend requests.

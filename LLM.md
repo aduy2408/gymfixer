@@ -2,6 +2,8 @@
 
 Technical notes for the current session-analysis implementation.
 
+The old Vite frontend has been removed. The active frontend is the Next.js app in `frontend/`.
+
 ## 1. Current Product Flow
 
 The frontend is now focused on after-session video analysis instead of live webcam feedback.
@@ -20,11 +22,11 @@ Backend
   -> compute angles
   -> update phase detector and rep count
   -> generate rule feedback
-  -> send analyzed-frame log to Gemini
-  -> return summary + LLM coaching + skeleton preview frames
+  -> optionally send analyzed-frame log to Gemini
+  -> return summary + rule/LLM coaching + skeleton preview frames
 ```
 
-The old WebSocket path still exists in backend code, but the active frontend Dashboard no longer uses live realtime posture detection.
+The old WebSocket path still exists in backend code, but the active `frontend/` Dashboard no longer uses live realtime posture detection.
 
 ## 2. Main Endpoints
 
@@ -50,7 +52,7 @@ Example:
 curl -X POST http://127.0.0.1:5000/posture/analyze-video \
   -F "exercise=bicep_curl" \
   -F "file=@/path/to/curl.mp4" \
-  -F "call_llm=true" \
+  -F "call_llm=false" \
   -F "sample_fps=8" \
   -F "max_frames=360" \
   -F "include_preview=true" \
@@ -73,9 +75,9 @@ Response includes:
     "processing_ms": 8000
   },
   "llm": {
-    "enabled": true,
+    "enabled": false,
     "model": "gemini-3-flash-preview",
-    "recommendations": "...",
+    "recommendations": "Gemini was not used, so this is a rule-based summary...",
     "error": null
   },
   "frame_log": [],
@@ -90,7 +92,7 @@ JSON endpoint for clients that already captured frame images.
 ```json
 {
   "exercise": "squat",
-  "call_llm": true,
+  "call_llm": false,
   "frames": [
     { "frame": "<base64-jpeg>", "timestamp_ms": 0 },
     { "frame": "<base64-jpeg>", "timestamp_ms": 100 }
@@ -240,7 +242,15 @@ The frontend displays preview images with `object-contain`, so vertical videos a
 
 ## 9. LLM Coaching
 
-Gemini is called only after the session has been processed.
+Gemini is called only after the session has been processed, and only when `call_llm=true`.
+
+Current dev defaults:
+
+- `PostureSessionRequest.call_llm = false`
+- `/posture/analyze-video` form default `call_llm = false`
+- frontend dashboard checkbox `Gemini coaching` starts unchecked
+
+This avoids spending Gemini quota during normal dev uploads. Turn the checkbox on only when intentionally testing LLM coaching.
 
 Important behavior:
 
@@ -248,6 +258,7 @@ Important behavior:
 - Setup/walk-in/no-pose/waiting frames are excluded from the coaching prompt.
 - This prevents the model from calling a session fragmented just because the user walked into frame.
 - UI/debug still shows `waiting_for_subject_frames` separately.
+- If Gemini quota is exceeded or the API request fails, the backend now fails clearly when `call_llm=true`; it does not silently fallback.
 
 Prompt sections requested from Gemini:
 
@@ -262,14 +273,15 @@ Config:
 ```env
 GEMINI_API_KEY=your-key
 GEMINI_MODEL=gemini-3-flash-preview
-POSTURE_LLM_MAX_LOG_FRAMES=300
+GEMINI_MAX_OUTPUT_TOKENS=1024
+POSTURE_LLM_MAX_LOG_FRAMES=60
 ```
 
-The Gemini request currently sets `maxOutputTokens` in `backend/posture/session_analysis.py`.
+`GEMINI_MAX_OUTPUT_TOKENS` controls Gemini `generationConfig.maxOutputTokens`. `POSTURE_LLM_MAX_LOG_FRAMES` controls how many important analyzed frame samples are included in the prompt.
 
 ## 10. Frontend State
 
-The Dashboard has been simplified to session analysis only.
+The active frontend is `frontend/`, a Next.js app. The Dashboard has been simplified to session analysis only.
 
 Kept:
 
@@ -278,8 +290,12 @@ Kept:
 - sample FPS / max frames controls
 - Gemini toggle
 - skeleton preview toggle
-- result metrics: reps, usable frames, waiting frames, total frames, processing time
-- top feedback and LLM coaching
+- result metrics: reps, analyzed frames, quality, processing time
+- angle chart from analyzed frame log
+- all skeleton preview frames returned by backend
+- per-preview-frame feedback
+- form-issue summary and all-feedback summary
+- rule-based or Gemini coaching
 
 Removed from Dashboard:
 
@@ -287,6 +303,16 @@ Removed from Dashboard:
 - live WebSocket connection status
 - Start/Stop realtime session buttons
 - live realtime feedback panel
+
+Dev commands:
+
+```bash
+cd backend
+../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000 --reload
+
+cd frontend
+npm run dev
+```
 
 ## 11. Future Improvements
 
