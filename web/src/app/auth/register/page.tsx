@@ -3,7 +3,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, AlertCircle, CheckCircle, Activity } from "lucide-react";
-import { mockRegister, setAuthToken } from "@/lib/mockData";
+import { setAuthToken } from "@/lib/mockData";
+import { login, register } from "@/lib/api";
 
 const passwordChecks = [
     { label: "At least 6 characters", test: (p: string) => p.length >= 6 },
@@ -30,11 +31,20 @@ export default function RegisterPage() {
         if (form.password !== form.confirm) return setError("Passwords do not match.");
 
         setLoading(true);
-        await new Promise((r) => setTimeout(r, 1000));
-        const ok = mockRegister(form.email, form.password);
-        if (!ok) { setLoading(false); return setError("Registration failed. Please try again."); }
-        setAuthToken("mock_jwt_token_" + Date.now());
-        router.push("/onboarding/intro");
+        try {
+            const createdUser = await register(form.name.trim(), form.email, form.password);
+            const data = await login(form.email, form.password);
+            setAuthToken(data.access_token);
+            localStorage.setItem("ptt_user", JSON.stringify({
+                id: createdUser.id,
+                email: createdUser.email,
+                name: createdUser.name,
+            }));
+            router.push("/onboarding/intro");
+        } catch (err) {
+            setLoading(false);
+            return setError(err instanceof Error ? err.message : "Registration failed. Please try again.");
+        }
     };
 
     const inputStyle: React.CSSProperties = {
@@ -184,7 +194,7 @@ export default function RegisterPage() {
                                 onFocus={(e) => (e.target.style.background = "#e8e8e8")}
                                 onBlur={(e) => (e.target.style.background = "#f2f2f2")} />
                             {form.confirm && form.confirm !== form.password && (
-                                <p style={{ fontSize: "0.75rem", color: "var(--red)", marginTop: "0.25rem" }}>Passwords don't match</p>
+                                <p style={{ fontSize: "0.75rem", color: "var(--red)", marginTop: "0.25rem" }}>Passwords don&apos;t match</p>
                             )}
                         </div>
 

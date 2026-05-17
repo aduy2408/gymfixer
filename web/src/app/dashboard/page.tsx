@@ -1,30 +1,120 @@
 "use client";
-import { motion } from "framer-motion";
-import Link from "next/link";
-import { TrendingUp, Activity, Clock, Award, ChevronRight, Plus, BarChart2 } from "lucide-react";
-import DashboardNav from "@/components/DashboardNav";
-import { mockUploads, mockProfile, mockProgress } from "@/lib/mockData";
 
-const scoreColor = (s: number) => s >= 85 ? "#10b981" : s >= 70 ? "#f59e0b" : "var(--red)";
+import { useCallback, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import {
+    Activity,
+    BarChart2,
+    CheckCircle,
+    FileVideo,
+    Film,
+    Loader2,
+    Upload,
+    X,
+} from "lucide-react";
+import DashboardNav from "@/components/DashboardNav";
+import {
+    analyzeVideo,
+    ExerciseId,
+    saveLatestAnalysis,
+    VideoAnalysisResult,
+} from "@/lib/api";
+import { mockProfile } from "@/lib/mockData";
+
+const exerciseOptions: Array<{ id: ExerciseId; label: string }> = [
+    { id: "squat", label: "Squat" },
+    { id: "bicep_curl", label: "Bicep Curl" },
+];
+
+const cardStyle: React.CSSProperties = {
+    background: "#fff",
+    border: "1px solid #e8e8e8",
+    borderRadius: 6,
+};
+
+const labelStyle: React.CSSProperties = {
+    display: "block",
+    fontSize: "0.68rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: "0.4rem",
+    color: "#555",
+};
+
+const inputStyle: React.CSSProperties = {
+    width: "100%",
+    background: "#f2f2f2",
+    border: "none",
+    borderRadius: 4,
+    padding: "11px 14px",
+    fontSize: "0.86rem",
+    color: "#0a0a0a",
+    outline: "none",
+};
 
 export default function DashboardPage() {
-    const completed = mockUploads.filter((u) => u.status === "completed");
-    const avgScore = Math.round(completed.reduce((a, u) => a + (u.score ?? 0), 0) / completed.length);
-    const bestScore = Math.max(...completed.map((u) => u.score ?? 0));
+    const router = useRouter();
+    const fileRef = useRef<HTMLInputElement>(null);
+    const [dragOver, setDragOver] = useState(false);
+    const [file, setFile] = useState<File | null>(null);
+    const [exercise, setExercise] = useState<ExerciseId>("squat");
+    const [callLlm, setCallLlm] = useState(false);
+    const [includePreview, setIncludePreview] = useState(true);
+    const [sampleFps, setSampleFps] = useState(8);
+    const [maxFrames, setMaxFrames] = useState(360);
+    const [previewMaxFrames, setPreviewMaxFrames] = useState(24);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState("");
+    const [lastResult, setLastResult] = useState<VideoAnalysisResult | null>(null);
 
-    const card: React.CSSProperties = {
-        background: "#fff",
-        border: "1px solid #e8e8e8",
-        borderRadius: 6,
-        padding: "1.25rem",
+    const onDrop = useCallback((event: React.DragEvent) => {
+        event.preventDefault();
+        setDragOver(false);
+        const nextFile = event.dataTransfer.files[0];
+        if (nextFile?.type.startsWith("video/")) setFile(nextFile);
+    }, []);
+
+    const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setFile(event.target.files?.[0] || null);
     };
 
-    const statCards = [
-        { label: "Avg Form Score", value: avgScore, unit: "/100", icon: Award, accent: "var(--red)" },
-        { label: "Best Score", value: bestScore, unit: "/100", icon: TrendingUp, accent: "#10b981" },
-        { label: "Total Sessions", value: mockUploads.length, unit: "", icon: Activity, accent: "var(--navy)" },
-        { label: "This Week", value: 2, unit: " sessions", icon: Clock, accent: "#f59e0b" },
-    ];
+    const handleAnalyze = async () => {
+        if (!file || isLoading) return;
+
+        setIsLoading(true);
+        setError("");
+        setLastResult(null);
+
+        try {
+            const result = await analyzeVideo({
+                file,
+                exercise,
+                callLlm,
+                sampleFps,
+                maxFrames,
+                includePreview,
+                previewMaxFrames,
+            });
+            const id = `analysis_${Date.now()}`;
+            saveLatestAnalysis({
+                id,
+                fileName: file.name,
+                analyzedAt: new Date().toISOString(),
+                result,
+            });
+            setLastResult(result);
+            router.push(`/dashboard/analysis/${id}`);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Video analysis failed.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const quality = lastResult?.summary.analysis_quality?.active_window_usable_ratio;
+    const fileSize = file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : "";
 
     return (
         <div style={{ display: "flex", minHeight: "100vh", background: "#f7f7f7", fontFamily: "'Barlow', sans-serif" }}>
@@ -32,154 +122,185 @@ export default function DashboardPage() {
 
             <main style={{ flex: 1, overflowY: "auto", padding: "2rem 2.5rem" }}>
                 <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-
-                    {/* Header */}
-                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-                        style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "2rem" }}>
+                    <motion.div
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: "1.75rem" }}
+                    >
                         <div>
                             <p style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--red)", marginBottom: "0.3rem" }}>
-                                Welcome back
+                                Posture analysis
                             </p>
-                            <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "2rem", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.3rem" }}>
-                                Alex Johnson
+                            <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "2rem", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.35rem" }}>
+                                Analyse Workout Video
                             </h1>
-                            <p style={{ fontSize: "0.8rem", color: "#888", fontWeight: 300 }}>
-                                Goal: {mockProfile.fitnessGoal} · {mockProfile.height}cm · {mockProfile.weight}kg
+                            <p style={{ fontSize: "0.82rem", color: "#888", fontWeight: 300 }}>
+                                FastAPI video analysis · Goal: {mockProfile.fitnessGoal}
                             </p>
                         </div>
-                        <Link href="/dashboard/upload">
-                            <button className="btn-red" style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.75rem 1.5rem", fontSize: "0.8rem", borderRadius: 4 }}>
-                                <Plus size={15} /> UPLOAD VIDEO
-                            </button>
-                        </Link>
                     </motion.div>
 
-                    {/* Stat cards — flush grid separated by borders */}
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8", marginBottom: "1.5rem" }}>
-                        {statCards.map((s, i) => (
-                            <motion.div key={s.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
-                                style={{ background: "#fff", padding: "1.25rem 1.5rem" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                                    <s.icon size={14} color={s.accent} />
-                                    <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#999" }}>{s.label}</p>
-                                </div>
-                                <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "2rem", lineHeight: 1, color: s.accent }}>
-                                    {s.value}<span style={{ fontSize: "0.9rem", color: "#bbb", fontWeight: 400 }}>{s.unit}</span>
-                                </p>
-                            </motion.div>
-                        ))}
-                    </div>
-
-                    {/* Main content grid */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: "1.5rem" }}>
-
-                        {/* Recent sessions */}
-                        <div>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
-                                <p style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#333" }}>Recent Sessions</p>
-                                <Link href="/dashboard/history">
-                                    <span style={{ fontSize: "0.75rem", color: "var(--red)", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.2rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                                        View all <ChevronRight size={12} />
-                                    </span>
-                                </Link>
+                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                        <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ ...cardStyle, padding: "1.25rem" }}>
+                            <div
+                                onClick={() => fileRef.current?.click()}
+                                onDragOver={(event) => { event.preventDefault(); setDragOver(true); }}
+                                onDragLeave={() => setDragOver(false)}
+                                onDrop={onDrop}
+                                style={{
+                                    border: `2px dashed ${dragOver ? "var(--red)" : file ? "#ccc" : "#ddd"}`,
+                                    borderRadius: 4,
+                                    background: dragOver ? "rgba(214,0,28,0.03)" : "#fafafa",
+                                    minHeight: 190,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    cursor: "pointer",
+                                    marginBottom: "1.25rem",
+                                }}
+                            >
+                                <input ref={fileRef} type="file" accept="video/*" style={{ display: "none" }} onChange={onFileChange} />
+                                {file ? (
+                                    <div style={{ textAlign: "center", padding: "1.5rem" }}>
+                                        <Film size={36} color="#555" style={{ margin: "0 auto 0.75rem" }} />
+                                        <p style={{ fontWeight: 600, fontSize: "0.9rem", marginBottom: "0.25rem" }}>{file.name}</p>
+                                        <p style={{ fontSize: "0.78rem", color: "#999" }}>{fileSize}</p>
+                                        <button
+                                            onClick={(event) => { event.stopPropagation(); setFile(null); }}
+                                            style={{ marginTop: "0.75rem", display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.75rem", padding: "0.3rem 0.75rem", border: "1px solid #ddd", borderRadius: 3, background: "#fff", cursor: "pointer", color: "#888" }}
+                                        >
+                                            <X size={11} /> Remove
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div style={{ textAlign: "center", padding: "1.5rem" }}>
+                                        <Upload size={36} color="#ccc" style={{ margin: "0 auto 0.75rem" }} />
+                                        <p style={{ fontWeight: 600, fontSize: "0.9rem", marginBottom: "0.25rem", color: "#444" }}>Drop a video here</p>
+                                        <p style={{ fontSize: "0.78rem", color: "#aaa" }}>MP4, MOV, or AVI · click to browse</p>
+                                    </div>
+                                )}
                             </div>
 
-                            <div style={{ border: "1px solid #e8e8e8", display: "flex", flexDirection: "column" }}>
-                                {mockUploads.map((u, i) => (
-                                    <motion.div key={u.id} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.08 + i * 0.06 }}>
-                                        <Link href={u.status === "completed" ? `/dashboard/analysis/${u.id}` : "#"}>
-                                            <div
-                                                style={{ display: "flex", alignItems: "center", gap: "1rem", padding: "0.9rem 1.1rem", background: "#fff", borderBottom: i < mockUploads.length - 1 ? "1px solid #f0f0f0" : "none", cursor: "pointer", transition: "background 0.12s" }}
-                                                onMouseEnter={(e) => (e.currentTarget as HTMLDivElement).style.background = "#fafafa"}
-                                                onMouseLeave={(e) => (e.currentTarget as HTMLDivElement).style.background = "#fff"}
-                                            >
-                                                <div style={{ width: 36, height: 36, borderRadius: 4, background: "#f2f2f2", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                                    <Activity size={16} color="#555" />
-                                                </div>
-                                                <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <p style={{ fontSize: "0.875rem", fontWeight: 600, marginBottom: "0.15rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.exercise}</p>
-                                                    <p style={{ fontSize: "0.75rem", color: "#999", fontWeight: 300 }}>
-                                                        {u.filename} · {u.duration} · {new Date(u.uploadedAt).toLocaleDateString()}
-                                                    </p>
-                                                </div>
-                                                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
-                                                    {u.status === "completed" && u.score ? (
-                                                        <div style={{ textAlign: "right" }}>
-                                                            <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "1.4rem", color: scoreColor(u.score), lineHeight: 1 }}>{u.score}</p>
-                                                            <p style={{ fontSize: "0.65rem", color: "#bbb", textTransform: "uppercase", letterSpacing: "0.06em" }}>score</p>
-                                                        </div>
-                                                    ) : (
-                                                        <span style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#f59e0b", background: "rgba(245,158,11,0.1)", padding: "0.2rem 0.6rem", borderRadius: 3 }}>Processing</span>
-                                                    )}
-                                                    <ChevronRight size={14} color="#ccc" />
-                                                </div>
-                                            </div>
-                                        </Link>
-                                    </motion.div>
+                            <div style={{ marginBottom: "1.25rem" }}>
+                                <label style={labelStyle}>Exercise Type</label>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
+                                    {exerciseOptions.map((option) => (
+                                        <button
+                                            key={option.id}
+                                            type="button"
+                                            onClick={() => setExercise(option.id)}
+                                            style={{
+                                                background: exercise === option.id ? "var(--red)" : "#fff",
+                                                color: exercise === option.id ? "#fff" : "#444",
+                                                border: "none",
+                                                padding: "0.75rem 0.9rem",
+                                                fontSize: "0.82rem",
+                                                fontWeight: exercise === option.id ? 700 : 500,
+                                                cursor: "pointer",
+                                                textAlign: "left",
+                                            }}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-3" style={{ marginBottom: "1.25rem" }}>
+                                <div>
+                                    <label style={labelStyle}>Sample FPS</label>
+                                    <input type="number" min={1} max={30} value={sampleFps} onChange={(event) => setSampleFps(Number(event.target.value))} style={inputStyle} />
+                                </div>
+                                <div>
+                                    <label style={labelStyle}>Max Frames</label>
+                                    <input type="number" min={30} max={2000} step={30} value={maxFrames} onChange={(event) => setMaxFrames(Number(event.target.value))} style={inputStyle} />
+                                </div>
+                                <div>
+                                    <label style={labelStyle}>Previews</label>
+                                    <input type="number" min={4} max={80} step={4} value={previewMaxFrames} disabled={!includePreview} onChange={(event) => setPreviewMaxFrames(Number(event.target.value))} style={inputStyle} />
+                                </div>
+                            </div>
+
+                            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+                                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.82rem", color: "#555" }}>
+                                        <input type="checkbox" checked={callLlm} onChange={(event) => setCallLlm(event.target.checked)} />
+                                        Gemini coaching
+                                    </label>
+                                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.82rem", color: "#555" }}>
+                                        <input type="checkbox" checked={includePreview} onChange={(event) => setIncludePreview(event.target.checked)} />
+                                        Skeleton preview
+                                    </label>
+                                </div>
+                                <button
+                                    id="analyse-submit"
+                                    onClick={handleAnalyze}
+                                    disabled={!file || isLoading}
+                                    className="btn-red"
+                                    style={{ borderRadius: 4, padding: "0.85rem 1.4rem", opacity: file && !isLoading ? 1 : 0.45, cursor: file && !isLoading ? "pointer" : "not-allowed" }}
+                                >
+                                    {isLoading ? <Loader2 size={16} className="animate-spin" /> : <FileVideo size={16} />}
+                                    {isLoading ? "Analysing..." : "Analyse Video"}
+                                </button>
+                            </div>
+
+                            {error && (
+                                <div style={{ marginTop: "1rem", border: "1px solid rgba(214,0,28,0.2)", background: "rgba(214,0,28,0.06)", color: "var(--red)", borderRadius: 4, padding: "0.8rem 1rem", fontSize: "0.85rem" }}>
+                                    {error}
+                                </div>
+                            )}
+                        </motion.section>
+
+                        <aside style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                            <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} style={{ ...cardStyle, padding: "1rem" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.75rem" }}>
+                                    <Activity size={14} color="var(--red)" />
+                                    <p style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#999" }}>Backend Pipeline</p>
+                                </div>
+                                {[
+                                    "Uploads to FastAPI",
+                                    "Samples frames with OpenCV",
+                                    "Runs MediaPipe pose analysis",
+                                    "Returns coaching and skeleton previews",
+                                ].map((item) => (
+                                    <div key={item} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.35rem 0", fontSize: "0.8rem", color: "#666" }}>
+                                        <CheckCircle size={12} color="#10b981" />
+                                        {item}
+                                    </div>
                                 ))}
-                            </div>
-                        </div>
-
-                        {/* Right column */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-
-                            {/* Body metrics */}
-                            <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }} style={card}>
-                                <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#999", marginBottom: "0.75rem" }}>Body Metrics</p>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                                    {[
-                                        { label: "Height", value: `${mockProfile.height} cm` },
-                                        { label: "Weight", value: `${mockProfile.weight} kg` },
-                                        { label: "Age", value: `${mockProfile.age} yrs` },
-                                        { label: "Gender", value: mockProfile.gender },
-                                        { label: "Goal", value: mockProfile.fitnessGoal },
-                                    ].map((m) => (
-                                        <div key={m.label} style={{ display: "flex", justifyContent: "space-between", paddingBottom: "0.5rem", borderBottom: "1px solid #f5f5f5" }}>
-                                            <span style={{ fontSize: "0.78rem", color: "#aaa" }}>{m.label}</span>
-                                            <span style={{ fontSize: "0.78rem", fontWeight: 700 }}>{m.value}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                                <Link href="/dashboard/profile">
-                                    <button style={{ marginTop: "0.75rem", width: "100%", padding: "0.5rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", border: "1px solid #e8e8e8", borderRadius: 4, background: "none", cursor: "pointer", color: "#666", transition: "border-color 0.15s, color 0.15s" }}
-                                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--red)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--red)"; }}
-                                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#e8e8e8"; (e.currentTarget as HTMLButtonElement).style.color = "#666"; }}>
-                                        Edit Profile
-                                    </button>
-                                </Link>
                             </motion.div>
 
-                            {/* Form score trend */}
-                            <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.35 }} style={card}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.75rem" }}>
-                                    <BarChart2 size={13} color="var(--red)" />
-                                    <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#999" }}>Form Score Trend</p>
+                            <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} style={{ ...cardStyle, padding: "1rem" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.75rem" }}>
+                                    <BarChart2 size={14} color="var(--navy)" />
+                                    <p style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#999" }}>Latest Result</p>
                                 </div>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                                    {mockProgress.map((p, i) => (
-                                        <div key={p.week} style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                                            <span style={{ fontSize: "0.7rem", color: "#aaa", width: 48, flexShrink: 0 }}>{p.week}</span>
-                                            <div style={{ flex: 1, height: 4, background: "#f0f0f0", borderRadius: 2 }}>
-                                                <motion.div
-                                                    initial={{ width: 0 }}
-                                                    animate={{ width: `${p.avgScore}%` }}
-                                                    transition={{ delay: 0.4 + i * 0.1, duration: 0.5, ease: "easeOut" }}
-                                                    style={{ height: 4, background: "var(--red)", borderRadius: 2 }}
-                                                />
-                                            </div>
-                                            <span style={{ fontSize: "0.75rem", fontWeight: 700, width: 28, textAlign: "right" }}>{p.avgScore}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                                <p style={{ fontSize: "0.72rem", color: "#10b981", marginTop: "0.6rem", display: "flex", alignItems: "center", gap: "0.3rem", fontWeight: 600 }}>
-                                    <TrendingUp size={11} /> +15 pts over 5 weeks
-                                </p>
+                                {lastResult ? (
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
+                                        <Metric label="Reps" value={lastResult.summary.rep_count} />
+                                        <Metric label="Frames" value={lastResult.summary.frames_analyzed} />
+                                        <Metric label="Time" value={`${Math.round(lastResult.summary.processing_ms / 1000)}s`} />
+                                        <Metric label="Quality" value={quality === undefined ? "n/a" : `${Math.round(quality * 100)}%`} />
+                                    </div>
+                                ) : (
+                                    <p style={{ fontSize: "0.82rem", color: "#888", lineHeight: 1.6 }}>
+                                        The result page opens automatically after backend analysis finishes.
+                                    </p>
+                                )}
                             </motion.div>
-
-                        </div>
+                        </aside>
                     </div>
                 </div>
             </main>
+        </div>
+    );
+}
+
+function Metric({ label, value }: { label: string; value: string | number }) {
+    return (
+        <div style={{ background: "#f7f7f7", borderRadius: 4, padding: "0.65rem", textAlign: "center" }}>
+            <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "1.35rem", lineHeight: 1, color: "var(--red)" }}>{value}</p>
+            <p style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "#999", marginTop: "0.25rem" }}>{label}</p>
         </div>
     );
 }

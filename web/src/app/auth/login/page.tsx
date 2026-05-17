@@ -3,7 +3,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, AlertCircle, Activity } from "lucide-react";
-import { mockLogin, setAuthToken } from "@/lib/mockData";
+import { setAuthToken } from "@/lib/mockData";
+import { login } from "@/lib/api";
 
 export default function LoginPage() {
     const router = useRouter();
@@ -21,14 +22,15 @@ export default function LoginPage() {
         if (password.length < 6) return setError("Password must be at least 6 characters.");
 
         setLoading(true);
-        await new Promise((r) => setTimeout(r, 900));
-        const ok = mockLogin(email, password);
-        if (!ok) {
+        try {
+            const data = await login(email, password);
+            setAuthToken(data.access_token);
+            localStorage.setItem("ptt_user", JSON.stringify({ email, name: email.split("@")[0] }));
+            router.push("/dashboard");
+        } catch (err) {
             setLoading(false);
-            return setError("Invalid credentials. Try any valid email + 6+ char password.");
+            return setError(err instanceof Error ? err.message : "Login failed.");
         }
-        setAuthToken("mock_jwt_token_" + Date.now());
-        router.push("/dashboard");
     };
 
     const inputStyle: React.CSSProperties = {

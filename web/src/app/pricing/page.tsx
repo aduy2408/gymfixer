@@ -157,7 +157,7 @@ export default function PricingPage() {
                         CHOOSE YOUR <span style={{ color: "var(--red)" }}>PLAN</span>
                     </h1>
                     <p className="text-lg max-w-2xl mx-auto mb-16" style={{ color: "var(--gray-dark)", fontWeight: 400 }}>
-                        Whether you're just starting out or you're a professional athlete, we have a plan designed to perfect your form and maximize your potential.
+                        Whether you&apos;re just starting out or you&apos;re a professional athlete, we have a plan designed to perfect your form and maximize your potential.
                     </p>
                 </motion.div>
 

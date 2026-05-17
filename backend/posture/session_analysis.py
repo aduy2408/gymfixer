@@ -24,7 +24,8 @@ from posture.phase_detector import PhaseDetector
 router = APIRouter(prefix="/posture", tags=["posture"])
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+GEMINI_MAX_OUTPUT_TOKENS = int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", "1024"))
 POSTURE_LLM_MAX_LOG_FRAMES = int(os.getenv("POSTURE_LLM_MAX_LOG_FRAMES", "120"))
 SUBJECT_READY_MIN_FRAMES = int(os.getenv("POSTURE_SUBJECT_READY_MIN_FRAMES", "3"))
 SUBJECT_MIN_BBOX_AREA = float(os.getenv("POSTURE_SUBJECT_MIN_BBOX_AREA", "0.035"))
@@ -45,7 +46,7 @@ class PostureSessionRequest(BaseModel):
     exercise: str
     frames: list[SessionFrame] = Field(..., min_length=1)
     call_llm: bool = Field(
-        default=True,
+        default=False,
         description="When true, send the processed posture log to Gemini.",
     )
 
@@ -54,7 +55,7 @@ def analyze_posture_session(
     exercise: str,
     encoded_frames: list[SessionFrame],
     *,
-    call_llm: bool = True,
+    call_llm: bool = False,
     include_preview: bool = False,
     preview_max_frames: int = 24,
 ) -> dict[str, Any]:
@@ -235,12 +236,8 @@ def analyze_posture_session(
     }
     if call_llm:
         prompt = build_gemini_posture_prompt(summary, frame_log)
-        try:
-            llm["enabled"] = True
-            llm["recommendations"] = call_gemini_posture_coach(prompt)
-        except RuntimeError as exc:
-            llm["enabled"] = False
-            llm["error"] = str(exc)
+        llm["enabled"] = True
+        llm["recommendations"] = call_gemini_posture_coach(prompt)
 
     return {
         "exercise": exercise,
@@ -273,7 +270,7 @@ async def analyze_session(request: PostureSessionRequest):
 async def analyze_video(
     exercise: str = Form(...),
     file: UploadFile = File(...),
-    call_llm: bool = Form(True),
+    call_llm: bool = Form(False),
     sample_fps: float = Form(8.0),
     max_frames: int = Form(360),
     include_preview: bool = Form(True),
@@ -395,7 +392,7 @@ def call_gemini_posture_coach(prompt: str) -> str:
         "generationConfig": {
             "temperature": 0.3,
             "topP": 0.9,
-            "maxOutputTokens": 3000,
+            "maxOutputTokens": GEMINI_MAX_OUTPUT_TOKENS,
         },
     }
     body = json.dumps(payload).encode("utf-8")
