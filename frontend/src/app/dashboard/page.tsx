@@ -16,6 +16,7 @@ import {
 import DashboardNav from "@/components/DashboardNav";
 import {
     analyzeVideo,
+    CameraView,
     ExerciseId,
     saveLatestAnalysis,
     VideoAnalysisResult,
@@ -25,6 +26,12 @@ import { mockProfile } from "@/lib/mockData";
 const exerciseOptions: Array<{ id: ExerciseId; label: string }> = [
     { id: "squat", label: "Squat" },
     { id: "bicep_curl", label: "Bicep Curl" },
+];
+
+const cameraViewOptions: Array<{ id: CameraView; label: string }> = [
+    { id: "side", label: "Side" },
+    { id: "front", label: "Front" },
+    { id: "three_quarter", label: "45°" },
 ];
 
 const cardStyle: React.CSSProperties = {
@@ -60,6 +67,7 @@ export default function DashboardPage() {
     const [dragOver, setDragOver] = useState(false);
     const [file, setFile] = useState<File | null>(null);
     const [exercise, setExercise] = useState<ExerciseId>("squat");
+    const [cameraView, setCameraView] = useState<CameraView>("side");
     const [callLlm, setCallLlm] = useState(false);
     const [includePreview, setIncludePreview] = useState(true);
     const [sampleFps, setSampleFps] = useState(8);
@@ -91,6 +99,7 @@ export default function DashboardPage() {
             const result = await analyzeVideo({
                 file,
                 exercise,
+                cameraView,
                 callLlm,
                 sampleFps,
                 maxFrames,
@@ -196,6 +205,31 @@ export default function DashboardPage() {
                                                 padding: "0.75rem 0.9rem",
                                                 fontSize: "0.82rem",
                                                 fontWeight: exercise === option.id ? 700 : 500,
+                                                cursor: "pointer",
+                                                textAlign: "left",
+                                            }}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div style={{ marginBottom: "1.25rem" }}>
+                                <label style={labelStyle}>Camera View</label>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
+                                    {cameraViewOptions.map((option) => (
+                                        <button
+                                            key={option.id}
+                                            type="button"
+                                            onClick={() => setCameraView(option.id)}
+                                            style={{
+                                                background: cameraView === option.id ? "var(--navy)" : "#fff",
+                                                color: cameraView === option.id ? "#fff" : "#444",
+                                                border: "none",
+                                                padding: "0.7rem 0.85rem",
+                                                fontSize: "0.8rem",
+                                                fontWeight: cameraView === option.id ? 700 : 500,
                                                 cursor: "pointer",
                                                 textAlign: "left",
                                             }}

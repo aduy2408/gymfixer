@@ -148,12 +148,13 @@ export default function AnalysisPage() {
                         initial={{ opacity: 0, y: 16 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
-                        className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8"
+                        className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-8"
                     >
                         <Metric label="Quality" value={`${qualityScore}%`} color={qualityScore >= 80 ? "#10b981" : qualityScore >= 60 ? "#f59e0b" : "var(--red)"} />
                         <Metric label="Reps" value={result.summary.rep_count} color="var(--red)" />
                         <Metric label="Frames Analysed" value={result.summary.frames_analyzed} color="var(--navy)" />
                         <Metric label="Processing" value={`${Math.round(result.summary.processing_ms / 1000)}s`} color="#f59e0b" />
+                        <Metric label="View" value={(result.summary.camera_view || result.camera_view || "side").replace("_", " ")} color="#555" />
                     </motion.div>
 
                     <div className="grid md:grid-cols-5 gap-6 mb-8">

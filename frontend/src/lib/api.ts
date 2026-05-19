@@ -1,10 +1,13 @@
 "use client";
 
 export type ExerciseId = "squat" | "bicep_curl";
+export type CameraView = "side" | "front" | "three_quarter";
 
 export type VideoAnalysisResult = {
   exercise: string;
+  camera_view?: CameraView | string;
   summary: {
+    camera_view?: CameraView | string;
     frames_received: number;
     frames_analyzed: number;
     waiting_for_subject_frames?: number;
@@ -101,6 +104,7 @@ export async function register(name: string, email: string, password: string): P
 export async function analyzeVideo(params: {
   file: File;
   exercise: ExerciseId;
+  cameraView: CameraView;
   callLlm: boolean;
   sampleFps: number;
   maxFrames: number;
@@ -109,6 +113,7 @@ export async function analyzeVideo(params: {
 }): Promise<VideoAnalysisResult> {
   const formData = new FormData();
   formData.append("exercise", params.exercise);
+  formData.append("camera_view", params.cameraView);
   formData.append("file", params.file);
   formData.append("call_llm", String(params.callLlm));
   formData.append("sample_fps", String(params.sampleFps));
