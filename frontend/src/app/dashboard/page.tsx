@@ -18,6 +18,7 @@ import {
     analyzeVideo,
     CameraView,
     ExerciseId,
+    PoseBackend,
     saveLatestAnalysis,
     VideoAnalysisResult,
 } from "@/lib/api";
@@ -32,6 +33,11 @@ const cameraViewOptions: Array<{ id: CameraView; label: string }> = [
     { id: "side", label: "Side" },
     { id: "front", label: "Front" },
     { id: "three_quarter", label: "45°" },
+];
+
+const poseBackendOptions: Array<{ id: PoseBackend; label: string }> = [
+    { id: "mediapipe", label: "MediaPipe" },
+    { id: "vitpose", label: "ViTPose" },
 ];
 
 const cardStyle: React.CSSProperties = {
@@ -68,6 +74,7 @@ export default function DashboardPage() {
     const [file, setFile] = useState<File | null>(null);
     const [exercise, setExercise] = useState<ExerciseId>("squat");
     const [cameraView, setCameraView] = useState<CameraView>("side");
+    const [poseBackend, setPoseBackend] = useState<PoseBackend>("mediapipe");
     const [callLlm, setCallLlm] = useState(false);
     const [includePreview, setIncludePreview] = useState(true);
     const [sampleFps, setSampleFps] = useState(8);
@@ -100,6 +107,7 @@ export default function DashboardPage() {
                 file,
                 exercise,
                 cameraView,
+                poseBackend,
                 callLlm,
                 sampleFps,
                 maxFrames,
@@ -230,6 +238,31 @@ export default function DashboardPage() {
                                                 padding: "0.7rem 0.85rem",
                                                 fontSize: "0.8rem",
                                                 fontWeight: cameraView === option.id ? 700 : 500,
+                                                cursor: "pointer",
+                                                textAlign: "left",
+                                            }}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div style={{ marginBottom: "1.25rem" }}>
+                                <label style={labelStyle}>Pose Backend</label>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
+                                    {poseBackendOptions.map((option) => (
+                                        <button
+                                            key={option.id}
+                                            type="button"
+                                            onClick={() => setPoseBackend(option.id)}
+                                            style={{
+                                                background: poseBackend === option.id ? "var(--navy)" : "#fff",
+                                                color: poseBackend === option.id ? "#fff" : "#444",
+                                                border: "none",
+                                                padding: "0.7rem 0.85rem",
+                                                fontSize: "0.8rem",
+                                                fontWeight: poseBackend === option.id ? 700 : 500,
                                                 cursor: "pointer",
                                                 textAlign: "left",
                                             }}

@@ -16,7 +16,7 @@ Browser
 
 Backend
   -> sample video frames with OpenCV
-  -> run MediaPipe Pose
+  -> run selected pose backend (MediaPipe by default, optional ViTPose)
   -> apply subject-ready gate
   -> apply exercise visibility gate
   -> compute angles
@@ -38,6 +38,8 @@ Form fields:
 
 ```text
 exercise=squat | bicep_curl
+camera_view=side | front | three_quarter
+pose_backend=mediapipe | vitpose
 file=@video.mp4
 call_llm=true | false
 sample_fps=8
@@ -51,6 +53,8 @@ Example:
 ```bash
 curl -X POST http://127.0.0.1:5000/posture/analyze-video \
   -F "exercise=bicep_curl" \
+  -F "camera_view=side" \
+  -F "pose_backend=mediapipe" \
   -F "file=@/path/to/curl.mp4" \
   -F "call_llm=false" \
   -F "sample_fps=8" \
@@ -92,6 +96,7 @@ JSON endpoint for clients that already captured frame images.
 ```json
 {
   "exercise": "squat",
+  "pose_backend": "mediapipe",
   "call_llm": false,
   "frames": [
     { "frame": "<base64-jpeg>", "timestamp_ms": 0 },
@@ -102,16 +107,25 @@ JSON endpoint for clients that already captured frame images.
 
 ## 3. Pose Estimation
 
-MediaPipe Pose is the current pose backend.
+The backend now has a small pose-backend switch:
+
+```env
+POSE_BACKEND=mediapipe | vitpose
+```
+
+`mediapipe` remains the default and is the stable path. `vitpose` is an optional offline-quality experiment for uploaded videos.
+
+### MediaPipe backend
 
 - Default model complexity is `0` (Lite) for CPU speed.
 - Use `MP_MODEL_COMPLEXITY=2` to try Heavy if CPU latency is acceptable.
 - MediaPipe Python on Linux does not use CUDA through the normal pip package.
-- YOLO pose is a future backend candidate, mainly because it can provide person bbox/confidence and CUDA acceleration via PyTorch.
+- MediaPipe returns 33 landmarks, including extra hand/foot/face points used by some current rules.
 
-Relevant config:
+Config:
 
 ```env
+POSE_BACKEND=mediapipe
 MP_MODEL_COMPLEXITY=0
 MP_MIN_DET_CONF=0.5
 MP_MIN_TRACK_CONF=0.5
@@ -119,9 +133,70 @@ MP_EMA_ALPHA=0.4
 MP_VIS_THRESHOLD=0.5
 ```
 
+### ViTPose backend
+
+`backend/posture/vitpose_utils.py` adds an optional `VitPoseProcessor` using Hugging Face `VitPoseForPoseEstimation`.
+
+Current behavior:
+
+- The ViTPose backend predicts COCO-17 body keypoints.
+- Those 17 keypoints are mapped into the existing MediaPipe-style 33-landmark slots so the current gates, angle extraction, phase detector, skeleton preview, and feedback rules can be reused.
+- Missing MediaPipe-only landmarks are marked invisible.
+- The prototype uses the whole frame as the single-person box. This is fine for controlled single-person videos, but a detector/crop stage should be added for loose framing or multiple people.
+- ViTPose has no MediaPipe-style `z` depth. Any rule using `z` should be treated as less informative under ViTPose.
+
+Install optional dependencies:
+
+```bash
+cd backend
+../p1_env/bin/pip install -r requirements-vitpose.txt
+```
+
+Run backend with ViTPose:
+
+```bash
+cd backend
+POSE_BACKEND=vitpose VITPOSE_DEVICE=auto \
+  ../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000 --reload
+```
+
+Then use the same `/posture/analyze-video` endpoint as normal. The frontend can also send `pose_backend=vitpose` per request. Responses include:
+
+```json
+{
+  "pose_backend": "vitpose",
+  "summary": {
+    "pose_backend": "vitpose"
+  }
+}
+```
+
+Config:
+
+```env
+POSE_BACKEND=vitpose
+VITPOSE_MODEL=usyd-community/vitpose-base-simple
+VITPOSE_DEVICE=auto
+VITPOSE_KEYPOINT_THRESHOLD=0.25
+VITPOSE_POSE_THRESHOLD=0.25
+VITPOSE_EMA_ALPHA=0.35
+```
+
+Recommended comparison workflow:
+
+```bash
+# Baseline request
+-F "pose_backend=mediapipe"
+
+# Quality experiment request
+-F "pose_backend=vitpose"
+```
+
+Upload the same video with the same `sample_fps`, `max_frames`, `camera_view`, and preview settings, then compare `pose_backend`, `frames_analyzed`, `phase_counts`, `rep_count`, `top_feedback`, `angle_stats`, and skeleton preview quality.
+
 ## 4. Subject-Ready Gate
 
-MediaPipe can hallucinate body landmarks when the user is not fully in frame. To prevent false `ok` frames and fake phases, session analysis now gates frames before phase detection.
+Pose backends can hallucinate body landmarks when the user is not fully in frame. To prevent false `ok` frames and fake phases, session analysis gates frames before phase detection.
 
 A frame must pass:
 
@@ -179,8 +254,24 @@ Computed values include:
 
 - `left_elbow`, `right_elbow` when visible
 - `left_elbow_drift`, `right_elbow_drift` when visible
+- `torso_lean` when at least one shoulder/hip side is visible
+- `elbow_flare_angle`, `wrist_angle`, and `shoulder_elevation_ratio` when the needed side keypoints are visible
 
-Elbow drift currently uses MediaPipe `z` as an approximate depth signal, normalized by shoulder width. This is useful but not physically exact.
+Elbow drift combines image-space shoulder/elbow offset and any available `z` offset, normalized by visible torso length when possible and upper-arm length as a fallback. Under MediaPipe, `z` is approximate; under ViTPose, `z` is currently `0.0`, so elbow drift is mainly image-space.
+Torso lean is the image-space angle between the shoulder-to-hip segment and vertical. It helps catch cheat curls where the user leans through the back for momentum while the arm keypoints are still visible.
+Supination is intentionally not detected because the current pose backends do not expose reliable forearm rotation/hand orientation for this use case.
+
+Config:
+
+```env
+POSTURE_CURL_ELBOW_DRIFT_THRESH=0.40
+POSTURE_CURL_TORSO_LEAN_THRESH=14.0
+POSTURE_CURL_TOP_ROM_THRESH=80.0
+POSTURE_CURL_BOTTOM_ROM_THRESH=150.0
+POSTURE_CURL_WRIST_FLEXION_THRESH=150.0
+POSTURE_CURL_ELBOW_FLARE_THRESH=32.0
+POSTURE_CURL_SHOULDER_ELEVATION_THRESH=0.38
+```
 
 ## 7. Phase Detection
 
@@ -357,8 +448,8 @@ Use first few valid reps to tune thresholds per user and camera setup.
 
 | Limitation | Impact | Current mitigation |
 |---|---|---|
-| MediaPipe hallucination on partial subjects | False phases before user is ready | Subject-ready gate + ready-frame streak |
+| Pose backend hallucination on partial subjects | False phases before user is ready | Subject-ready gate + ready-frame streak |
 | Camera angle sensitivity | Valgus/drift can be noisy | Skeleton preview + visibility gate |
-| MediaPipe `z` is estimated | Elbow drift is approximate | Treat as coaching cue, not precise measurement |
+| Depth is backend-dependent | Elbow drift is approximate; ViTPose currently has no `z` depth | Treat as coaching cue, not precise measurement |
 | Universal phase thresholds | Some bodies/reps may misclassify | Future calibration |
-| CPU-only MediaPipe on Linux | Heavy model is slower | Lite default, optional Heavy |
+| Backend performance varies | MediaPipe is light; ViTPose is heavier but can use PyTorch/CUDA | Use `POSE_BACKEND` per experiment |

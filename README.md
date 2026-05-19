@@ -1,13 +1,13 @@
 # GymFixer
 
-AI-assisted workout posture analysis. The active product flow is after-session video analysis: upload a squat or bicep-curl video, the backend samples frames, runs MediaPipe pose estimation, computes angles and reps, returns skeleton previews, and optionally calls Gemini for coaching.
+AI-assisted workout posture analysis. The active product flow is after-session video analysis: upload a squat or bicep-curl video, the backend samples frames, runs the selected pose backend, computes angles and reps, returns skeleton previews, and optionally calls Gemini for coaching.
 
 ## Current Stack
 
 | Layer | Tech |
 |---|---|
 | Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS, Recharts |
-| Backend | FastAPI, SQLAlchemy, SQLite, MediaPipe, OpenCV |
+| Backend | FastAPI, SQLAlchemy, SQLite, MediaPipe, optional ViTPose, OpenCV |
 | Auth | Email/password registration and login, JWT token generation |
 | LLM coaching | Gemini API, disabled by default in dev |
 
@@ -71,6 +71,14 @@ source p1_env/bin/activate
 pip install -r backend/requirements.txt
 ```
 
+Optional offline-quality ViTPose backend:
+
+```bash
+pip install -r backend/requirements-vitpose.txt
+```
+
+ViTPose is optional because it installs a heavier PyTorch/Transformers stack. The normal backend still runs with `requirements.txt` only.
+
 Create `backend/.env`:
 
 ```env
@@ -80,10 +88,11 @@ JWT_SECRET_KEY=change-this-for-real-use
 # Optional Gemini coaching
 GEMINI_API_KEY=your-key
 GEMINI_MODEL=gemini-3-flash-preview
-GEMINI_MAX_OUTPUT_TOKENS=1024
+GEMINI_MAX_OUTPUT_TOKENS=3000
 POSTURE_LLM_MAX_LOG_FRAMES=60
 
 # Pose/session analysis
+POSE_BACKEND=mediapipe
 POSTURE_SUBJECT_READY_MIN_FRAMES=10
 POSTURE_SUBJECT_MIN_BBOX_AREA=0.035
 POSTURE_SUBJECT_MIN_BBOX_WIDTH=0.12
@@ -91,7 +100,41 @@ POSTURE_SUBJECT_MIN_BBOX_HEIGHT=0.20
 MP_MIN_DET_CONF=0.5
 MP_MIN_TRACK_CONF=0.5
 MP_VIS_THRESHOLD=0.5
+
+# Optional when POSE_BACKEND=vitpose
+VITPOSE_MODEL=usyd-community/vitpose-base-simple
+VITPOSE_DEVICE=auto
+VITPOSE_KEYPOINT_THRESHOLD=0.25
+VITPOSE_POSE_THRESHOLD=0.25
+VITPOSE_EMA_ALPHA=0.35
 ```
+
+### Choosing a Pose Backend
+
+Default MediaPipe run:
+
+```bash
+cd /mnt/data/gymfixer/backend
+POSE_BACKEND=mediapipe ../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000 --reload
+```
+
+ViTPose experiment:
+
+```bash
+cd /mnt/data/gymfixer/backend
+../p1_env/bin/pip install -r requirements-vitpose.txt
+POSE_BACKEND=vitpose VITPOSE_DEVICE=auto ../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000 --reload
+```
+
+Use the frontend normally after the backend starts. The Dashboard includes a temporary `Pose Backend` selector for MediaPipe or ViTPose. The analysis response includes `pose_backend` at the top level and inside `summary`, so you can confirm which backend processed the video.
+
+Current ViTPose notes:
+
+- It is intended for offline uploaded videos, not the old realtime WebSocket path.
+- It maps ViTPose COCO-17 body keypoints into the existing MediaPipe-style landmark slots.
+- It currently uses the whole frame as the person box, so single-person, well-framed videos are expected.
+- It does not provide MediaPipe's detailed hand landmarks or `z` depth estimate.
+- If install was interrupted, rerun the `pip install -r backend/requirements-vitpose.txt` command.
 
 ### Frontend
 
@@ -155,6 +198,8 @@ Form fields:
 
 ```text
 exercise=squat | bicep_curl
+camera_view=side | front | three_quarter
+pose_backend=mediapipe | vitpose
 file=@video.mp4
 call_llm=false
 sample_fps=8
@@ -168,6 +213,8 @@ Example:
 ```bash
 curl -X POST http://127.0.0.1:5000/posture/analyze-video \
   -F "exercise=squat" \
+  -F "camera_view=side" \
+  -F "pose_backend=mediapipe" \
   -F "file=@/path/to/squat.mp4" \
   -F "call_llm=false" \
   -F "sample_fps=8" \
@@ -175,6 +222,15 @@ curl -X POST http://127.0.0.1:5000/posture/analyze-video \
   -F "include_preview=true" \
   -F "preview_max_frames=24"
 ```
+
+To compare pose backends, run the same upload twice with the same form fields, changing only `pose_backend`:
+
+```bash
+-F "pose_backend=mediapipe"  # baseline
+-F "pose_backend=vitpose"    # optional quality experiment
+```
+
+Compare `frames_analyzed`, `rep_count`, `phase_counts`, `top_feedback`, `angle_stats`, and the skeleton preview frames.
 
 ### Frame Session Analysis
 

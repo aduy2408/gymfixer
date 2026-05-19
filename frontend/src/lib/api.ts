@@ -2,12 +2,15 @@
 
 export type ExerciseId = "squat" | "bicep_curl";
 export type CameraView = "side" | "front" | "three_quarter";
+export type PoseBackend = "mediapipe" | "vitpose";
 
 export type VideoAnalysisResult = {
   exercise: string;
   camera_view?: CameraView | string;
+  pose_backend?: string;
   summary: {
     camera_view?: CameraView | string;
+    pose_backend?: string;
     frames_received: number;
     frames_analyzed: number;
     waiting_for_subject_frames?: number;
@@ -23,6 +26,10 @@ export type VideoAnalysisResult = {
   llm: {
     enabled: boolean;
     model: string;
+    max_output_tokens?: number;
+    prompt_chars?: number;
+    finish_reason?: string | null;
+    usage_metadata?: Record<string, unknown> | null;
     recommendations: string;
     error: string | null;
   };
@@ -105,6 +112,7 @@ export async function analyzeVideo(params: {
   file: File;
   exercise: ExerciseId;
   cameraView: CameraView;
+  poseBackend: PoseBackend;
   callLlm: boolean;
   sampleFps: number;
   maxFrames: number;
@@ -114,6 +122,7 @@ export async function analyzeVideo(params: {
   const formData = new FormData();
   formData.append("exercise", params.exercise);
   formData.append("camera_view", params.cameraView);
+  formData.append("pose_backend", params.poseBackend);
   formData.append("file", params.file);
   formData.append("call_llm", String(params.callLlm));
   formData.append("sample_fps", String(params.sampleFps));
