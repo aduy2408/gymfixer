@@ -146,21 +146,33 @@ def check_visibility(landmarks, exercise: str) -> tuple[bool, list[str]]:
 # ---------------------------------------------------------------------------
 
 class PoseProcessor:
-    """Persistent MediaPipe Pose processor (Heavy model, model_complexity=2).
+    """Persistent pose processor facade.
 
-    Upgraded from the default Lite model to improve accuracy on partial
-    occlusions common in gym environments (e.g., weights blocking limbs).
-
-    GPU note: MediaPipe Python on Linux uses CPU by default. The Heavy model
-    still improves accuracy significantly over Lite/Full on CPU.
+    Default backend is MediaPipe Pose. Set POSE_BACKEND=vitpose to use the
+    optional offline ViTPose backend while preserving the existing landmark
+    format expected by visibility gates, angle extraction, and feedback rules.
 
     Usage:
         processor = PoseProcessor()
         pose_landmarks, landmarks, smoothed_landmarks = processor.process(frame)
     """
 
-    def __init__(self, min_detection_confidence=0.5, min_tracking_confidence=0.5,
-                 model_complexity=0):
+    def __init__(
+        self,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
+        model_complexity=0,
+        backend_name: str | None = None,
+    ):
+        self.backend_name = (backend_name or os.getenv("POSE_BACKEND", "mediapipe")).strip().lower()
+        self._delegate = None
+        if self.backend_name == "vitpose":
+            from posture.vitpose_utils import VitPoseProcessor
+
+            self._delegate = VitPoseProcessor()
+            return
+
+        self.backend_name = "mediapipe"
         self.min_detection_confidence = float(os.getenv("MP_MIN_DET_CONF", min_detection_confidence))
         self.min_tracking_confidence = float(os.getenv("MP_MIN_TRACK_CONF", min_tracking_confidence))
         # model_complexity: 0=Lite (~15ms, best FPS), 1=Full, 2=Heavy (~50ms)
@@ -189,6 +201,9 @@ class PoseProcessor:
         Returns (pose_landmarks, raw_landmarks_list, smoothed_landmarks_list).
         All three may be None if no person detected.
         """
+        if self._delegate is not None:
+            return self._delegate.process(frame)
+
         if frame is None:
             return None, None, None
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -224,6 +239,28 @@ def _safe_angle(a, b, c):
         return math.degrees(math.acos(cosine_angle))
     except Exception:
         logger.exception("Error calculating angle")
+        return None
+
+
+def _vertical_lean_degrees(top, bottom) -> float | None:
+    """Angle between a body segment and the image vertical axis."""
+    try:
+        dx = float(top.x) - float(bottom.x)
+        dy = float(bottom.y) - float(top.y)
+        length = math.hypot(dx, dy)
+        if length == 0:
+            return None
+        return math.degrees(math.atan2(abs(dx), abs(dy)))
+    except Exception:
+        logger.exception("Error calculating vertical lean")
+        return None
+
+
+def _point_distance(a, b) -> float | None:
+    try:
+        return math.hypot(float(a.x) - float(b.x), float(a.y) - float(b.y))
+    except Exception:
+        logger.exception("Error calculating point distance")
         return None
 
 
@@ -435,53 +472,94 @@ def get_shoulder_press_angles(landmarks):
 
 
 def get_bicep_curl_angles(landmarks):
-    """Elbow angles for bicep curl.
-
-    Also computes elbow_drift: how far the elbow has moved away from the torso
-    (shoulder-to-elbow x-offset normalised by shoulder width). A large positive
-    drift indicates the upper arm is swinging forward for momentum.
-    """
+    """Angles and posture metrics for bicep curl analysis."""
     angles = {}
     if not _has_enough_landmarks(landmarks):
         return angles
 
-    for side, sh, el, wr in [
+    side_specs = [
         ('right',
          mp_pose.PoseLandmark.RIGHT_SHOULDER.value,
          mp_pose.PoseLandmark.RIGHT_ELBOW.value,
-         mp_pose.PoseLandmark.RIGHT_WRIST.value),
+         mp_pose.PoseLandmark.RIGHT_WRIST.value,
+         mp_pose.PoseLandmark.RIGHT_HIP.value,
+         mp_pose.PoseLandmark.RIGHT_INDEX.value,
+         mp_pose.PoseLandmark.RIGHT_EAR.value),
         ('left',
          mp_pose.PoseLandmark.LEFT_SHOULDER.value,
          mp_pose.PoseLandmark.LEFT_ELBOW.value,
-         mp_pose.PoseLandmark.LEFT_WRIST.value),
-    ]:
-        if not _landmarks_visible(landmarks, [sh, el, wr]):
-            continue
-        val = _safe_angle(landmarks[sh], landmarks[el], landmarks[wr])
-        if val is not None:
-            angles[f'{side}_elbow'] = val
+         mp_pose.PoseLandmark.LEFT_WRIST.value,
+         mp_pose.PoseLandmark.LEFT_HIP.value,
+         mp_pose.PoseLandmark.LEFT_INDEX.value,
+         mp_pose.PoseLandmark.LEFT_EAR.value),
+    ]
 
-    # Elbow drift: forward swing of elbow during curl
-    try:
-        lsh = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value]
-        rsh = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value]
-        lel = landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value]
-        rel = landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value]
-        shoulder_width = abs(lsh.x - rsh.x) or 0.001
-        # How far each elbow has moved forward (y-axis in image ≈ vertical,
-        # z-axis in MediaPipe ≈ depth; use z for forward lean)
-        if _landmarks_visible(landmarks, [
-            mp_pose.PoseLandmark.RIGHT_SHOULDER.value,
-            mp_pose.PoseLandmark.RIGHT_ELBOW.value,
-        ]):
-            angles['right_elbow_drift'] = abs(rel.z - rsh.z) / shoulder_width
-        if _landmarks_visible(landmarks, [
-            mp_pose.PoseLandmark.LEFT_SHOULDER.value,
-            mp_pose.PoseLandmark.LEFT_ELBOW.value,
-        ]):
-            angles['left_elbow_drift'] = abs(lel.z - lsh.z) / shoulder_width
-    except Exception:
-        pass
+    torso_leans = []
+    elbow_drifts = []
+    elbow_flare_angles = []
+    wrist_flexion_angles = []
+    shoulder_elevation_ratios = []
+
+    for side, sh, el, wr, hip, index, ear in side_specs:
+        if not _landmarks_visible(landmarks, [sh, el, wr]):
+            # Keep one-arm curl support: skip only the hidden side.
+            continue
+
+        shoulder = landmarks[sh]
+        elbow = landmarks[el]
+        wrist = landmarks[wr]
+        elbow_angle = _safe_angle(shoulder, elbow, wrist)
+        if elbow_angle is not None:
+            angles[f'{side}_elbow'] = elbow_angle
+
+        upper_arm_lean = _vertical_lean_degrees(elbow, shoulder)
+        if upper_arm_lean is not None:
+            angles[f'{side}_upper_arm_lean'] = upper_arm_lean
+            elbow_flare_angles.append(upper_arm_lean)
+
+        upper_arm_len = _point_distance(shoulder, elbow) or 0.001
+        drift_normalizer = upper_arm_len
+        if _landmarks_visible(landmarks, [sh, hip]):
+            hip_lm = landmarks[hip]
+            torso_len = _point_distance(shoulder, hip_lm) or 0.001
+            drift_normalizer = torso_len
+
+            torso_lean = _vertical_lean_degrees(shoulder, hip_lm)
+            if torso_lean is not None:
+                angles[f'{side}_torso_lean'] = torso_lean
+                torso_leans.append(torso_lean)
+
+            if _landmarks_visible(landmarks, [ear]):
+                ear_lm = landmarks[ear]
+                shoulder_to_ear = max(0.0, float(shoulder.y) - float(ear_lm.y))
+                elevation_ratio = shoulder_to_ear / torso_len
+                angles[f'{side}_shoulder_elevation_ratio'] = elevation_ratio
+                shoulder_elevation_ratios.append(elevation_ratio)
+
+        elbow_xy_offset = abs(float(elbow.x) - float(shoulder.x)) / drift_normalizer
+        elbow_z_offset = abs(float(elbow.z) - float(shoulder.z)) / drift_normalizer
+        elbow_drift = max(elbow_xy_offset, elbow_z_offset)
+        angles[f'{side}_elbow_xy_offset'] = elbow_xy_offset
+        angles[f'{side}_elbow_z_offset'] = elbow_z_offset
+        angles[f'{side}_elbow_drift'] = elbow_drift
+        elbow_drifts.append(elbow_drift)
+
+        if _landmarks_visible(landmarks, [index]):
+            wrist_angle = _safe_angle(elbow, wrist, landmarks[index])
+            if wrist_angle is not None:
+                angles[f'{side}_wrist_angle'] = wrist_angle
+                wrist_flexion_angles.append(wrist_angle)
+
+    if torso_leans:
+        angles['torso_lean'] = max(torso_leans)
+    if elbow_drifts:
+        angles['elbow_drift'] = max(elbow_drifts)
+    if elbow_flare_angles:
+        angles['elbow_flare_angle'] = max(elbow_flare_angles)
+    if wrist_flexion_angles:
+        angles['wrist_angle'] = min(wrist_flexion_angles)
+    if shoulder_elevation_ratios:
+        angles['shoulder_elevation_ratio'] = min(shoulder_elevation_ratios)
 
     return angles
 
@@ -512,4 +590,4 @@ def get_angles_for_exercise(exercise, landmarks):
 # Default singleton reused by the WebSocket handler
 # ---------------------------------------------------------------------------
 
-DEFAULT_POSE_PROCESSOR = PoseProcessor()
+DEFAULT_POSE_PROCESSOR = None if os.getenv("POSE_BACKEND", "mediapipe").strip().lower() == "vitpose" else PoseProcessor()

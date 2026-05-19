@@ -8,12 +8,14 @@ import time
 import urllib.error
 import urllib.request
 from collections import Counter, defaultdict
+from pathlib import Path
 from typing import Any
 
 import cv2
 import numpy as np
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
 
 from posture import feedback as feedback_module
 from posture import mediapipe_utils
@@ -21,16 +23,45 @@ from posture import visualizer
 from posture.phase_detector import PhaseDetector
 
 
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
 router = APIRouter(prefix="/posture", tags=["posture"])
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
-GEMINI_MAX_OUTPUT_TOKENS = int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", "1024"))
+GEMINI_MAX_OUTPUT_TOKENS = int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", "3000"))
 POSTURE_LLM_MAX_LOG_FRAMES = int(os.getenv("POSTURE_LLM_MAX_LOG_FRAMES", "120"))
 SUBJECT_READY_MIN_FRAMES = int(os.getenv("POSTURE_SUBJECT_READY_MIN_FRAMES", "3"))
 SUBJECT_MIN_BBOX_AREA = float(os.getenv("POSTURE_SUBJECT_MIN_BBOX_AREA", "0.035"))
 SUBJECT_MIN_BBOX_WIDTH = float(os.getenv("POSTURE_SUBJECT_MIN_BBOX_WIDTH", "0.12"))
 SUBJECT_MIN_BBOX_HEIGHT = float(os.getenv("POSTURE_SUBJECT_MIN_BBOX_HEIGHT", "0.20"))
+
+
+def _normalise_camera_view(camera_view: str | None) -> str:
+    value = (camera_view or "side").strip().lower().replace("-", "_")
+    aliases = {
+        "45": "three_quarter",
+        "45_degree": "three_quarter",
+        "three_quarter": "three_quarter",
+        "quarter": "three_quarter",
+        "front": "front",
+        "side": "side",
+    }
+    return aliases.get(value, "side")
+
+
+def _normalise_pose_backend(pose_backend: str | None) -> str:
+    value = (pose_backend or os.getenv("POSE_BACKEND", "mediapipe")).strip().lower()
+    aliases = {
+        "mp": "mediapipe",
+        "mediapipe": "mediapipe",
+        "vit": "vitpose",
+        "vitpose": "vitpose",
+    }
+    if value not in aliases:
+        supported = ", ".join(sorted(set(aliases.values())))
+        raise ValueError(f"Unsupported pose_backend '{pose_backend}'. Supported: {supported}")
+    return aliases[value]
 
 
 
@@ -44,6 +75,14 @@ class SessionFrame(BaseModel):
 
 class PostureSessionRequest(BaseModel):
     exercise: str
+    camera_view: str = Field(
+        default="side",
+        description="Camera angle for view-dependent rules: side, front, or three_quarter.",
+    )
+    pose_backend: str | None = Field(
+        default=None,
+        description="Optional pose backend override: mediapipe or vitpose.",
+    )
     frames: list[SessionFrame] = Field(..., min_length=1)
     call_llm: bool = Field(
         default=False,
@@ -58,6 +97,8 @@ def analyze_posture_session(
     call_llm: bool = False,
     include_preview: bool = False,
     preview_max_frames: int = 24,
+    camera_view: str = "side",
+    pose_backend: str | None = None,
 ) -> dict[str, Any]:
     """Process a full exercise session, then ask Gemini for coaching advice.
 
@@ -68,8 +109,14 @@ def analyze_posture_session(
     if exercise not in mediapipe_utils.ANGLE_FUNCTIONS:
         supported = ", ".join(sorted(mediapipe_utils.ANGLE_FUNCTIONS))
         raise ValueError(f"Unsupported exercise '{exercise}'. Supported: {supported}")
+    camera_view = _normalise_camera_view(camera_view)
+    pose_backend = _normalise_pose_backend(pose_backend)
 
-    pose_processor = mediapipe_utils.PoseProcessor()
+    try:
+        pose_processor = mediapipe_utils.PoseProcessor(backend_name=pose_backend)
+    except RuntimeError as exc:
+        raise ValueError(str(exc)) from exc
+    pose_backend = getattr(pose_processor, "backend_name", "mediapipe")
     phase_detector = PhaseDetector(exercise)
     started_at = time.time()
 
@@ -187,7 +234,12 @@ def analyze_posture_session(
 
         angles = mediapipe_utils.get_angles_for_exercise(exercise, smoothed_landmarks)
         phase, rep_count = phase_detector.update(angles)
-        feedback = feedback_module.generate_feedback(exercise, angles, phase=phase)
+        feedback = feedback_module.generate_feedback(
+            exercise,
+            angles,
+            phase=phase,
+            camera_view=camera_view,
+        )
 
         for name, value in angles.items():
             angle_values[name].append(float(value))
@@ -218,6 +270,8 @@ def analyze_posture_session(
 
     summary = _build_session_summary(
         exercise=exercise,
+        camera_view=camera_view,
+        pose_backend=pose_backend,
         frame_count=len(encoded_frames),
         frame_log=frame_log,
         issue_counts=issue_counts,
@@ -231,16 +285,24 @@ def analyze_posture_session(
     llm = {
         "enabled": False,
         "model": GEMINI_MODEL,
+        "max_output_tokens": GEMINI_MAX_OUTPUT_TOKENS,
+        "prompt_chars": 0,
+        "finish_reason": None,
+        "usage_metadata": None,
         "recommendations": _local_recommendations(summary),
         "error": None,
     }
     if call_llm:
         prompt = build_gemini_posture_prompt(summary, frame_log)
         llm["enabled"] = True
-        llm["recommendations"] = call_gemini_posture_coach(prompt)
+        llm["prompt_chars"] = len(prompt)
+        llm_result = call_gemini_posture_coach(prompt)
+        llm.update(llm_result)
 
     return {
         "exercise": exercise,
+        "camera_view": camera_view,
+        "pose_backend": pose_backend,
         "summary": summary,
         "llm": llm,
         "frame_log": frame_log,
@@ -261,6 +323,8 @@ async def analyze_session(request: PostureSessionRequest):
             request.exercise,
             request.frames,
             call_llm=request.call_llm,
+            camera_view=request.camera_view,
+            pose_backend=request.pose_backend,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -269,6 +333,8 @@ async def analyze_session(request: PostureSessionRequest):
 @router.post("/analyze-video")
 async def analyze_video(
     exercise: str = Form(...),
+    camera_view: str = Form("side"),
+    pose_backend: str | None = Form(None),
     file: UploadFile = File(...),
     call_llm: bool = Form(False),
     sample_fps: float = Form(8.0),
@@ -314,6 +380,8 @@ async def analyze_video(
             call_llm=call_llm,
             include_preview=include_preview,
             preview_max_frames=preview_max_frames,
+            camera_view=camera_view,
+            pose_backend=pose_backend,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -366,6 +434,8 @@ def _summary_for_llm(
     top_feedback = summary.get("top_feedback", {})
     return {
         "exercise": summary.get("exercise"),
+        "camera_view": summary.get("camera_view", "side"),
+        "pose_backend": summary.get("pose_backend", "mediapipe"),
         "analyzed_frames": len(coaching_log),
         "rep_count": summary.get("rep_count", 0),
         "phase_counts": summary.get("phase_counts", {}),
@@ -379,7 +449,7 @@ def _summary_for_llm(
         ),
     }
 
-def call_gemini_posture_coach(prompt: str) -> str:
+def call_gemini_posture_coach(prompt: str) -> dict[str, Any]:
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not configured.")
 
@@ -413,8 +483,14 @@ def call_gemini_posture_coach(prompt: str) -> str:
         raise RuntimeError(f"Gemini request failed: {exc.reason}") from exc
 
     try:
-        parts = result["candidates"][0]["content"]["parts"]
-        return "\n".join(part.get("text", "") for part in parts).strip()
+        candidate = result["candidates"][0]
+        parts = candidate["content"]["parts"]
+        recommendations = "\n".join(part.get("text", "") for part in parts).strip()
+        return {
+            "recommendations": recommendations,
+            "finish_reason": candidate.get("finishReason"),
+            "usage_metadata": result.get("usageMetadata"),
+        }
     except (KeyError, IndexError, TypeError) as exc:
         raise RuntimeError("Gemini response did not contain text output.") from exc
 
@@ -706,6 +782,8 @@ def _frame_log_entry_for_prompt(entry: dict[str, Any]) -> dict[str, Any]:
 def _build_session_summary(
     *,
     exercise: str,
+    camera_view: str,
+    pose_backend: str,
     frame_count: int,
     frame_log: list[dict[str, Any]],
     issue_counts: Counter[str],
@@ -737,6 +815,8 @@ def _build_session_summary(
 
     return {
         "exercise": exercise,
+        "camera_view": camera_view,
+        "pose_backend": pose_backend,
         "frames_received": frame_count,
         "frames_analyzed": ok_frames,
         "analysis_quality": _build_analysis_quality(frame_log),

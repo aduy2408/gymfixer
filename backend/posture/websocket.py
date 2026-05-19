@@ -73,6 +73,7 @@ async def posture_ws(websocket: WebSocket):
 
     # --- Per-session state ---
     exercise: str | None = None
+    camera_view: str = "side"
     phase_detector: PhaseDetector | None = None
     last_processed: float = 0.0
     last_feedback: list[str] = ["No frames processed yet."]
@@ -115,6 +116,8 @@ async def posture_ws(websocket: WebSocket):
                         logger.info(f"Exercise changed: {exercise} → {new_ex}")
                         exercise = new_ex
                         _reset_detector(exercise)
+                if "camera_view" in data:
+                    camera_view = data.get("camera_view") or "side"
 
                 # Meta-control message
                 if data.get("type") == "meta":
@@ -122,6 +125,7 @@ async def posture_ws(websocket: WebSocket):
                     if new_ex != exercise:
                         exercise = new_ex
                         _reset_detector(exercise)
+                    camera_view = data.get("camera_view", camera_view) or "side"
                     skeleton_enabled = data.get("skeleton", skeleton_enabled)
                     if data.get("verbose") is not None and data["verbose"]:
                         logger.setLevel(logging.DEBUG)
@@ -223,7 +227,10 @@ async def posture_ws(websocket: WebSocket):
 
                             # Phase-aware feedback
                             feedback = feedback_module.generate_feedback(
-                                exercise, angles, phase=phase_str
+                                exercise,
+                                angles,
+                                phase=phase_str,
+                                camera_view=camera_view,
                             )
 
             # ------------------------------------------------------------------

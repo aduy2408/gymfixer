@@ -7,6 +7,22 @@ threshold-based feedback unchanged from the original implementation.
 
 from __future__ import annotations
 
+import os
+
+
+def _normalise_camera_view(camera_view: str | None) -> str:
+    value = (camera_view or "side").strip().lower().replace("-", "_")
+    aliases = {
+        "45": "three_quarter",
+        "45_degree": "three_quarter",
+        "three_quarter": "three_quarter",
+        "quarter": "three_quarter",
+        "front": "front",
+        "side": "side",
+    }
+    return aliases.get(value, "side")
+
+
 # ---------------------------------------------------------------------------
 # Squat — phase-aware
 # ---------------------------------------------------------------------------
@@ -87,61 +103,108 @@ def generate_squat_feedback(angles: dict, phase: str | None = None) -> list[str]
 # Bicep curl — phase-aware
 # ---------------------------------------------------------------------------
 
-def generate_bicep_curl_feedback(angles: dict, phase: str | None = None) -> list[str]:
+def generate_bicep_curl_feedback(
+    angles: dict,
+    phase: str | None = None,
+    camera_view: str | None = "side",
+) -> list[str]:
     """Generate cue-specific bicep curl feedback based on current phase.
 
     Phases: EXTENDED | CURLING | CONTRACTED | LOWERING
     """
     feedback: list[str] = []
+    view = _normalise_camera_view(camera_view)
+    side_like = view in {"side", "three_quarter"}
+    front_like = view in {"front", "three_quarter"}
 
-    re = angles.get('right_elbow')
-    le = angles.get('left_elbow')
-    r_drift = angles.get('right_elbow_drift', 0.0)
-    l_drift = angles.get('left_elbow_drift', 0.0)
-    max_drift = max(r_drift, l_drift)
+    elbows = [
+        value
+        for value in (angles.get('right_elbow'), angles.get('left_elbow'))
+        if value is not None
+    ]
+    max_elbow = max(elbows) if elbows else None
+    min_elbow = min(elbows) if elbows else None
+    max_drift = max(
+        angles.get('elbow_drift', 0.0),
+        angles.get('right_elbow_drift', 0.0),
+        angles.get('left_elbow_drift', 0.0),
+    )
+    torso_lean = angles.get('torso_lean')
+    wrist_angle = angles.get('wrist_angle')
+    elbow_flare = angles.get('elbow_flare_angle')
+    shoulder_elevation = angles.get('shoulder_elevation_ratio')
 
-    DRIFT_THRESH = 0.4   # normalised; above = swinging the arm
+    DRIFT_THRESH = float(os.getenv("POSTURE_CURL_ELBOW_DRIFT_THRESH", "0.40"))
+    TORSO_LEAN_THRESH = float(os.getenv("POSTURE_CURL_TORSO_LEAN_THRESH", "14.0"))
+    TOP_ROM_THRESH = float(os.getenv("POSTURE_CURL_TOP_ROM_THRESH", "80.0"))
+    BOTTOM_ROM_THRESH = float(os.getenv("POSTURE_CURL_BOTTOM_ROM_THRESH", "150.0"))
+    WRIST_FLEXION_THRESH = float(os.getenv("POSTURE_CURL_WRIST_FLEXION_THRESH", "150.0"))
+    ELBOW_FLARE_THRESH = float(os.getenv("POSTURE_CURL_ELBOW_FLARE_THRESH", "32.0"))
+    SHOULDER_ELEVATION_THRESH = float(os.getenv("POSTURE_CURL_SHOULDER_ELEVATION_THRESH", "0.38"))
+
+    def add_wrist_cue() -> None:
+        if wrist_angle is not None and wrist_angle < WRIST_FLEXION_THRESH:
+            feedback.append("Keep your wrist neutral — don't curl the weight with your forearm.")
+
+    def add_side_momentum_cues() -> None:
+        if torso_lean is not None and torso_lean > TORSO_LEAN_THRESH:
+            feedback.append("Keep your torso upright — don't lean back to curl the weight.")
+        if max_drift > DRIFT_THRESH:
+            feedback.append("Keep your elbows pinned to your sides — don't let them travel forward.")
+
+    def add_front_stability_cues() -> None:
+        if shoulder_elevation is not None and shoulder_elevation < SHOULDER_ELEVATION_THRESH:
+            feedback.append("Relax your traps — don't shrug your shoulders during the curl.")
+        if elbow_flare is not None and elbow_flare > ELBOW_FLARE_THRESH:
+            feedback.append("Keep your elbows tucked — don't flare them out to the side.")
 
     if phase == "CURLING":
-        if max_drift > DRIFT_THRESH:
-            feedback.append("Keep your elbows pinned to your sides — avoid swinging.")
+        if side_like:
+            add_side_momentum_cues()
+        if front_like:
+            add_front_stability_cues()
+        add_wrist_cue()
         if not feedback:
             feedback.append("Curl up — squeeze at the top!")
 
     elif phase == "CONTRACTED":
-        if re is not None and le is not None:
-            avg_elbow = (re + le) / 2.0
-            if avg_elbow > 80:
-                feedback.append("Squeeze harder at the top — get the full contraction.")
-        if max_drift > DRIFT_THRESH:
-            feedback.append("Elbows forward — you're using momentum instead of the bicep.")
+        if max_elbow is not None and max_elbow > TOP_ROM_THRESH:
+            feedback.append("Finish the curl higher — don't stop short at the top.")
+        if side_like:
+            add_side_momentum_cues()
+        if front_like:
+            add_front_stability_cues()
+        add_wrist_cue()
         if not feedback:
             feedback.append("Great contraction! Now lower slowly.")
 
     elif phase == "LOWERING":
-        if re is not None and le is not None:
-            avg_elbow = (re + le) / 2.0
-            if avg_elbow > 140:
-                feedback.append("Slow down the descent — control the negative.")
-        if max_drift > DRIFT_THRESH:
-            feedback.append("Keep elbows close — don't let them drift back.")
+        if side_like:
+            add_side_momentum_cues()
+        if front_like:
+            add_front_stability_cues()
+        add_wrist_cue()
         if not feedback:
             feedback.append("Good control on the way down.")
 
     elif phase == "EXTENDED":
-        if re is not None and le is not None:
-            if min(re, le) < 150:
-                feedback.append("Fully extend your arms at the bottom for a complete rep.")
+        if min_elbow is not None and min_elbow < BOTTOM_ROM_THRESH:
+            feedback.append("Lower to full elbow extension before starting the next rep.")
+        add_wrist_cue()
         if not feedback:
             feedback.append("Arms extended — ready for the next curl.")
 
     else:
         # Fallback static checks
-        if re is not None and le is not None:
-            if max(re, le) > 160:
-                feedback.append("Extend your arms fully to complete the negative.")
-            if min(re, le) < 40:
-                feedback.append("Squeeze at the top of the curl; control the motion.")
+        if max_elbow is not None and max_elbow > 165:
+            feedback.append("Use a controlled curl — don't just hang at the bottom.")
+        if min_elbow is not None and min_elbow < 40:
+            feedback.append("Avoid over-curling; keep tension and control at the top.")
+        if side_like:
+            add_side_momentum_cues()
+        if front_like:
+            add_front_stability_cues()
+        add_wrist_cue()
         if not feedback:
             feedback.append("Nice curls — controlled tempo and full range.")
 
@@ -224,9 +287,16 @@ _FEEDBACK_FN = {
 }
 
 
-def generate_feedback(exercise: str, angles: dict, phase: str | None = None) -> list[str]:
+def generate_feedback(
+    exercise: str,
+    angles: dict,
+    phase: str | None = None,
+    camera_view: str | None = "side",
+) -> list[str]:
     """Generate feedback for the given exercise, angles, and optional phase context."""
     fn = _FEEDBACK_FN.get(exercise)
     if fn is None:
         return ["Exercise not supported yet."]
+    if exercise == 'bicep_curl':
+        return fn(angles, phase=phase, camera_view=camera_view)
     return fn(angles, phase=phase)

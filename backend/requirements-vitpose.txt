@@ -1,0 +1,7 @@
+# Optional offline-quality pose backend.
+# Keep this separate from requirements.txt because torch/transformers are heavy.
+-r requirements.txt
+Pillow>=10.0.0
+scipy>=1.10.0
+torch>=2.2.0
+transformers>=4.53.0

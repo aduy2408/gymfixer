@@ -26,6 +26,10 @@ def draw_skeleton_bytes(frame, pose_landmarks=None, landmarks_list=None, draw=Tr
 
     annotated = frame.copy()
     try:
+        if getattr(pose_landmarks, "_gymfixer_normalized_pose", False):
+            landmarks_list = getattr(pose_landmarks, "landmark", landmarks_list)
+            pose_landmarks = None
+
         if pose_landmarks is not None:
             # Safe draw; MediaPipe drawing handles visibility flags.
             mp_drawing.draw_landmarks(
@@ -41,6 +45,8 @@ def draw_skeleton_bytes(frame, pose_landmarks=None, landmarks_list=None, draw=Tr
             h, w = annotated.shape[:2]
             for i, lm in enumerate(landmarks_list):
                 try:
+                    if getattr(lm, "visibility", 1.0) < 0.2:
+                        continue
                     x = int(lm.x * w)
                     y = int(lm.y * h)
                     cv2.circle(annotated, (x, y), 3, (0, 255, 0), -1)
@@ -53,6 +59,8 @@ def draw_skeleton_bytes(frame, pose_landmarks=None, landmarks_list=None, draw=Tr
                 try:
                     a_lm = landmarks_list[a]
                     b_lm = landmarks_list[b]
+                    if getattr(a_lm, "visibility", 1.0) < 0.2 or getattr(b_lm, "visibility", 1.0) < 0.2:
+                        continue
                     ax = int(a_lm.x * w)
                     ay = int(a_lm.y * h)
                     bx = int(b_lm.x * w)
