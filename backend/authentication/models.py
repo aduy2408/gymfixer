@@ -1,4 +1,6 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
 
@@ -11,3 +13,89 @@ class User(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     hashed_password = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    workout_sessions = relationship("WorkoutSession", back_populates="user")
+    usage_events = relationship("UsageEvent", back_populates="user")
+
+
+class WorkoutSession(Base):
+    __tablename__ = "workout_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    exercise = Column(String, nullable=False, index=True)
+    camera_view = Column(String, nullable=False)
+    pose_backend = Column(String, nullable=False)
+    source_type = Column(String, nullable=False, default="video_upload")
+    file_name = Column(String, nullable=True)
+    file_size_bytes = Column(Integer, nullable=True)
+    sample_fps = Column(Float, nullable=True)
+    max_frames = Column(Integer, nullable=True)
+    include_preview = Column(Boolean, nullable=False, default=False)
+    preview_max_frames = Column(Integer, nullable=True)
+    llm_requested = Column(Boolean, nullable=False, default=False)
+    status = Column(String, nullable=False, default="processing", index=True)
+    started_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="workout_sessions")
+    analysis_result = relationship(
+        "AnalysisResult",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    usage_events = relationship("UsageEvent", back_populates="session")
+
+
+class AnalysisResult(Base):
+    __tablename__ = "analysis_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(
+        Integer,
+        ForeignKey("workout_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    frames_received = Column(Integer, nullable=False, default=0)
+    frames_analyzed = Column(Integer, nullable=False, default=0)
+    rep_count = Column(Integer, nullable=False, default=0)
+    processing_ms = Column(Integer, nullable=False, default=0)
+    quality_ratio = Column(Float, nullable=True)
+    no_pose_frames = Column(Integer, nullable=False, default=0)
+    visibility_failed_frames = Column(Integer, nullable=False, default=0)
+    waiting_for_subject_frames = Column(Integer, nullable=False, default=0)
+    decode_errors = Column(Integer, nullable=False, default=0)
+    summary_json = Column(JSONB, nullable=False)
+    angle_stats_json = Column(JSONB, nullable=False, default=dict)
+    top_feedback_json = Column(JSONB, nullable=False, default=dict)
+    visibility_failures_json = Column(JSONB, nullable=False, default=dict)
+    llm_enabled = Column(Boolean, nullable=False, default=False)
+    llm_model = Column(String, nullable=True)
+    llm_usage_json = Column(JSONB, nullable=True)
+    llm_recommendations = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    session = relationship("WorkoutSession", back_populates="analysis_result")
+
+
+class UsageEvent(Base):
+    __tablename__ = "usage_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    session_id = Column(
+        Integer,
+        ForeignKey("workout_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    event_name = Column(String, nullable=False, index=True)
+    properties_json = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="usage_events")
+    session = relationship("WorkoutSession", back_populates="usage_events")

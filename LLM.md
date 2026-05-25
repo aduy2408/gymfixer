@@ -10,11 +10,13 @@ The frontend is now focused on after-session video analysis instead of live webc
 
 ```text
 Browser
+  -> register/login and store JWT
   -> select exercise: squat | bicep_curl
   -> upload video
-  -> POST /posture/analyze-video multipart/form-data
+  -> POST /posture/analyze-video multipart/form-data with Bearer token
 
 Backend
+  -> create workout_sessions row with status=processing
   -> sample video frames with OpenCV
   -> run selected pose backend (MediaPipe by default, optional ViTPose)
   -> apply subject-ready gate
@@ -23,7 +25,9 @@ Backend
   -> update phase detector and rep count
   -> generate rule feedback
   -> optionally send analyzed-frame log to Gemini
-  -> return summary + rule/LLM coaching + skeleton preview frames
+  -> persist summary/statistics to PostgreSQL
+  -> mark workout_sessions row completed or failed
+  -> return summary + rule/LLM coaching + distinct mistake frames
 ```
 
 The old WebSocket path still exists in backend code, but the active `frontend/` Dashboard no longer uses live realtime posture detection.
@@ -32,7 +36,11 @@ The old WebSocket path still exists in backend code, but the active `frontend/` 
 
 ### `POST /posture/analyze-video`
 
-Multipart upload endpoint for normal video files.
+Authenticated multipart upload endpoint for normal video files. It requires:
+
+```http
+Authorization: Bearer <access_token>
+```
 
 Form fields:
 
@@ -48,10 +56,15 @@ include_preview=true | false
 preview_max_frames=24
 ```
 
+The active frontend hides `max_frames`, `include_preview`, and
+`preview_max_frames`; it sends internal defaults for short clips around 20
+seconds.
+
 Example:
 
 ```bash
 curl -X POST http://127.0.0.1:5000/posture/analyze-video \
+  -H "Authorization: Bearer $TOKEN" \
   -F "exercise=bicep_curl" \
   -F "camera_view=side" \
   -F "pose_backend=mediapipe" \
@@ -67,6 +80,8 @@ Response includes:
 
 ```json
 {
+  "session_id": 42,
+  "analysis_id": 42,
   "exercise": "bicep_curl",
   "summary": {
     "frames_received": 341,
@@ -86,6 +101,40 @@ Response includes:
   },
   "frame_log": [],
   "preview_frames": []
+}
+```
+
+Persistence behavior:
+
+- `workout_sessions` stores request/session metadata and status.
+- `analysis_results` stores summary/statistics, top feedback, angle stats, quality, and LLM metadata.
+- `usage_events` stores register/login/analysis lifecycle events.
+- The database does not store uploaded videos, base64 preview images, or full frame logs in v1.
+
+### User History and Analytics
+
+All endpoints below require `Authorization: Bearer <access_token>`.
+
+```http
+GET /me
+GET /workouts
+GET /workouts/{session_id}
+GET /analytics/summary
+```
+
+`/analytics/summary` returns:
+
+```json
+{
+  "total_sessions": 4,
+  "total_reps": 38,
+  "sessions_by_exercise": { "squat": 3, "bicep_curl": 1 },
+  "reps_by_exercise": { "squat": 30, "bicep_curl": 8 },
+  "avg_quality_ratio": 0.86,
+  "avg_processing_ms": 7420,
+  "top_feedback": {},
+  "llm_enabled_count": 1,
+  "recent_sessions": []
 }
 ```
 
@@ -192,7 +241,7 @@ Recommended comparison workflow:
 -F "pose_backend=vitpose"
 ```
 
-Upload the same video with the same `sample_fps`, `max_frames`, `camera_view`, and preview settings, then compare `pose_backend`, `frames_analyzed`, `phase_counts`, `rep_count`, `top_feedback`, `angle_stats`, and skeleton preview quality.
+Upload the same video with the same `sample_fps`, `camera_view`, and internal frame limits, then compare `pose_backend`, `frames_analyzed`, `phase_counts`, `rep_count`, `top_feedback`, `angle_stats`, and mistake-frame quality.
 
 ## 4. Subject-Ready Gate
 
@@ -302,15 +351,18 @@ Mid-range direction is inferred from angle deltas:
 
 This avoids sticking in `LOWERING` or `ASCENDING` solely because of the previous phase.
 
-## 8. Skeleton Preview
+## 8. Key Correction Frames
 
-`/posture/analyze-video` can return preview frames with skeleton overlays.
+`/posture/analyze-video` can return mistake frames with skeleton overlays. The
+selector prioritizes spaced-apart frames that introduce different problem
+feedback. It is intended to show distinct correction moments, not every repeated
+bad frame.
 
 Frontend options:
 
 ```text
-Skeleton preview: on/off
-Preview frames: default 24
+Mistake frames: enabled internally
+Mistake frame cap: default 12
 ```
 
 Each preview item includes:
@@ -325,11 +377,12 @@ Each preview item includes:
   "phase": "LOWERING",
   "rep_count": 1,
   "feedback": ["..."],
+  "preview_reason": "new_issue",
   "image": "data:image/jpeg;base64,..."
 }
 ```
 
-The frontend displays preview images with `object-contain`, so vertical videos are not cropped.
+The frontend displays mistake-frame images with `object-contain`, so vertical videos are not cropped.
 
 ## 9. LLM Coaching
 
@@ -380,11 +433,11 @@ Kept:
 - upload video panel
 - sample FPS / max frames controls
 - Gemini toggle
-- skeleton preview toggle
+- automatic mistake-frame selection
 - result metrics: reps, analyzed frames, quality, processing time
 - angle chart from analyzed frame log
-- all skeleton preview frames returned by backend
-- per-preview-frame feedback
+- mistake frames returned by backend
+- per-mistake-frame feedback
 - form-issue summary and all-feedback summary
 - rule-based or Gemini coaching
 
@@ -449,7 +502,7 @@ Use first few valid reps to tune thresholds per user and camera setup.
 | Limitation | Impact | Current mitigation |
 |---|---|---|
 | Pose backend hallucination on partial subjects | False phases before user is ready | Subject-ready gate + ready-frame streak |
-| Camera angle sensitivity | Valgus/drift can be noisy | Skeleton preview + visibility gate |
+| Camera angle sensitivity | Valgus/drift can be noisy | Mistake frames + visibility gate |
 | Depth is backend-dependent | Elbow drift is approximate; ViTPose currently has no `z` depth | Treat as coaching cue, not precise measurement |
 | Universal phase thresholds | Some bodies/reps may misclassify | Future calibration |
 | Backend performance varies | MediaPipe is light; ViTPose is heavier but can use PyTorch/CUDA | Use `POSE_BACKEND` per experiment |

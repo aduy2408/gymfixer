@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import timedelta
 
 from .database import get_db
 from .models import User
 from .schemas import UserCreate, LoginRequest, Token, UserOut
-from .utils import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from .utils import get_password_hash, verify_password, create_access_token
+from usage_events import log_usage_event
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -28,6 +28,8 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
         hashed_password=hashed_password
     )
     db.add(user)
+    db.flush()
+    log_usage_event(db, event_name="register", user_id=user.id)
     db.commit()
     db.refresh(user)
 
@@ -44,5 +46,7 @@ def login(user_in: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     access_token = create_access_token(user_id=user.id)
+    log_usage_event(db, event_name="login", user_id=user.id)
+    db.commit()
     
     return {"access_token": access_token, "token_type": "bearer"}

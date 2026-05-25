@@ -1,10 +1,14 @@
 "use client";
 
+import { getAuthToken } from "./mockData";
+
 export type ExerciseId = "squat" | "bicep_curl";
 export type CameraView = "side" | "front" | "three_quarter";
 export type PoseBackend = "mediapipe" | "vitpose";
 
 export type VideoAnalysisResult = {
+  session_id?: number;
+  analysis_id?: number;
   exercise: string;
   camera_view?: CameraView | string;
   pose_backend?: string;
@@ -17,6 +21,7 @@ export type VideoAnalysisResult = {
     rep_count: number;
     processing_ms: number;
     top_feedback?: Record<string, number>;
+    angle_stats?: Record<string, { min?: number; avg?: number; max?: number }>;
     analysis_quality?: {
       active_window_usable_ratio?: number;
       usable_frames?: number;
@@ -41,6 +46,7 @@ export type VideoAnalysisResult = {
     rep_count?: number | null;
     angles?: Record<string, number>;
     feedback?: string[];
+    problem_feedback?: string[];
   }>;
   preview_frames?: Array<{
     frame_index: number;
@@ -51,6 +57,8 @@ export type VideoAnalysisResult = {
     phase?: string | null;
     rep_count?: number | null;
     feedback?: string[];
+    problem_feedback?: string[];
+    preview_reason?: string;
     image: string;
   }>;
 };
@@ -60,6 +68,41 @@ export type StoredAnalysis = {
   fileName: string;
   analyzedAt: string;
   result: VideoAnalysisResult;
+};
+
+export type WorkoutSession = {
+  id: number;
+  exercise: string;
+  camera_view: CameraView | string;
+  pose_backend: string;
+  file_name: string | null;
+  file_size_bytes: number | null;
+  status: string;
+  started_at: string;
+  completed_at: string | null;
+  created_at: string;
+  analysis_id: number | null;
+  summary: VideoAnalysisResult["summary"] | null;
+  analysis?: {
+    id: number;
+    summary: VideoAnalysisResult["summary"];
+    top_feedback: Record<string, number>;
+    angle_stats: Record<string, unknown>;
+    llm: VideoAnalysisResult["llm"];
+    created_at: string;
+  };
+};
+
+export type AnalyticsSummary = {
+  total_sessions: number;
+  total_reps: number;
+  sessions_by_exercise: Record<string, number>;
+  reps_by_exercise: Record<string, number>;
+  avg_quality_ratio: number | null;
+  avg_processing_ms: number | null;
+  top_feedback: Record<string, number>;
+  llm_enabled_count: number;
+  recent_sessions: WorkoutSession[];
 };
 
 type LoginResponse = {
@@ -129,9 +172,11 @@ export async function analyzeVideo(params: {
   formData.append("max_frames", String(params.maxFrames));
   formData.append("include_preview", String(params.includePreview));
   formData.append("preview_max_frames", String(params.previewMaxFrames));
+  const token = getAuthToken();
 
   const response = await fetch(`${apiBase()}/posture/analyze-video`, {
     method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
   });
   const data = await response.json().catch(() => null);
@@ -139,6 +184,61 @@ export async function analyzeVideo(params: {
     throw new Error(data?.detail || "Video analysis failed.");
   }
   return data;
+}
+
+export async function fetchAnalyticsSummary(): Promise<AnalyticsSummary> {
+  const response = await authFetch("/analytics/summary");
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.detail || "Could not load analytics.");
+  }
+  return data;
+}
+
+export async function fetchWorkout(sessionId: string | number): Promise<WorkoutSession> {
+  const response = await authFetch(`/workouts/${sessionId}`);
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.detail || "Could not load workout.");
+  }
+  return data;
+}
+
+export function workoutToStoredAnalysis(workout: WorkoutSession): StoredAnalysis {
+  const analysis = workout.analysis;
+  const summary = analysis?.summary || workout.summary;
+  if (!summary) {
+    throw new Error("Workout has no analysis summary.");
+  }
+
+  return {
+    id: String(workout.id),
+    fileName: workout.file_name || "Uploaded video",
+    analyzedAt: workout.completed_at || workout.created_at,
+    result: {
+      session_id: workout.id,
+      analysis_id: workout.analysis_id || analysis?.id,
+      exercise: workout.exercise,
+      camera_view: workout.camera_view,
+      pose_backend: workout.pose_backend,
+      summary,
+      llm: analysis?.llm || {
+        enabled: false,
+        model: "n/a",
+        recommendations: "No persisted coaching text is available for this analysis.",
+        error: null,
+      },
+      frame_log: [],
+      preview_frames: [],
+    },
+  };
+}
+
+async function authFetch(path: string, init: RequestInit = {}) {
+  const token = getAuthToken();
+  const headers = new Headers(init.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(`${apiBase()}${path}`, { ...init, headers });
 }
 
 export function saveLatestAnalysis(analysis: StoredAnalysis) {

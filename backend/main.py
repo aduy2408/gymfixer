@@ -6,6 +6,7 @@ from authentication.database import init_db
 from authentication.routes import router as auth_router
 from posture.session_analysis import router as session_analysis_router
 from posture.websocket import router as posture_router
+from workout_routes import router as workout_router
 import os
 
 app = FastAPI(title="Project1 API")
@@ -33,13 +34,14 @@ app.add_middleware(
 app.include_router(posture_router)
 app.include_router(session_analysis_router)
 
-# Create tables on startup
+# Import SQLAlchemy models on startup. Schema changes are handled by Alembic.
 @app.on_event("startup")
 def on_startup():
     init_db()
 
 # Include auth routes
 app.include_router(auth_router)
+app.include_router(workout_router)
 
 # ---------------------------------------------------------------------------
 # Serve built frontend as static files (single-port deployment)

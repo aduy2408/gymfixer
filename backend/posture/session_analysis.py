@@ -8,19 +8,25 @@ import time
 import urllib.error
 import urllib.request
 from collections import Counter, defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import cv2
 import numpy as np
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session as DBSession
 
+from authentication.database import get_db
+from authentication.models import AnalysisResult, User, WorkoutSession
+from authentication.utils import get_current_user
 from posture import feedback as feedback_module
 from posture import mediapipe_utils
 from posture import visualizer
 from posture.phase_detector import PhaseDetector
+from usage_events import log_usage_event
 
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -240,12 +246,13 @@ def analyze_posture_session(
             phase=phase,
             camera_view=camera_view,
         )
+        problem_feedback = _problem_feedback(feedback)
 
         for name, value in angles.items():
             angle_values[name].append(float(value))
         if phase:
             phase_counts.update([phase])
-        issue_counts.update(feedback)
+        issue_counts.update(problem_feedback)
 
         entry = {
             "frame_index": index,
@@ -256,6 +263,7 @@ def analyze_posture_session(
             "rep_count": rep_count,
             "angles": _round_angles(angles),
             "feedback": feedback,
+            "problem_feedback": problem_feedback,
         }
         frame_log.append(entry)
         _maybe_add_preview_frame(
@@ -341,6 +349,8 @@ async def analyze_video(
     max_frames: int = Form(360),
     include_preview: bool = Form(True),
     preview_max_frames: int = Form(24),
+    current_user: User = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
 ):
     """Analyze an uploaded exercise video by sampling frames from it.
 
@@ -358,6 +368,22 @@ async def analyze_video(
     suffix = os.path.splitext(file.filename or "")[1] or ".mp4"
     temp_path = None
     try:
+        workout_session = _create_workout_session(
+            db,
+            current_user=current_user,
+            exercise=exercise,
+            camera_view=camera_view,
+            pose_backend=pose_backend,
+            file=file,
+            call_llm=call_llm,
+            sample_fps=sample_fps,
+            max_frames=max_frames,
+            include_preview=include_preview,
+            preview_max_frames=preview_max_frames,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
             temp_path = temp_file.name
             while chunk := await file.read(1024 * 1024):
@@ -374,7 +400,7 @@ async def analyze_video(
                 detail="No readable frames were found in the uploaded video.",
             )
 
-        return analyze_posture_session(
+        result = analyze_posture_session(
             exercise,
             frames,
             call_llm=call_llm,
@@ -383,12 +409,154 @@ async def analyze_video(
             camera_view=camera_view,
             pose_backend=pose_backend,
         )
+        analysis = _persist_analysis_result(db, workout_session, result)
+        result["session_id"] = workout_session.id
+        result["analysis_id"] = analysis.id
+        return result
+    except HTTPException as exc:
+        _mark_workout_session_failed(
+            db,
+            workout_session,
+            error=str(exc.detail),
+        )
+        raise
     except ValueError as exc:
+        _mark_workout_session_failed(db, workout_session, error=str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        _mark_workout_session_failed(db, workout_session, error=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         await file.close()
         if temp_path and os.path.exists(temp_path):
             os.unlink(temp_path)
+
+
+def _create_workout_session(
+    db: DBSession,
+    *,
+    current_user: User,
+    exercise: str,
+    camera_view: str,
+    pose_backend: str | None,
+    file: UploadFile,
+    call_llm: bool,
+    sample_fps: float,
+    max_frames: int,
+    include_preview: bool,
+    preview_max_frames: int,
+) -> WorkoutSession:
+    workout_session = WorkoutSession(
+        user_id=current_user.id,
+        exercise=exercise,
+        camera_view=_normalise_camera_view(camera_view),
+        pose_backend=_normalise_pose_backend(pose_backend),
+        source_type="video_upload",
+        file_name=file.filename,
+        file_size_bytes=getattr(file, "size", None),
+        sample_fps=sample_fps,
+        max_frames=max_frames,
+        include_preview=include_preview,
+        preview_max_frames=preview_max_frames,
+        llm_requested=call_llm,
+        status="processing",
+    )
+    db.add(workout_session)
+    db.flush()
+    log_usage_event(
+        db,
+        event_name="analysis_started",
+        user_id=current_user.id,
+        session_id=workout_session.id,
+        properties={
+            "exercise": exercise,
+            "camera_view": workout_session.camera_view,
+            "pose_backend": workout_session.pose_backend,
+            "file_name": file.filename,
+            "sample_fps": sample_fps,
+            "max_frames": max_frames,
+        },
+    )
+    if call_llm:
+        log_usage_event(
+            db,
+            event_name="llm_enabled",
+            user_id=current_user.id,
+            session_id=workout_session.id,
+            properties={"model": GEMINI_MODEL},
+        )
+    db.commit()
+    db.refresh(workout_session)
+    return workout_session
+
+
+def _persist_analysis_result(
+    db: DBSession,
+    workout_session: WorkoutSession,
+    result: dict[str, Any],
+) -> AnalysisResult:
+    summary = result.get("summary", {})
+    llm = result.get("llm", {})
+    analysis_quality = summary.get("analysis_quality") or {}
+
+    analysis = AnalysisResult(
+        session_id=workout_session.id,
+        frames_received=int(summary.get("frames_received") or 0),
+        frames_analyzed=int(summary.get("frames_analyzed") or 0),
+        rep_count=int(summary.get("rep_count") or 0),
+        processing_ms=int(summary.get("processing_ms") or 0),
+        quality_ratio=analysis_quality.get("active_window_usable_ratio"),
+        no_pose_frames=int(summary.get("no_pose_frames") or 0),
+        visibility_failed_frames=int(summary.get("visibility_failed_frames") or 0),
+        waiting_for_subject_frames=int(summary.get("waiting_for_subject_frames") or 0),
+        decode_errors=int(summary.get("decode_errors") or 0),
+        summary_json=summary,
+        angle_stats_json=summary.get("angle_stats") or {},
+        top_feedback_json=summary.get("top_feedback") or {},
+        visibility_failures_json=summary.get("visibility_failures") or {},
+        llm_enabled=bool(llm.get("enabled")),
+        llm_model=llm.get("model"),
+        llm_usage_json=llm.get("usage_metadata"),
+        llm_recommendations=llm.get("recommendations"),
+    )
+    workout_session.status = "completed"
+    workout_session.completed_at = datetime.now(timezone.utc)
+    db.add(analysis)
+    db.flush()
+    log_usage_event(
+        db,
+        event_name="analysis_completed",
+        user_id=workout_session.user_id,
+        session_id=workout_session.id,
+        properties={
+            "analysis_id": analysis.id,
+            "rep_count": analysis.rep_count,
+            "frames_analyzed": analysis.frames_analyzed,
+            "quality_ratio": analysis.quality_ratio,
+            "llm_enabled": analysis.llm_enabled,
+        },
+    )
+    db.commit()
+    db.refresh(analysis)
+    return analysis
+
+
+def _mark_workout_session_failed(
+    db: DBSession,
+    workout_session: WorkoutSession,
+    *,
+    error: str,
+) -> None:
+    workout_session.status = "failed"
+    workout_session.completed_at = datetime.now(timezone.utc)
+    log_usage_event(
+        db,
+        event_name="analysis_failed",
+        user_id=workout_session.user_id,
+        session_id=workout_session.id,
+        properties={"error": error[:1000]},
+    )
+    db.commit()
 
 
 def build_gemini_posture_prompt(
@@ -574,7 +742,12 @@ def _maybe_add_preview_frame(
         return
 
     frame_index = int(entry.get("frame_index", 0))
-    if not force and frame_index % preview_stride != 0:
+    if not _should_add_preview_frame(
+        preview_frames,
+        entry=entry,
+        preview_stride=preview_stride,
+        force=force,
+    ):
         return
 
     skeleton_bytes = visualizer.draw_skeleton_bytes(
@@ -593,12 +766,117 @@ def _maybe_add_preview_frame(
             "phase": entry.get("phase"),
             "rep_count": entry.get("rep_count"),
             "feedback": entry.get("feedback"),
+            "preview_reason": _preview_reason(preview_frames, entry, force=force),
             "image": (
                 "data:image/jpeg;base64,"
                 + base64.b64encode(skeleton_bytes).decode("ascii")
             ),
         }
     )
+
+
+def _should_add_preview_frame(
+    preview_frames: list[dict[str, Any]],
+    *,
+    entry: dict[str, Any],
+    preview_stride: int,
+    force: bool,
+) -> bool:
+    frame_index = int(entry.get("frame_index", 0))
+    min_gap = max(1, preview_stride)
+    last_frame = preview_frames[-1]["frame_index"] if preview_frames else None
+    is_spaced = last_frame is None or frame_index - int(last_frame) >= min_gap
+    if not is_spaced:
+        return False
+
+    entry_issues = _problem_feedback(entry.get("feedback") or [])
+    if not entry_issues:
+        return False
+    existing_issues = {
+        issue
+        for preview in preview_frames
+        for issue in _problem_feedback(preview.get("feedback") or [])
+    }
+    has_new_issue = any(issue not in existing_issues for issue in entry_issues)
+    if has_new_issue:
+        return True
+
+    return force and frame_index % preview_stride == 0
+
+
+def _preview_reason(
+    preview_frames: list[dict[str, Any]],
+    entry: dict[str, Any],
+    *,
+    force: bool,
+) -> str:
+    entry_issues = _problem_feedback(entry.get("feedback") or [])
+    existing_issues = {
+        issue
+        for preview in preview_frames
+        for issue in _problem_feedback(preview.get("feedback") or [])
+    }
+    if any(issue not in existing_issues for issue in entry_issues):
+        return "new_issue"
+    return "repeated_issue"
+
+
+def _problem_feedback(feedback: list[str]) -> list[str]:
+    return [item for item in feedback if _is_problem_feedback(item)]
+
+
+def _is_problem_feedback(item: str) -> bool:
+    lower = item.lower()
+    non_issue_phrases = (
+        "hold still",
+        "starting analysis",
+        "move into frame",
+        "move fully into frame",
+        "can't see",
+        "no person detected",
+        "frame could not be decoded",
+        "please get fully into the frame",
+        "ready for the next",
+        "curl up",
+        "squeeze at the top",
+        "good",
+        "great",
+        "nice",
+        "excellent",
+        "strong",
+    )
+    if any(phrase in lower for phrase in non_issue_phrases):
+        return False
+
+    issue_markers = (
+        "don't",
+        "do not",
+        "avoid",
+        "too ",
+        "short",
+        "stop short",
+        "caving",
+        "cave",
+        "rounding",
+        "collapse",
+        "lean",
+        "shrug",
+        "flare",
+        "travel forward",
+        "wrist neutral",
+        "elbows pinned",
+        "elbows tucked",
+        "knees out",
+        "knees pushed out",
+        "knees outward",
+        "deeper",
+        "full elbow extension",
+        "back straighter",
+        "neutral spine",
+        "torso upright",
+        "chest up",
+    )
+    return any(marker in lower for marker in issue_markers)
 
 
 def _sample_video_frames(
@@ -684,7 +962,7 @@ def _compact_log_for_llm(
         if phase != previous_phase or rep != previous_rep:
             priority_indices.add(idx)
 
-        if _has_problem_feedback(feedback):
+        if _problem_feedback(feedback):
             priority_indices.add(idx)
 
         if phase in idle_phases:
@@ -756,15 +1034,6 @@ def _evenly_sample(indices: list[int], limit: int) -> list[int]:
         return [indices[len(indices) // 2]]
     step = (len(indices) - 1) / float(limit - 1)
     return [indices[round(i * step)] for i in range(limit)]
-
-
-def _has_problem_feedback(feedback: list[str]) -> bool:
-    positive_words = ("good", "great", "nice", "excellent", "strong")
-    for item in feedback:
-        lower = item.lower()
-        if not any(word in lower for word in positive_words):
-            return True
-    return False
 
 
 def _frame_log_entry_for_prompt(entry: dict[str, Any]) -> dict[str, Any]:
@@ -881,9 +1150,4 @@ def _local_recommendations(summary: dict[str, Any]) -> str:
         return "No reliable posture issues were detected in the submitted frames."
 
     cues = "\n".join(f"- {item}" for item in top_feedback[:5])
-    return (
-        "Gemini was not used, so this is a rule-based summary.\n\n"
-        f"Detected reps: {summary.get('rep_count', 0)}\n\n"
-        "Most repeated coaching cues:\n"
-        f"{cues}"
-    )
+    return f"Focus on these corrections next set:\n{cues}"

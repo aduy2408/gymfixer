@@ -1,13 +1,13 @@
 # GymFixer
 
-AI-assisted workout posture analysis. The active product flow is after-session video analysis: upload a squat or bicep-curl video, the backend samples frames, runs the selected pose backend, computes angles and reps, returns skeleton previews, and optionally calls Gemini for coaching.
+AI-assisted workout posture analysis. The active product flow is after-session video analysis: upload a short squat or bicep-curl video, the backend samples frames, runs the selected pose backend, computes angles and reps, returns distinct mistake frames, and optionally calls Gemini for coaching.
 
 ## Current Stack
 
 | Layer | Tech |
 |---|---|
 | Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS, Recharts |
-| Backend | FastAPI, SQLAlchemy, SQLite, MediaPipe, optional ViTPose, OpenCV |
+| Backend | FastAPI, SQLAlchemy, PostgreSQL, Alembic, MediaPipe, optional ViTPose, OpenCV |
 | Auth | Email/password registration and login, JWT token generation |
 | LLM coaching | Gemini API, disabled by default in dev |
 
@@ -71,6 +71,61 @@ source p1_env/bin/activate
 pip install -r backend/requirements.txt
 ```
 
+`DATABASE_URL` must point to PostgreSQL. Runtime schema creation is handled by
+Alembic migrations, not SQLite or startup table creation.
+
+### PostgreSQL Setup
+
+Use a local PostgreSQL database for development. The examples below create a
+database named `gymfixer` and use the default `postgres` superuser.
+
+#### Linux
+
+Ubuntu/Debian:
+
+```bash
+sudo apt update
+sudo apt install postgresql postgresql-contrib
+sudo systemctl enable --now postgresql
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres123';"
+sudo -u postgres createdb gymfixer
+```
+
+Arch Linux:
+
+```bash
+sudo pacman -S postgresql
+sudo -iu postgres initdb -D /var/lib/postgres/data
+sudo systemctl enable --now postgresql
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres123';"
+sudo -u postgres createdb gymfixer
+```
+
+If the database already exists, `createdb gymfixer` may fail with
+`database already exists`; that is fine.
+
+#### Windows
+
+1. Install PostgreSQL for Windows.
+2. During install, set and remember the password for the `postgres` user.
+3. Open **SQL Shell (psql)** or **pgAdmin**.
+4. Connect with user `postgres`.
+5. Create the app database:
+
+```sql
+CREATE DATABASE gymfixer;
+```
+
+For local development, a simple password such as `postgres123` avoids URL
+encoding issues. If your password contains special characters like `@`, `#`,
+`/`, or `:`, URL-encode it before putting it in `DATABASE_URL`.
+
+Then use this local connection string in `backend/.env`:
+
+```env
+DATABASE_URL=postgresql+psycopg://postgres:postgres123@localhost:5432/gymfixer
+```
+
 Optional offline-quality ViTPose backend:
 
 ```bash
@@ -82,7 +137,7 @@ ViTPose is optional because it installs a heavier PyTorch/Transformers stack. Th
 Create `backend/.env`:
 
 ```env
-DATABASE_URL=sqlite:///./backend.db
+DATABASE_URL=postgresql+psycopg://postgres:postgres123@localhost:5432/gymfixer
 JWT_SECRET_KEY=change-this-for-real-use
 
 # Optional Gemini coaching
@@ -108,6 +163,29 @@ VITPOSE_KEYPOINT_THRESHOLD=0.25
 VITPOSE_POSE_THRESHOLD=0.25
 VITPOSE_EMA_ALPHA=0.35
 ```
+
+After PostgreSQL and `backend/.env` are ready, run migrations:
+
+```bash
+cd backend
+../p1_env/bin/alembic upgrade head
+../p1_env/bin/alembic current
+```
+
+Verify the app can connect:
+
+```bash
+../p1_env/bin/python -c "from authentication.database import engine; c=engine.connect(); print(c.exec_driver_sql('select 1').scalar()); c.close()"
+```
+
+Verify tables exist:
+
+```bash
+psql -U postgres -h localhost -d gymfixer -c "\dt"
+```
+
+Expected tables include `users`, `workout_sessions`, `analysis_results`,
+`usage_events`, and `alembic_version`.
 
 ### Choosing a Pose Backend
 
@@ -166,15 +244,15 @@ npm run install:all
 
 1. Register or log in.
 2. Open the dashboard.
-3. Upload a workout video.
+3. Upload a workout video. Video analysis requires the JWT from login/register.
 4. Choose `squat` or `bicep_curl`.
-5. Tune sample FPS, max frames, and preview frame count if needed.
+5. Tune sample FPS if needed. Keep clips around 20 seconds; max frame and mistake-frame limits are handled internally.
 6. Leave `Gemini coaching` off for normal dev usage. Turn it on only when you intentionally want to spend Gemini API quota.
 7. Review the analysis page:
    - rep count
    - analyzed frame count
    - angle chart
-   - skeleton preview frames
+   - key correction frames with skeleton overlays
    - per-frame feedback
    - rule-based or Gemini coaching
 
@@ -191,6 +269,7 @@ POST /auth/login
 
 ```http
 POST /posture/analyze-video
+Authorization: Bearer <access_token>
 Content-Type: multipart/form-data
 ```
 
@@ -208,10 +287,14 @@ include_preview=true
 preview_max_frames=24
 ```
 
+The current frontend sends `max_frames`, `include_preview`, and `preview_max_frames`
+internally. Users do not configure these controls in the dashboard.
+
 Example:
 
 ```bash
 curl -X POST http://127.0.0.1:5000/posture/analyze-video \
+  -H "Authorization: Bearer $TOKEN" \
   -F "exercise=squat" \
   -F "camera_view=side" \
   -F "pose_backend=mediapipe" \
@@ -230,7 +313,21 @@ To compare pose backends, run the same upload twice with the same form fields, c
 -F "pose_backend=vitpose"    # optional quality experiment
 ```
 
-Compare `frames_analyzed`, `rep_count`, `phase_counts`, `top_feedback`, `angle_stats`, and the skeleton preview frames.
+Compare `frames_analyzed`, `rep_count`, `phase_counts`, `top_feedback`, `angle_stats`, and the key correction frames.
+
+Successful video analysis returns the normal analysis payload plus `session_id` and `analysis_id`. The backend persists only summary/statistics data in PostgreSQL; uploaded videos, preview images, and full frame logs are not stored in the database.
+
+### User History and Analytics
+
+```http
+GET /me
+GET /workouts
+GET /workouts/{session_id}
+GET /analytics/summary
+Authorization: Bearer <access_token>
+```
+
+`/analytics/summary` returns user-level statistics such as total sessions, total reps, reps by exercise, average quality ratio, top feedback, LLM run count, and recent sessions.
 
 ### Frame Session Analysis
 
@@ -298,6 +395,7 @@ Run backend:
 
 ```bash
 cd backend
+../p1_env/bin/alembic upgrade head
 ../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000 --reload
 ```
 
@@ -310,9 +408,4 @@ npm run dev
 
 ## Docker
 
-`docker-compose.yml` builds:
-
-- `frontend`: Next.js app on port `3000`
-- `backend`: FastAPI app on port `5000`
-
-The frontend container uses `NEXT_PUBLIC_API_BASE_URL` for backend requests.
+Docker is currently out of scope for the active local/production database flow. Prefer the Postgres + Alembic setup above.

@@ -1,12 +1,10 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-    Activity,
     BarChart2,
-    CheckCircle,
     FileVideo,
     Film,
     Loader2,
@@ -16,8 +14,10 @@ import {
 import DashboardNav from "@/components/DashboardNav";
 import {
     analyzeVideo,
+    AnalyticsSummary,
     CameraView,
     ExerciseId,
+    fetchAnalyticsSummary,
     PoseBackend,
     saveLatestAnalysis,
     VideoAnalysisResult,
@@ -39,6 +39,9 @@ const poseBackendOptions: Array<{ id: PoseBackend; label: string }> = [
     { id: "mediapipe", label: "MediaPipe" },
     { id: "vitpose", label: "ViTPose" },
 ];
+
+const DEFAULT_MAX_FRAMES = 240;
+const DEFAULT_MISTAKE_FRAMES = 12;
 
 const cardStyle: React.CSSProperties = {
     background: "#fff",
@@ -76,13 +79,26 @@ export default function DashboardPage() {
     const [cameraView, setCameraView] = useState<CameraView>("side");
     const [poseBackend, setPoseBackend] = useState<PoseBackend>("mediapipe");
     const [callLlm, setCallLlm] = useState(false);
-    const [includePreview, setIncludePreview] = useState(true);
     const [sampleFps, setSampleFps] = useState(8);
-    const [maxFrames, setMaxFrames] = useState(360);
-    const [previewMaxFrames, setPreviewMaxFrames] = useState(24);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
     const [lastResult, setLastResult] = useState<VideoAnalysisResult | null>(null);
+    const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
+    const [analyticsError, setAnalyticsError] = useState("");
+
+    useEffect(() => {
+        let cancelled = false;
+        fetchAnalyticsSummary()
+            .then((data) => {
+                if (!cancelled) setAnalytics(data);
+            })
+            .catch((err) => {
+                if (!cancelled) setAnalyticsError(err instanceof Error ? err.message : "Could not load analytics.");
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const onDrop = useCallback((event: React.DragEvent) => {
         event.preventDefault();
@@ -110,11 +126,11 @@ export default function DashboardPage() {
                 poseBackend,
                 callLlm,
                 sampleFps,
-                maxFrames,
-                includePreview,
-                previewMaxFrames,
+                maxFrames: DEFAULT_MAX_FRAMES,
+                includePreview: true,
+                previewMaxFrames: DEFAULT_MISTAKE_FRAMES,
             });
-            const id = `analysis_${Date.now()}`;
+            const id = result.session_id ? String(result.session_id) : `analysis_${Date.now()}`;
             saveLatestAnalysis({
                 id,
                 fileName: file.name,
@@ -122,6 +138,7 @@ export default function DashboardPage() {
                 result,
             });
             setLastResult(result);
+            fetchAnalyticsSummary().then(setAnalytics).catch(() => {});
             router.push(`/dashboard/analysis/${id}`);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Video analysis failed.");
@@ -156,6 +173,21 @@ export default function DashboardPage() {
                             </p>
                         </div>
                     </motion.div>
+
+                    <motion.section
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        style={{ ...cardStyle, padding: "1rem", marginBottom: "1.25rem" }}
+                    >
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            <Metric label="Sessions" value={analytics?.total_sessions ?? "0"} />
+                            <Metric label="Total Reps" value={analytics?.total_reps ?? "0"} />
+                            <Metric label="Avg Quality" value={analytics?.avg_quality_ratio === null || analytics?.avg_quality_ratio === undefined ? "n/a" : `${Math.round(analytics.avg_quality_ratio * 100)}%`} />
+                        </div>
+                        {analyticsError && (
+                            <p style={{ marginTop: "0.75rem", fontSize: "0.78rem", color: "var(--red)" }}>{analyticsError}</p>
+                        )}
+                    </motion.section>
 
                     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
                         <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ ...cardStyle, padding: "1.25rem" }}>
@@ -273,19 +305,14 @@ export default function DashboardPage() {
                                 </div>
                             </div>
 
-                            <div className="grid gap-4 md:grid-cols-3" style={{ marginBottom: "1.25rem" }}>
+                            <div className="grid gap-4 md:grid-cols-2" style={{ marginBottom: "1.25rem" }}>
                                 <div>
                                     <label style={labelStyle}>Sample FPS</label>
                                     <input type="number" min={1} max={30} value={sampleFps} onChange={(event) => setSampleFps(Number(event.target.value))} style={inputStyle} />
                                 </div>
-                                <div>
-                                    <label style={labelStyle}>Max Frames</label>
-                                    <input type="number" min={30} max={2000} step={30} value={maxFrames} onChange={(event) => setMaxFrames(Number(event.target.value))} style={inputStyle} />
-                                </div>
-                                <div>
-                                    <label style={labelStyle}>Previews</label>
-                                    <input type="number" min={4} max={80} step={4} value={previewMaxFrames} disabled={!includePreview} onChange={(event) => setPreviewMaxFrames(Number(event.target.value))} style={inputStyle} />
-                                </div>
+                                <p style={{ fontSize: "0.78rem", color: "#888", lineHeight: 1.55, alignSelf: "end", marginBottom: "0.15rem" }}>
+                                    Use clips around 20 seconds. The report highlights distinct mistake frames automatically.
+                                </p>
                             </div>
 
                             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
@@ -293,10 +320,6 @@ export default function DashboardPage() {
                                     <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.82rem", color: "#555" }}>
                                         <input type="checkbox" checked={callLlm} onChange={(event) => setCallLlm(event.target.checked)} />
                                         Gemini coaching
-                                    </label>
-                                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.82rem", color: "#555" }}>
-                                        <input type="checkbox" checked={includePreview} onChange={(event) => setIncludePreview(event.target.checked)} />
-                                        Skeleton preview
                                     </label>
                                 </div>
                                 <button
@@ -319,24 +342,6 @@ export default function DashboardPage() {
                         </motion.section>
 
                         <aside style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                            <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} style={{ ...cardStyle, padding: "1rem" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.75rem" }}>
-                                    <Activity size={14} color="var(--red)" />
-                                    <p style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#999" }}>Backend Pipeline</p>
-                                </div>
-                                {[
-                                    "Uploads to FastAPI",
-                                    "Samples frames with OpenCV",
-                                    "Runs MediaPipe pose analysis",
-                                    "Returns coaching and skeleton previews",
-                                ].map((item) => (
-                                    <div key={item} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.35rem 0", fontSize: "0.8rem", color: "#666" }}>
-                                        <CheckCircle size={12} color="#10b981" />
-                                        {item}
-                                    </div>
-                                ))}
-                            </motion.div>
-
                             <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} style={{ ...cardStyle, padding: "1rem" }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.75rem" }}>
                                     <BarChart2 size={14} color="var(--navy)" />

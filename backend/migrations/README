@@ -5,7 +5,9 @@ This directory is the Alembic migration workspace for the FastAPI backend databa
 Current notes:
 
 - Runtime posture analysis does not depend on database migrations.
-- Authentication/database tables are initialized by the backend startup path.
+- Authentication, workout history, analysis summaries, and usage statistics are
+  managed by Alembic migrations.
+- `DATABASE_URL` must point to PostgreSQL.
 - The video posture analysis flow lives in `backend/posture/session_analysis.py`.
 - The active frontend flow is session/video analysis, not live webcam analysis.
 
@@ -24,9 +26,8 @@ cd backend
 ../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000 --reload
 ```
 
-Do not commit local secrets or runtime database files such as:
+Do not commit local secrets such as:
 
 ```text
 backend/.env
-backend/backend.db
 ```
