@@ -16,6 +16,8 @@ class User(Base):
 
     workout_sessions = relationship("WorkoutSession", back_populates="user")
     usage_events = relationship("UsageEvent", back_populates="user")
+    weekly_workout_plans = relationship("WeeklyWorkoutPlan", back_populates="user")
+    weekly_meal_plans = relationship("WeeklyMealPlan", back_populates="user")
 
 
 class WorkoutSession(Base):
@@ -99,3 +101,29 @@ class UsageEvent(Base):
 
     user = relationship("User", back_populates="usage_events")
     session = relationship("WorkoutSession", back_populates="usage_events")
+
+
+class WeeklyWorkoutPlan(Base):
+    __tablename__ = "weekly_workout_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    input_json = Column(JSONB, nullable=False)
+    plan_json = Column(JSONB, nullable=False)
+    generation_source = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="weekly_workout_plans")
+
+
+class WeeklyMealPlan(Base):
+    __tablename__ = "weekly_meal_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    input_json = Column(JSONB, nullable=False)
+    plan_json = Column(JSONB, nullable=False)
+    generation_source = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="weekly_meal_plans")

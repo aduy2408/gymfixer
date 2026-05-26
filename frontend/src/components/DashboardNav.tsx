@@ -2,12 +2,13 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, BarChart3, LayoutDashboard, User, LogOut, Menu, X } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, LayoutDashboard, User, LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { clearAuth } from "@/lib/mockData";
 
 const navLinks = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/dashboard/plans", label: "Plans", icon: CalendarDays },
     { href: "/dashboard/statistics", label: "Statistics", icon: BarChart3 },
     { href: "/dashboard/profile", label: "Profile", icon: User },
 ];

@@ -105,6 +105,107 @@ export type AnalyticsSummary = {
   recent_sessions: WorkoutSession[];
 };
 
+export type WorkoutPlanRequest = {
+  age: number;
+  height_cm: number;
+  weight_kg: number;
+  gender: "male" | "female" | "other" | "";
+  goal: "fat_loss" | "muscle" | "strength" | "endurance" | "rehab" | "general";
+  level: "beginner" | "intermediate" | "advanced";
+  days_per_week: number;
+  session_minutes: number;
+  equipment: string[];
+  injuries?: string;
+  focus_muscles?: string[];
+};
+
+export type WorkoutPlan = {
+  id: number;
+  generation_source: "gemini" | "fallback";
+  generation_diagnostics?: {
+    attempted_gemini: boolean;
+    fallback_reason?: "missing_api_key" | "timeout" | "network_error" | "http_error" | "invalid_response" | "schema_error" | null;
+    duration_ms?: number | null;
+  } | null;
+  days: Array<{
+    day: "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
+    type: "training" | "rest" | "mobility";
+    title: string;
+    estimated_minutes: number;
+    exercises: Array<{
+      name: string;
+      sets: number;
+      reps: string;
+      rest_sec: number;
+      notes?: string;
+    }>;
+  }>;
+  safety_notes: string[];
+};
+
+export type MealPlanRequest = {
+  age: number;
+  height_cm: number;
+  weight_kg: number;
+  gender: "male" | "female" | "other" | "";
+  goal: "fat_loss" | "muscle" | "strength" | "endurance" | "general";
+  meals_per_day: number;
+  diet_preference: "none" | "vegetarian" | "vegan" | "halal" | "low_carb";
+  allergies?: string;
+  disliked_foods?: string;
+  budget: "low" | "medium" | "high";
+  cooking_time: "minimal" | "normal" | "meal_prep";
+  target_calories?: number | null;
+  adjust_for_workout_plan: boolean;
+};
+
+export type MealPlan = {
+  id: number;
+  generation_source: "gemini" | "fallback";
+  generation_diagnostics?: {
+    attempted_gemini: boolean;
+    fallback_reason?: "missing_api_key" | "timeout" | "network_error" | "http_error" | "invalid_response" | "schema_error" | null;
+    duration_ms?: number | null;
+  } | null;
+  daily_targets: {
+    calories: number;
+    protein_g: number;
+    carbs_g: number;
+    fat_g: number;
+  };
+  workout_sync?: {
+    enabled: boolean;
+    source_workout_plan_id: number | null;
+    applied: boolean;
+    note: string;
+    schedule?: Record<string, string> | null;
+  } | null;
+  days: Array<{
+    day: "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
+    meals: Array<{
+      name: string;
+      time?: string;
+      items: Array<
+        | string
+        | {
+            name: string;
+            quantity: number;
+            unit: "g" | "ml" | "large" | "piece" | "slice" | "scoop" | "tbsp" | "cup";
+            calories: number;
+            protein_g: number;
+            carbs_g: number;
+            fat_g: number;
+          }
+      >;
+      calories: number;
+      protein_g: number;
+      carbs_g: number;
+      fat_g: number;
+    }>;
+  }>;
+  safety_notes: string[];
+};
+
 type LoginResponse = {
   access_token: string;
   token_type: string;
@@ -200,6 +301,50 @@ export async function fetchWorkout(sessionId: string | number): Promise<WorkoutS
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(data?.detail || "Could not load workout.");
+  }
+  return data;
+}
+
+export async function createWorkoutPlan(params: WorkoutPlanRequest): Promise<WorkoutPlan> {
+  const response = await authFetch("/plans/workout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.detail || "Could not create workout plan.");
+  }
+  return data;
+}
+
+export async function fetchLatestWorkoutPlan(): Promise<WorkoutPlan> {
+  const response = await authFetch("/plans/workout/latest");
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.detail || "No workout plan found.");
+  }
+  return data;
+}
+
+export async function createMealPlan(params: MealPlanRequest): Promise<MealPlan> {
+  const response = await authFetch("/plans/meals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.detail || "Could not create meal plan.");
+  }
+  return data;
+}
+
+export async function fetchLatestMealPlan(): Promise<MealPlan> {
+  const response = await authFetch("/plans/meals/latest");
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.detail || "No meal plan found.");
   }
   return data;
 }
