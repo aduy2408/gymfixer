@@ -39,6 +39,12 @@ RUN python -c "from huggingface_hub import snapshot_download; \
 snapshot_download(repo_id='usyd-community/vitpose-base-simple', local_dir='model/vitpose', \
 allow_patterns=['config.json', 'preprocessor_config.json', '*.safetensors', '*.bin', '*.json', '*.txt'])"
 
+# Pre-download MediaPipe Pose models so they are baked into the image and ready offline
+RUN python -c "import mediapipe as mp; \
+mp.solutions.pose.Pose(model_complexity=0); \
+mp.solutions.pose.Pose(model_complexity=1); \
+mp.solutions.pose.Pose(model_complexity=2)"
+
 # Copy application code
 COPY . .
 
