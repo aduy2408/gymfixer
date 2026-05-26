@@ -1,8 +1,8 @@
 import re
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 PASSWORD_SPECIAL_RE = re.compile(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\/;\'`~]')
@@ -86,6 +86,52 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+ProfileGender = Literal["male", "female", "other", ""]
+ProfileGoal = Literal["fat_loss", "muscle", "strength", "endurance", "rehab", "general", ""]
+
+
+class UserProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    height_cm: Optional[int] = Field(default=None, ge=100, le=250)
+    weight_kg: Optional[int] = Field(default=None, ge=30, le=300)
+    age: Optional[int] = Field(default=None, ge=10, le=100)
+    gender: Optional[ProfileGender] = None
+    goal: Optional[ProfileGoal] = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_optional_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("Name is required")
+        if len(value) > 120:
+            raise ValueError("Name must be 120 characters or fewer")
+        return value
+
+    @field_validator("email")
+    @classmethod
+    def validate_optional_email(cls, value: Optional[EmailStr]) -> Optional[str]:
+        if value is None:
+            return value
+        return normalize_email(value)
+
+
+class UserProfileOut(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+    height_cm: Optional[int] = None
+    weight_kg: Optional[int] = None
+    age: Optional[int] = None
+    gender: str = ""
+    goal: str = ""
+    created_at: datetime
+    updated_at: Optional[datetime] = None
 
 
 class GoogleToken(BaseModel):

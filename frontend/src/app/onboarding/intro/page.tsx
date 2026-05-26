@@ -11,13 +11,13 @@ const features = [
     },
     {
         icon: Cpu,
-        title: "AI Pose Estimation",
-        desc: "MediaPipe tracks 33 body landmarks per frame — shoulders, elbows, hips, knees, and more.",
+        title: "Quality Form Coaching",
+        desc: "Get clear, reliable feedback designed to help every rep feel sharper, safer, and more controlled.",
     },
     {
         icon: Activity,
-        title: "Joint Angle Analysis",
-        desc: "We compute real-time joint angles and compare them against biomechanical reference ranges.",
+        title: "Performance You Can Trust",
+        desc: "Our analysis highlights the details that matter, turning each upload into practical cues for better training.",
     },
     {
         icon: Shield,

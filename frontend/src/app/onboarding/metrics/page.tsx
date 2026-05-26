@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Activity, ArrowRight } from "lucide-react";
+import { updateUserProfile } from "@/lib/api";
 
 const goals = [
     { id: "fat_loss", emoji: "🔥", label: "Fat Loss", desc: "Reduce body fat while preserving muscle" },
@@ -17,6 +18,7 @@ export default function OnboardingMetricsPage() {
     const router = useRouter();
     const [form, setForm] = useState({ height: "", weight: "", age: "", gender: "", goal: "" });
     const [saving, setSaving] = useState(false);
+    const [error, setError] = useState("");
 
     const update = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
         setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -24,9 +26,21 @@ export default function OnboardingMetricsPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setSaving(true);
-        if (typeof window !== "undefined") localStorage.setItem("fg_profile", JSON.stringify(form));
-        await new Promise((r) => setTimeout(r, 800));
-        router.push("/dashboard");
+        setError("");
+        try {
+            await updateUserProfile({
+                height_cm: Number(form.height),
+                weight_kg: Number(form.weight),
+                age: Number(form.age),
+                gender: form.gender as "" | "male" | "female" | "other",
+                goal: form.goal as "fat_loss" | "muscle" | "strength" | "endurance" | "rehab" | "general",
+            });
+            if (typeof window !== "undefined") localStorage.removeItem("fg_profile");
+            router.push("/dashboard");
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Could not save your profile.");
+            setSaving(false);
+        }
     };
 
     const isComplete = form.height && form.weight && form.age && form.goal;
@@ -165,6 +179,12 @@ export default function OnboardingMetricsPage() {
                         </div>
 
                         {/* Submit */}
+                        {error && (
+                            <div style={{ border: "1px solid rgba(214,0,28,0.2)", background: "rgba(214,0,28,0.06)", color: "var(--red)", borderRadius: 4, padding: "0.8rem 1rem", fontSize: "0.85rem" }}>
+                                {error}
+                            </div>
+                        )}
+
                         <motion.button
                             whileTap={{ scale: 0.98 }}
                             id="metrics-submit"

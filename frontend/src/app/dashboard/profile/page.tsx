@@ -1,10 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Save, CheckCircle } from "lucide-react";
 import DashboardNav from "@/components/DashboardNav";
-import { mockProfile, mockUser } from "@/lib/mockData";
 import Link from "next/link";
+import { fetchUserProfile, updateUserProfile, UserProfile } from "@/lib/api";
+import { setStoredUser } from "@/lib/auth";
 
 const goals = [
     { id: "fat_loss", label: "🔥 Fat Loss" },
@@ -46,24 +47,69 @@ const Divider = () => <hr style={{ border: "none", borderTop: "1px solid #e8e8e8
 
 export default function ProfilePage() {
     const [form, setForm] = useState({
-        name: mockUser.name,
-        email: mockUser.email,
-        height: String(mockProfile.height),
-        weight: String(mockProfile.weight),
-        age: String(mockProfile.age),
-        gender: mockProfile.gender.toLowerCase(),
-        goal: "muscle",
+        name: "",
+        email: "",
+        height: "",
+        weight: "",
+        age: "",
+        gender: "",
+        goal: "",
     });
+    const [profile, setProfile] = useState<UserProfile | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
     const [saved, setSaved] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        fetchUserProfile()
+            .then((data) => {
+                if (cancelled) return;
+                setProfile(data);
+                setForm({
+                    name: data.name,
+                    email: data.email,
+                    height: data.height_cm ? String(data.height_cm) : "",
+                    weight: data.weight_kg ? String(data.weight_kg) : "",
+                    age: data.age ? String(data.age) : "",
+                    gender: data.gender || "",
+                    goal: data.goal || "",
+                });
+                setLoading(false);
+            })
+            .catch((err) => {
+                if (cancelled) return;
+                setError(err instanceof Error ? err.message : "Could not load profile.");
+                setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const update = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
         setForm((f) => ({ ...f, [k]: e.target.value }));
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
-        await new Promise((r) => setTimeout(r, 600));
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2500);
+        setError("");
+        try {
+            const updated = await updateUserProfile({
+                name: form.name,
+                email: form.email,
+                height_cm: form.height ? Number(form.height) : undefined,
+                weight_kg: form.weight ? Number(form.weight) : undefined,
+                age: form.age ? Number(form.age) : undefined,
+                gender: form.gender as "" | "male" | "female" | "other",
+                goal: form.goal as "" | "fat_loss" | "muscle" | "strength" | "endurance" | "rehab" | "general",
+            });
+            setProfile(updated);
+            setStoredUser({ id: updated.id, name: updated.name, email: updated.email });
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2500);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Could not save profile.");
+        }
     };
 
     return (
@@ -81,6 +127,13 @@ export default function ProfilePage() {
                             Manage your account and body metrics
                         </p>
 
+                        {loading && (
+                            <div style={{ background: "#fff", padding: "1rem", borderRadius: 6, border: "1px solid #e8e8e8", color: "#777", fontSize: "0.85rem" }}>
+                                Loading profile...
+                            </div>
+                        )}
+
+                        {!loading && (
                         <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 300px", gap: "1rem", marginTop: "1rem" }}>
                             {/* Left Side: Profile Form */}
                             <form onSubmit={handleSave} style={{ background: "#fff", padding: "1rem", borderRadius: 6, border: "1px solid #e8e8e8" }}>
@@ -95,7 +148,7 @@ export default function ProfilePage() {
                                         <p style={{ fontWeight: 700, fontSize: "0.9rem" }}>{form.name}</p>
                                         <p style={{ fontSize: "0.78rem", color: "#aaa", fontWeight: 300 }}>{form.email}</p>
                                         <p style={{ fontSize: "0.72rem", color: "#ccc", marginTop: "0.15rem" }}>
-                                            Member since {new Date(mockUser.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                                            Member since {profile?.created_at ? new Date(profile.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "n/a"}
                                         </p>
                                     </div>
                                 </div>
@@ -169,6 +222,15 @@ export default function ProfilePage() {
 
                                 <Divider />
 
+                                {error && (
+                                    <>
+                                        <div style={{ border: "1px solid rgba(214,0,28,0.2)", background: "rgba(214,0,28,0.06)", color: "var(--red)", borderRadius: 4, padding: "0.75rem 1rem", fontSize: "0.82rem" }}>
+                                            {error}
+                                        </div>
+                                        <Divider />
+                                    </>
+                                )}
+
                                 {/* ── Save button ── */}
                                 <button
                                     type="submit"
@@ -238,6 +300,7 @@ export default function ProfilePage() {
                                 </div>
                             </div>
                         </div>
+                        )}
                     </motion.div>
                 </div>
             </main>

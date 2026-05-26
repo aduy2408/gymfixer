@@ -9,6 +9,7 @@ import {
     createWorkoutPlan,
     fetchLatestMealPlan,
     fetchLatestWorkoutPlan,
+    fetchUserProfile,
     MealPlan,
     MealPlanRequest,
     WorkoutPlan,
@@ -59,8 +60,10 @@ export default function PlansPage() {
     const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
     const [workoutLoading, setWorkoutLoading] = useState(false);
     const [mealLoading, setMealLoading] = useState(false);
+    const [latestLoading, setLatestLoading] = useState(true);
     const [workoutError, setWorkoutError] = useState("");
     const [mealError, setMealError] = useState("");
+    const [latestError, setLatestError] = useState("");
 
     const [workoutForm, setWorkoutForm] = useState({
         age: "28",
@@ -94,16 +97,48 @@ export default function PlansPage() {
 
     useEffect(() => {
         let cancelled = false;
-        fetchLatestWorkoutPlan()
-            .then((data) => {
-                if (!cancelled) setWorkoutPlan(data);
-            })
-            .catch(() => {});
-        fetchLatestMealPlan()
-            .then((data) => {
-                if (!cancelled) setMealPlan(data);
-            })
-            .catch(() => {});
+        async function loadInitialData() {
+            const [profileResult, workoutResult, mealResult] = await Promise.allSettled([
+                fetchUserProfile(),
+                fetchLatestWorkoutPlan(),
+                fetchLatestMealPlan(),
+            ]);
+
+            if (cancelled) return;
+
+            if (profileResult.status === "fulfilled") {
+                const profile = profileResult.value;
+                const metricPatch = {
+                    age: profile.age ? String(profile.age) : "28",
+                    height_cm: profile.height_cm ? String(profile.height_cm) : "175",
+                    weight_kg: profile.weight_kg ? String(profile.weight_kg) : "72",
+                    gender: profile.gender || "male",
+                    goal: profile.goal || "muscle",
+                };
+                setWorkoutForm((form) => ({ ...form, ...metricPatch }));
+                setMealForm((form) => ({
+                    ...form,
+                    ...metricPatch,
+                    goal: metricPatch.goal === "rehab" ? "general" : metricPatch.goal,
+                }));
+            }
+
+            if (workoutResult.status === "fulfilled") {
+                setWorkoutPlan(workoutResult.value);
+            } else if (!isMissingPlanError(workoutResult.reason)) {
+                setLatestError((prev) => prev || "Could not load your latest workout plan.");
+            }
+
+            if (mealResult.status === "fulfilled") {
+                setMealPlan(mealResult.value);
+            } else if (!isMissingPlanError(mealResult.reason)) {
+                setLatestError((prev) => prev || "Could not load your latest meal plan.");
+            }
+
+            setLatestLoading(false);
+        }
+
+        loadInitialData();
         return () => {
             cancelled = true;
         };
@@ -205,6 +240,16 @@ export default function PlansPage() {
                         <p style={{ fontSize: "0.84rem", color: "#888" }}>
                             Generate a 7-day training plan and meal plan from your goals, metrics, constraints, and preferences.
                         </p>
+                        {latestLoading && (
+                            <p style={{ fontSize: "0.76rem", color: "#aaa", marginTop: "0.55rem" }}>
+                                Loading your saved plans...
+                            </p>
+                        )}
+                        {latestError && (
+                            <div style={{ marginTop: "0.75rem" }}>
+                                <ErrorBox text={latestError} />
+                            </div>
+                        )}
                     </motion.div>
 
                     <div style={{ ...cardStyle, padding: "0.35rem", display: "inline-flex", gap: "0.35rem", marginBottom: "1.25rem" }}>
@@ -842,6 +887,10 @@ function validateNumberField(label: string, value: string, min: number, max: num
     if (!Number.isFinite(parsed)) return `${label} must be a valid number.`;
     if (parsed < min || parsed > max) return `${label} must be between ${min} and ${max}.`;
     return "";
+}
+
+function isMissingPlanError(error: unknown) {
+    return error instanceof Error && error.message.toLowerCase().includes("no ") && error.message.toLowerCase().includes("plan");
 }
 
 function splitCsv(value: string) {
