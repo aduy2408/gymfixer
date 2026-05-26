@@ -34,7 +34,7 @@ const metricStyle: React.CSSProperties = {
     background: "#fff",
     border: "1px solid #e8e8e8",
     borderRadius: 6,
-    padding: "1rem",
+    padding: "0.75rem",
 };
 
 const lineColors = ["#ef4444", "var(--navy)", "var(--red)", "#10b981", "#f59e0b", "#6366f1"];
@@ -79,16 +79,16 @@ export default function AnalysisPage() {
 
     if (!analysis || !result) {
         return (
-            <div style={{ display: "flex", minHeight: "100vh", background: "#f7f7f7", fontFamily: "'Barlow', sans-serif" }}>
+            <div style={{ display: "flex", minHeight: "100vh", background: "#f7f7f7", fontFamily: "var(--font-ui)" }}>
                 <DashboardNav />
                 <main style={{ flex: 1, padding: "2rem 2.5rem" }}>
                     <div style={{ maxWidth: 760, margin: "0 auto", ...metricStyle, padding: "2rem" }}>
                         <Link href="/dashboard">
-                            <button className="flex items-center gap-1.5 text-sm mb-4" style={{ color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                            <button className="flex items-center gap-1.5 text-xs mb-3" style={{ color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                                 <ArrowLeft size={15} /> Back to Dashboard
                             </button>
                         </Link>
-                        <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "2rem", textTransform: "uppercase", marginBottom: "0.5rem" }}>
+                        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "2rem", textTransform: "uppercase", marginBottom: "0.5rem" }}>
                             No Analysis Found
                         </h1>
                         <p style={{ color: "#777", fontSize: "0.9rem", lineHeight: 1.6 }}>
@@ -111,14 +111,14 @@ export default function AnalysisPage() {
         .slice(0, 8);
 
     return (
-        <div style={{ display: "flex", minHeight: "100vh", background: "#f7f7f7", fontFamily: "'Barlow', sans-serif" }}>
+        <div style={{ display: "flex", minHeight: "100vh", background: "#f7f7f7", fontFamily: "var(--font-ui)" }}>
             <DashboardNav />
 
-            <main style={{ flex: 1, overflowY: "auto", padding: "2rem 2.5rem" }}>
-                <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+            <main style={{ flex: 1, overflowY: "auto", padding: "1.25rem 1.75rem" }}>
+                <div style={{ maxWidth: 1040, margin: "0 auto" }}>
+                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-4">
                         <Link href="/dashboard">
-                            <button className="flex items-center gap-1.5 text-sm mb-4" style={{ color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                            <button className="flex items-center gap-1.5 text-xs mb-3" style={{ color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                                 <ArrowLeft size={15} /> Back to Dashboard
                             </button>
                         </Link>
@@ -128,7 +128,7 @@ export default function AnalysisPage() {
                                 <p style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--red)", marginBottom: "0.35rem" }}>
                                     Analysis {analysis.id}
                                 </p>
-                                <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "2.4rem", textTransform: "uppercase", lineHeight: 1, color: "var(--red)" }}>
+                                <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.8rem", textTransform: "uppercase", lineHeight: 1, color: "var(--red)" }}>
                                     {result.exercise.replace("_", " ")} Report
                                 </h1>
                                 <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
@@ -148,7 +148,7 @@ export default function AnalysisPage() {
                         initial={{ opacity: 0, y: 16 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
-                        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8"
+                        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4"
                     >
                         <Metric label="Quality" value={`${qualityScore}%`} color={qualityScore >= 80 ? "#10b981" : qualityScore >= 60 ? "#f59e0b" : "var(--red)"} />
                         <Metric label="Reps" value={result.summary.rep_count} color="var(--red)" />
@@ -158,14 +158,14 @@ export default function AnalysisPage() {
                         <Metric label="Backend" value={result.summary.pose_backend || result.pose_backend || "mediapipe"} color="#555" />
                     </motion.div>
 
-                    <div className="grid md:grid-cols-5 gap-6 mb-8">
+                    <div className="grid md:grid-cols-5 gap-4 mb-4">
                         <motion.section
                             initial={{ opacity: 0, x: -12 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: 0.2 }}
                             className="md:col-span-2"
                         >
-                            <h2 className="font-bold text-base mb-3 flex items-center gap-2">
+                            <h2 className="font-bold text-sm mb-2 flex items-center gap-2">
                                 <FileVideo size={16} style={{ color: "var(--navy)" }} /> Skeleton Preview
                                 {previewFrames.length > 0 && (
                                     <span style={{ color: "#999", fontSize: "0.75rem", fontWeight: 500 }}>
@@ -217,10 +217,10 @@ export default function AnalysisPage() {
                             transition={{ delay: 0.3 }}
                             className="md:col-span-3"
                         >
-                            <h2 className="font-bold text-base mb-3 flex items-center gap-2">
+                            <h2 className="font-bold text-sm mb-2 flex items-center gap-2">
                                 <BarChart2 size={16} style={{ color: "var(--red)" }} /> Joint Angles
                             </h2>
-                            <div style={{ ...metricStyle, height: 320, marginBottom: "1rem" }}>
+                            <div style={{ ...metricStyle, height: 240, marginBottom: "0.75rem" }}>
                                 {chartData.length > 0 ? (
                                     <ResponsiveContainer width="100%" height="100%">
                                         <LineChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
@@ -241,7 +241,7 @@ export default function AnalysisPage() {
                                 )}
                             </div>
 
-                            <div style={{ ...metricStyle, padding: "1rem" }}>
+                            <div style={{ ...metricStyle, padding: "0.75rem" }}>
                                 <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
                                     <AlertTriangle size={15} style={{ color: "#f59e0b" }} /> Form Issues
                                 </h3>
@@ -259,7 +259,7 @@ export default function AnalysisPage() {
                                 )}
                             </div>
 
-                            <div style={{ ...metricStyle, padding: "1rem", marginTop: "1rem" }}>
+                            <div style={{ ...metricStyle, padding: "0.75rem", marginTop: "0.75rem" }}>
                                 <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
                                     <Info size={15} style={{ color: "var(--navy)" }} /> All Feedback
                                 </h3>
@@ -280,10 +280,10 @@ export default function AnalysisPage() {
                     </div>
 
                     <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-                        <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
+                        <h2 className="font-bold text-base mb-2 flex items-center gap-2">
                             <Activity size={18} style={{ color: "var(--red)" }} /> Coaching
                         </h2>
-                        <div style={{ ...metricStyle, padding: "1.25rem" }}>
+                        <div style={{ ...metricStyle, padding: "0.9rem" }}>
                             <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
                                 <Info size={16} style={{ color: "var(--red)", marginTop: 2, flexShrink: 0 }} />
                                 <div>
@@ -297,7 +297,7 @@ export default function AnalysisPage() {
                                             {result.llm.prompt_chars ? ` · Prompt: ${result.llm.prompt_chars} chars` : ""}
                                         </p>
                                     )}
-                                    <div style={{ whiteSpace: "pre-wrap", color: "#555", fontSize: "0.9rem", lineHeight: 1.7 }}>
+                                    <div style={{ whiteSpace: "pre-wrap", color: "#555", fontSize: "0.82rem", lineHeight: 1.55 }}>
                                         {result.llm.recommendations}
                                     </div>
                                     {result.llm.error && (
@@ -316,7 +316,7 @@ export default function AnalysisPage() {
 function Metric({ label, value, color }: { label: string; value: string | number; color: string }) {
     return (
         <div style={metricStyle}>
-            <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "2rem", lineHeight: 1, color }}>
+            <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.45rem", lineHeight: 1, color }}>
                 {value}
             </p>
             <p style={{ fontSize: "0.7rem", color: "#999", marginTop: "0.35rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>

@@ -13,10 +13,12 @@ from typing import Any
 
 import cv2
 import numpy as np
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
+from authentication.models import User
+from authentication.utils import get_current_user
 from posture import feedback as feedback_module
 from posture import mediapipe_utils
 from posture import visualizer
@@ -341,6 +343,7 @@ async def analyze_video(
     max_frames: int = Form(360),
     include_preview: bool = Form(True),
     preview_max_frames: int = Form(24),
+    current_user: User = Depends(get_current_user),
 ):
     """Analyze an uploaded exercise video by sampling frames from it.
 

@@ -3,8 +3,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, AlertCircle, Activity } from "lucide-react";
-import { setAuthToken } from "@/lib/mockData";
+import { setSession } from "@/lib/auth";
 import { login } from "@/lib/api";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 export default function LoginPage() {
     const router = useRouter();
@@ -24,8 +25,7 @@ export default function LoginPage() {
         setLoading(true);
         try {
             const data = await login(email, password);
-            setAuthToken(data.access_token);
-            localStorage.setItem("ptt_user", JSON.stringify({ email, name: email.split("@")[0] }));
+            setSession(data.access_token, data.user);
             router.push("/dashboard");
         } catch (err) {
             setLoading(false);
@@ -46,7 +46,7 @@ export default function LoginPage() {
     };
 
     return (
-        <div style={{ minHeight: "100vh", display: "flex", background: "#fff", fontFamily: "'Barlow', sans-serif" }}>
+        <div style={{ minHeight: "100vh", display: "flex", background: "#fff", fontFamily: "var(--font-ui)" }}>
 
             {/* Left — brand panel */}
             <div
@@ -57,7 +57,7 @@ export default function LoginPage() {
                     <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ background: "var(--red)" }}>
                         <Activity size={16} color="white" />
                     </div>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "1.2rem", letterSpacing: "0.05em", color: "#fff", textTransform: "uppercase" }}>
+                    <span style={{ fontFamily: "var(--font-display)", fontWeight: 900, fontSize: "1.2rem", letterSpacing: "0.05em", color: "#fff", textTransform: "uppercase" }}>
                         PTT<span style={{ color: "var(--red)" }}>.</span>
                     </span>
                 </div>
@@ -66,7 +66,7 @@ export default function LoginPage() {
                     <p style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--red)", marginBottom: "1rem" }}>
                         AI-Powered Coaching
                     </p>
-                    <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "3.5rem", textTransform: "uppercase", lineHeight: 0.95, color: "#fff", marginBottom: "1.5rem" }}>
+                    <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "3.5rem", textTransform: "uppercase", lineHeight: 0.95, color: "#fff", marginBottom: "1.5rem" }}>
                         TRAIN SMART.<br />
                         <span style={{ color: "var(--red)" }}>LIFT SAFE.</span>
                     </h2>
@@ -96,7 +96,7 @@ export default function LoginPage() {
                         <div style={{ width: 32, height: 32, borderRadius: 6, background: "var(--red)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                             <Activity size={15} color="white" />
                         </div>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "1.1rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                        <span style={{ fontFamily: "var(--font-display)", fontWeight: 900, fontSize: "1.1rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                             PTT<span style={{ color: "var(--red)" }}>.</span>
                         </span>
                     </div>
@@ -104,7 +104,7 @@ export default function LoginPage() {
                     <p style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--red)", marginBottom: "0.5rem" }}>
                         Welcome Back
                     </p>
-                    <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "2.6rem", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.5rem" }}>
+                    <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "2.6rem", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.5rem" }}>
                         SIGN IN
                     </h1>
                     <p style={{ color: "#888", fontSize: "0.875rem", marginBottom: "2rem", fontWeight: 300 }}>
@@ -134,7 +134,7 @@ export default function LoginPage() {
                                 <label style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#333" }}>
                                     Password
                                 </label>
-                                <a href="#" style={{ fontSize: "0.75rem", color: "var(--red)", fontWeight: 600 }}>Forgot password?</a>
+                                <Link href="/auth/forgot-password" style={{ fontSize: "0.75rem", color: "var(--red)", fontWeight: 600 }}>Forgot password?</Link>
                             </div>
                             <div style={{ position: "relative" }}>
                                 <input
@@ -142,7 +142,7 @@ export default function LoginPage() {
                                     type={showPass ? "text" : "password"}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="Min. 6 characters"
+                                    placeholder="Enter your password"
                                     style={{ ...inputStyle, paddingRight: "2.75rem" }}
                                     autoComplete="current-password"
                                     onFocus={(e) => (e.target.style.background = "#e8e8e8")}
@@ -189,7 +189,9 @@ export default function LoginPage() {
                         <div style={{ flex: 1, height: 1, background: "#e8e8e8" }} />
                     </div>
 
-                    <p style={{ textAlign: "center", fontSize: "0.875rem", color: "#888" }}>
+                    <GoogleSignInButton onSuccess={() => router.push("/dashboard")} onError={setError} />
+
+                    <p style={{ textAlign: "center", fontSize: "0.875rem", color: "#888", marginTop: "1.5rem" }}>
                         Don&apos;t have an account?{" "}
                         <Link href="/auth/register" style={{ fontWeight: 700, color: "var(--red)" }}>
                             Sign up free

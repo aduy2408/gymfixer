@@ -1,8 +1,26 @@
 "use client";
 
+import { getAuthToken } from "@/lib/auth";
+
 export type ExerciseId = "squat" | "bicep_curl";
 export type CameraView = "side" | "front" | "three_quarter";
 export type PoseBackend = "mediapipe" | "vitpose";
+
+export type AuthUser = {
+  id: number | string;
+  name: string;
+  email: string;
+  is_verified?: boolean;
+  auth_provider?: string;
+  created_at?: string;
+  last_login_at?: string | null;
+};
+
+export type AuthResponse = {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
+};
 
 export type VideoAnalysisResult = {
   exercise: string;
@@ -62,50 +80,100 @@ export type StoredAnalysis = {
   result: VideoAnalysisResult;
 };
 
-type LoginResponse = {
-  access_token: string;
-  token_type: string;
-};
-
-type UserResponse = {
-  id: number | string;
-  name: string;
-  email: string;
-};
-
 let latestAnalysisMemory: StoredAnalysis | null = null;
 
 export function apiBase(): string {
   const envBase = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
   if (envBase) return envBase.replace(/\/$/, "");
-
   return "http://localhost:5000";
 }
 
-export async function login(email: string, password: string): Promise<LoginResponse> {
+async function parseResponse<T>(response: Response, fallback: string): Promise<T> {
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.detail || data?.message || fallback);
+  }
+  return data as T;
+}
+
+async function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  const token = getAuthToken();
+  const headers = new Headers(init.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(input, { ...init, headers });
+}
+
+export async function login(email: string, password: string): Promise<AuthResponse> {
   const response = await fetch(`${apiBase()}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.detail || "Invalid email or password.");
-  }
-  return data;
+  return parseResponse<AuthResponse>(response, "Invalid email or password.");
 }
 
-export async function register(name: string, email: string, password: string): Promise<UserResponse> {
+export async function register(name: string, email: string, password: string): Promise<AuthUser> {
   const response = await fetch(`${apiBase()}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, email, password }),
   });
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.detail || "Registration failed.");
-  }
-  return data;
+  return parseResponse<AuthUser>(response, "Registration failed.");
+}
+
+export async function getMe(): Promise<AuthUser> {
+  const response = await authFetch(`${apiBase()}/auth/me`);
+  return parseResponse<AuthUser>(response, "Could not load user.");
+}
+
+export async function logout(): Promise<{ message: string }> {
+  const response = await authFetch(`${apiBase()}/auth/logout`, { method: "POST" });
+  return parseResponse<{ message: string }>(response, "Could not log out.");
+}
+
+export async function loginWithGoogle(token: string): Promise<AuthResponse> {
+  const response = await fetch(`${apiBase()}/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  return parseResponse<AuthResponse>(response, "Google sign-in failed.");
+}
+
+export async function forgotPassword(email: string): Promise<{ message: string }> {
+  const response = await fetch(`${apiBase()}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  return parseResponse<{ message: string }>(response, "Could not request password reset.");
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+  const response = await fetch(`${apiBase()}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+  return parseResponse<{ message: string }>(response, "Could not reset password.");
+}
+
+export async function verifyEmail(token: string): Promise<AuthUser> {
+  const response = await fetch(`${apiBase()}/auth/verify-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  return parseResponse<AuthUser>(response, "Could not verify email.");
+}
+
+export async function resendVerification(email: string): Promise<{ message: string }> {
+  const response = await fetch(`${apiBase()}/auth/resend-verification`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  return parseResponse<{ message: string }>(response, "Could not send verification email.");
 }
 
 export async function analyzeVideo(params: {
@@ -130,22 +198,29 @@ export async function analyzeVideo(params: {
   formData.append("include_preview", String(params.includePreview));
   formData.append("preview_max_frames", String(params.previewMaxFrames));
 
-  const response = await fetch(`${apiBase()}/posture/analyze-video`, {
+  const response = await authFetch(`${apiBase()}/posture/analyze-video`, {
     method: "POST",
     body: formData,
   });
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.detail || "Video analysis failed.");
-  }
-  return data;
+  return parseResponse<VideoAnalysisResult>(response, "Video analysis failed.");
 }
 
 export function saveLatestAnalysis(analysis: StoredAnalysis) {
   latestAnalysisMemory = analysis;
-  localStorage.removeItem("ptt_latest_analysis");
+  if (typeof window !== "undefined") {
+    sessionStorage.setItem("gf_latest_analysis", JSON.stringify(analysis));
+  }
 }
 
 export function readLatestAnalysis(): StoredAnalysis | null {
-  return latestAnalysisMemory;
+  if (latestAnalysisMemory) return latestAnalysisMemory;
+  if (typeof window === "undefined") return null;
+  const raw = sessionStorage.getItem("gf_latest_analysis");
+  if (!raw) return null;
+  try {
+    latestAnalysisMemory = JSON.parse(raw) as StoredAnalysis;
+    return latestAnalysisMemory;
+  } catch {
+    return null;
+  }
 }

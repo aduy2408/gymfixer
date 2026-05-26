@@ -89,7 +89,7 @@ export default function PricingPage() {
                         </div>
                         <span
                             className="heading-condensed text-xl tracking-wider"
-                            style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, letterSpacing: "0.05em" }}
+                            style={{ fontFamily: "var(--font-display)", fontWeight: 900, letterSpacing: "0.05em" }}
                         >
                             PTT<span style={{ color: "var(--red)" }}>.</span>
                         </span>
@@ -97,72 +97,56 @@ export default function PricingPage() {
                 </div>
 
                 {/* Center: Links */}
-                <div className="hidden md:flex flex-1 justify-center items-center gap-12">
-                    <Link
-                        href="/#features"
-                        className="text-sm font-bold uppercase tracking-wider transition-colors"
-                        style={{ color: "var(--black)", letterSpacing: "0.08em" }}
-                        onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--red)")}
-                        onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--black)")}
-                    >
-                        Features
-                    </Link>
-                    <Link
-                        href="/#how-it-works"
-                        className="text-sm font-bold uppercase tracking-wider transition-colors"
-                        style={{ color: "var(--black)", letterSpacing: "0.08em" }}
-                        onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--red)")}
-                        onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--black)")}
-                    >
-                        How It Works
-                    </Link>
-                    <Link
-                        href="/#faq"
-                        className="text-sm font-bold uppercase tracking-wider transition-colors"
-                        style={{ color: "var(--black)", letterSpacing: "0.08em" }}
-                        onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--red)")}
-                        onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--black)")}
-                    >
-                        FAQ
-                    </Link>
-                    <Link
-                        href="/pricing"
-                        className="text-sm font-bold uppercase tracking-wider transition-colors"
-                        style={{ color: "var(--red)", letterSpacing: "0.08em" }}
-                    >
-                        Pricing
-                    </Link>
+                <div className="hidden md:flex flex-1 justify-center items-center gap-8 lg:gap-10 whitespace-nowrap">
+                    {[
+                        { label: "Home", href: "/#home" },
+                        { label: "Features", href: "/#features" },
+                        { label: "How It Works", href: "/#how-it-works" },
+                        { label: "FAQ", href: "/#faq" },
+                        { label: "Pricing", href: "/pricing" },
+                    ].map((item) => (
+                        <Link
+                            key={item.label}
+                            href={item.href}
+                            className="text-sm font-bold uppercase tracking-wider transition-colors"
+                            style={{ color: item.label === "Pricing" ? "var(--red)" : "var(--black)", letterSpacing: "0.08em" }}
+                            onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--red)")}
+                            onMouseLeave={(e) => ((e.target as HTMLElement).style.color = item.label === "Pricing" ? "var(--red)" : "var(--black)")}
+                        >
+                            {item.label}
+                        </Link>
+                    ))}
                 </div>
 
                 {/* Right Side: Auth Buttons */}
                 <div className="flex-1 flex justify-end items-center gap-3">
                     <Link href="/auth/login">
-                        <button className="btn-outline-red text-sm px-5 py-2.5">Log In</button>
+                        <button className="btn-outline-red text-sm px-4 py-2">Log In</button>
                     </Link>
                     <Link href="/auth/register">
-                        <button className="btn-red text-sm px-5 py-2.5">Start Free Trial</button>
+                        <button className="btn-red text-sm px-4 py-2">Start Free Trial</button>
                     </Link>
                 </div>
             </nav>
 
             {/* ─── Hero Section ─── */}
-            <section className="pt-36 pb-16 px-6 md:px-16 text-center" style={{ background: "var(--gray-light)", flex: 1 }}>
+            <section className="px-6 md:px-16 text-center" style={{ minHeight: "calc(100vh - 68px)", display: "flex", flexDirection: "column", justifyContent: "center", paddingTop: "5.5rem", paddingBottom: "2rem", background: "var(--gray-light)", flex: 1 }}>
                 <motion.div
                     initial="hidden"
                     animate="visible"
                     variants={fadeUp}
                 >
-                    <p className="label-small mb-3" style={{ color: "var(--red)" }}>Transparent Pricing</p>
-                    <h1 className="heading-condensed mb-6" style={{ fontSize: "clamp(3rem, 6vw, 5rem)" }}>
+                    <p className="label-small mb-2" style={{ color: "var(--red)" }}>Transparent Pricing</p>
+                    <h1 className="heading-condensed mb-3" style={{ fontSize: "clamp(2rem, 4vw, 3.2rem)" }}>
                         CHOOSE YOUR <span style={{ color: "var(--red)" }}>PLAN</span>
                     </h1>
-                    <p className="text-lg max-w-2xl mx-auto mb-16" style={{ color: "var(--gray-dark)", fontWeight: 400 }}>
+                    <p className="text-sm max-w-2xl mx-auto mb-6" style={{ color: "var(--gray-dark)", fontWeight: 400 }}>
                         Whether you&apos;re just starting out or you&apos;re a professional athlete, we have a plan designed to perfect your form and maximize your potential.
                     </p>
                 </motion.div>
 
                 {/* ─── Pricing Cards ─── */}
-                <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8 items-stretch pb-20">
+                <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-5 items-stretch">
                     {plans.map((plan, i) => (
                         <motion.div
                             key={plan.name}
@@ -170,7 +154,7 @@ export default function PricingPage() {
                             initial="hidden"
                             animate="visible"
                             variants={fadeUp}
-                            className={`relative flex flex-col rounded-2xl overflow-hidden transition-transform duration-300 hover:-translate-y-2`}
+                            className={`relative flex flex-col rounded-xl overflow-hidden transition-transform duration-300 hover:-translate-y-1`}
                             style={{
                                 background: plan.name === "PRO" ? "var(--navy)" : "var(--white)",
                                 color: plan.name === "PRO" ? "var(--white)" : "var(--black)",
@@ -180,27 +164,27 @@ export default function PricingPage() {
                             }}
                         >
                             {plan.isPopular && (
-                                <div style={{ background: "var(--red)", color: "white", padding: "0.4rem", textAlign: "center", fontSize: "0.75rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                                <div style={{ background: "var(--red)", color: "white", padding: "0.3rem", textAlign: "center", fontSize: "0.68rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                                     Most Popular
                                 </div>
                             )}
-                            <div className="p-8 flex-1 flex flex-col">
-                                <h3 className="heading-condensed text-2xl mb-2" style={{ color: plan.name === "PRO" ? "var(--white)" : "var(--black)" }}>{plan.name}</h3>
-                                <div className="flex items-baseline gap-1 mb-4">
-                                    <span className="heading-condensed" style={{ fontSize: "3.5rem", lineHeight: 1, color: plan.name === "PRO" ? "var(--white)" : "var(--black)" }}>{plan.price}</span>
+                            <div className="p-5 flex-1 flex flex-col">
+                                <h3 className="heading-condensed text-xl mb-1" style={{ color: plan.name === "PRO" ? "var(--white)" : "var(--black)" }}>{plan.name}</h3>
+                                <div className="flex items-baseline gap-1 mb-3">
+                                    <span className="heading-condensed" style={{ fontSize: "2.5rem", lineHeight: 1, color: plan.name === "PRO" ? "var(--white)" : "var(--black)" }}>{plan.price}</span>
                                     <span style={{ color: plan.name === "PRO" ? "rgba(255,255,255,0.6)" : "var(--gray-dark)", fontWeight: 500 }}>{plan.period}</span>
                                 </div>
-                                <p className="text-sm mb-8" style={{ color: plan.name === "PRO" ? "rgba(255,255,255,0.8)" : "var(--gray-dark)" }}>{plan.description}</p>
+                                <p className="text-sm mb-4" style={{ color: plan.name === "PRO" ? "rgba(255,255,255,0.8)" : "var(--gray-dark)" }}>{plan.description}</p>
 
-                                <div className="divider-red mb-8" style={{ background: plan.name === "PRO" ? "rgba(255,255,255,0.2)" : "var(--gray-mid)" }} />
+                                <div className="divider-red mb-4" style={{ background: plan.name === "PRO" ? "rgba(255,255,255,0.2)" : "var(--gray-mid)" }} />
 
-                                <ul className="space-y-4 mb-10 flex-1">
+                                <ul className="space-y-2.5 mb-5 flex-1">
                                     {plan.features.map((feature, idx) => (
-                                        <li key={idx} className="flex items-start gap-3">
+                                        <li key={idx} className="flex items-start gap-2">
                                             <div className="mt-0.5 shrink-0" style={{ color: plan.name === "PRO" ? "var(--red)" : "var(--red)" }}>
-                                                <CheckCircle size={18} />
+                                                <CheckCircle size={15} />
                                             </div>
-                                            <span className="text-sm font-medium" style={{ color: plan.name === "PRO" ? "rgba(255,255,255,0.9)" : "var(--black)" }}>{feature}</span>
+                                            <span className="text-xs font-medium" style={{ color: plan.name === "PRO" ? "rgba(255,255,255,0.9)" : "var(--black)" }}>{feature}</span>
                                         </li>
                                     ))}
                                 </ul>
@@ -208,7 +192,7 @@ export default function PricingPage() {
                                 <Link href={plan.name === "FREE" ? "/auth/register" : "/dashboard/plans"} style={{ width: "100%" }}>
                                     <button
                                         className={plan.buttonClass}
-                                        style={{ width: "100%", padding: "1rem", fontSize: "1rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem" }}
+                                        style={{ width: "100%", padding: "0.65rem", fontSize: "0.8rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem" }}
                                     >
                                         {plan.buttonText} {plan.name !== "FREE" && <ArrowRight size={18} />}
                                     </button>
@@ -224,9 +208,9 @@ export default function PricingPage() {
                     whileInView="visible"
                     viewport={{ once: true }}
                     variants={fadeUp}
-                    className="pb-20"
+                    className="mt-5"
                 >
-                    <p className="text-sm" style={{ color: "var(--gray-dark)" }}>
+                    <p className="text-xs" style={{ color: "var(--gray-dark)" }}>
                         Have questions about our plans? <Link href="/#faq" style={{ color: "var(--red)", fontWeight: 600, textDecoration: "underline" }}>Check out our FAQ</Link>.
                     </p>
                 </motion.div>
@@ -234,27 +218,11 @@ export default function PricingPage() {
 
             {/* ─── Footer ─── */}
             <footer
-                className="px-6 md:px-16 py-10"
+                className="px-6 md:px-16 py-6"
                 style={{ background: "var(--black)", color: "rgba(255,255,255,0.5)" }}
             >
-                <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: "var(--red)" }}>
-                            <Activity size={12} color="white" />
-                        </div>
-                        <span
-                            className="font-bold text-base uppercase tracking-widest"
-                            style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "var(--white)", fontWeight: 900 }}
-                        >
-                            PTT<span style={{ color: "var(--red)" }}>.</span>
-                        </span>
-                    </div>
-                    <p className="text-xs text-center">© 2026 PTT. All rights reserved. · Privacy Policy · Terms of Service</p>
-                    <div className="flex gap-4">
-                        <Link href="/#features" className="text-xs uppercase tracking-wide hover:text-white transition-colors" style={{ letterSpacing: "0.08em" }}>Features</Link>
-                        <Link href="/#how-it-works" className="text-xs uppercase tracking-wide hover:text-white transition-colors" style={{ letterSpacing: "0.08em" }}>How It Works</Link>
-                        <Link href="/pricing" className="text-xs uppercase tracking-wide hover:text-white transition-colors" style={{ letterSpacing: "0.08em" }}>Pricing</Link>
-                    </div>
+                <div className="max-w-6xl mx-auto text-center">
+                    <p className="text-xs">© 2026 PTT. All rights reserved. · Privacy Policy · Terms of Service</p>
                 </div>
             </footer>
         </div>

@@ -48,11 +48,11 @@ const cardStyle: React.CSSProperties = {
 
 const labelStyle: React.CSSProperties = {
     display: "block",
-    fontSize: "0.68rem",
+    fontSize: "0.64rem",
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
-    marginBottom: "0.4rem",
+    marginBottom: "0.3rem",
     color: "#555",
 };
 
@@ -61,8 +61,8 @@ const inputStyle: React.CSSProperties = {
     background: "#f2f2f2",
     border: "none",
     borderRadius: 4,
-    padding: "11px 14px",
-    fontSize: "0.86rem",
+    padding: "9px 12px",
+    fontSize: "0.8rem",
     color: "#0a0a0a",
     outline: "none",
 };
@@ -134,21 +134,21 @@ export default function DashboardPage() {
     const fileSize = file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : "";
 
     return (
-        <div style={{ display: "flex", minHeight: "100vh", background: "#f7f7f7", fontFamily: "'Barlow', sans-serif" }}>
+        <div style={{ display: "flex", minHeight: "100vh", background: "#f7f7f7", fontFamily: "var(--font-ui)" }}>
             <DashboardNav />
 
-            <main style={{ flex: 1, overflowY: "auto", padding: "2rem 2.5rem" }}>
-                <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+            <main style={{ flex: 1, overflowY: "auto", padding: "1.25rem 1.75rem" }}>
+                <div style={{ maxWidth: 1040, margin: "0 auto" }}>
                     <motion.div
                         initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
-                        style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: "1.75rem" }}
+                        style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: "1rem" }}
                     >
                         <div>
                             <p style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--red)", marginBottom: "0.3rem" }}>
                                 Posture analysis
                             </p>
-                            <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "2rem", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.35rem" }}>
+                            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.6rem", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.25rem" }}>
                                 Analyse Workout Video
                             </h1>
                             <p style={{ fontSize: "0.82rem", color: "#888", fontWeight: 300 }}>
@@ -157,8 +157,8 @@ export default function DashboardPage() {
                         </div>
                     </motion.div>
 
-                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-                        <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ ...cardStyle, padding: "1.25rem" }}>
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+                        <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ ...cardStyle, padding: "0.8rem" }}>
                             <div
                                 onClick={() => fileRef.current?.click()}
                                 onDragOver={(event) => { event.preventDefault(); setDragOver(true); }}
@@ -168,12 +168,12 @@ export default function DashboardPage() {
                                     border: `2px dashed ${dragOver ? "var(--red)" : file ? "#ccc" : "#ddd"}`,
                                     borderRadius: 4,
                                     background: dragOver ? "rgba(214,0,28,0.03)" : "#fafafa",
-                                    minHeight: 190,
+                                    minHeight: 140,
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "center",
                                     cursor: "pointer",
-                                    marginBottom: "1.25rem",
+                                    marginBottom: "0.9rem",
                                 }}
                             >
                                 <input ref={fileRef} type="file" accept="video/*" style={{ display: "none" }} onChange={onFileChange} />
@@ -198,7 +198,7 @@ export default function DashboardPage() {
                                 )}
                             </div>
 
-                            <div style={{ marginBottom: "1.25rem" }}>
+                            <div style={{ marginBottom: "0.9rem" }}>
                                 <label style={labelStyle}>Exercise Type</label>
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
                                     {exerciseOptions.map((option) => (
@@ -210,7 +210,7 @@ export default function DashboardPage() {
                                                 background: exercise === option.id ? "var(--red)" : "#fff",
                                                 color: exercise === option.id ? "#fff" : "#444",
                                                 border: "none",
-                                                padding: "0.75rem 0.9rem",
+                                                padding: "0.55rem 0.75rem",
                                                 fontSize: "0.82rem",
                                                 fontWeight: exercise === option.id ? 700 : 500,
                                                 cursor: "pointer",
@@ -223,7 +223,7 @@ export default function DashboardPage() {
                                 </div>
                             </div>
 
-                            <div style={{ marginBottom: "1.25rem" }}>
+                            <div style={{ marginBottom: "0.9rem" }}>
                                 <label style={labelStyle}>Camera View</label>
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
                                     {cameraViewOptions.map((option) => (
@@ -235,7 +235,7 @@ export default function DashboardPage() {
                                                 background: cameraView === option.id ? "var(--navy)" : "#fff",
                                                 color: cameraView === option.id ? "#fff" : "#444",
                                                 border: "none",
-                                                padding: "0.7rem 0.85rem",
+                                                padding: "0.5rem 0.7rem",
                                                 fontSize: "0.8rem",
                                                 fontWeight: cameraView === option.id ? 700 : 500,
                                                 cursor: "pointer",
@@ -248,7 +248,7 @@ export default function DashboardPage() {
                                 </div>
                             </div>
 
-                            <div style={{ marginBottom: "1.25rem" }}>
+                            <div style={{ marginBottom: "0.9rem" }}>
                                 <label style={labelStyle}>Pose Backend</label>
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
                                     {poseBackendOptions.map((option) => (
@@ -260,7 +260,7 @@ export default function DashboardPage() {
                                                 background: poseBackend === option.id ? "var(--navy)" : "#fff",
                                                 color: poseBackend === option.id ? "#fff" : "#444",
                                                 border: "none",
-                                                padding: "0.7rem 0.85rem",
+                                                padding: "0.5rem 0.7rem",
                                                 fontSize: "0.8rem",
                                                 fontWeight: poseBackend === option.id ? 700 : 500,
                                                 cursor: "pointer",
@@ -273,7 +273,7 @@ export default function DashboardPage() {
                                 </div>
                             </div>
 
-                            <div className="grid gap-4 md:grid-cols-3" style={{ marginBottom: "1.25rem" }}>
+                            <div className="grid gap-3 md:grid-cols-3" style={{ marginBottom: "0.9rem" }}>
                                 <div>
                                     <label style={labelStyle}>Sample FPS</label>
                                     <input type="number" min={1} max={30} value={sampleFps} onChange={(event) => setSampleFps(Number(event.target.value))} style={inputStyle} />
@@ -304,7 +304,7 @@ export default function DashboardPage() {
                                     onClick={handleAnalyze}
                                     disabled={!file || isLoading}
                                     className="btn-red"
-                                    style={{ borderRadius: 4, padding: "0.85rem 1.4rem", opacity: file && !isLoading ? 1 : 0.45, cursor: file && !isLoading ? "pointer" : "not-allowed" }}
+                                    style={{ borderRadius: 4, padding: "0.65rem 1.1rem", opacity: file && !isLoading ? 1 : 0.45, cursor: file && !isLoading ? "pointer" : "not-allowed" }}
                                 >
                                     {isLoading ? <Loader2 size={16} className="animate-spin" /> : <FileVideo size={16} />}
                                     {isLoading ? "Analysing..." : "Analyse Video"}
@@ -318,9 +318,9 @@ export default function DashboardPage() {
                             )}
                         </motion.section>
 
-                        <aside style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                            <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} style={{ ...cardStyle, padding: "1rem" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.75rem" }}>
+                        <aside style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                            <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} style={{ ...cardStyle, padding: "0.8rem" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.55rem" }}>
                                     <Activity size={14} color="var(--red)" />
                                     <p style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#999" }}>Backend Pipeline</p>
                                 </div>
@@ -330,15 +330,15 @@ export default function DashboardPage() {
                                     "Runs MediaPipe pose analysis",
                                     "Returns coaching and skeleton previews",
                                 ].map((item) => (
-                                    <div key={item} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.35rem 0", fontSize: "0.8rem", color: "#666" }}>
+                                    <div key={item} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.25rem 0", fontSize: "0.8rem", color: "#666" }}>
                                         <CheckCircle size={12} color="#10b981" />
                                         {item}
                                     </div>
                                 ))}
                             </motion.div>
 
-                            <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} style={{ ...cardStyle, padding: "1rem" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.75rem" }}>
+                            <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} style={{ ...cardStyle, padding: "0.8rem" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.55rem" }}>
                                     <BarChart2 size={14} color="var(--navy)" />
                                     <p style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#999" }}>Latest Result</p>
                                 </div>
@@ -366,7 +366,7 @@ export default function DashboardPage() {
 function Metric({ label, value }: { label: string; value: string | number }) {
     return (
         <div style={{ background: "#f7f7f7", borderRadius: 4, padding: "0.65rem", textAlign: "center" }}>
-            <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "1.35rem", lineHeight: 1, color: "var(--red)" }}>{value}</p>
+            <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.35rem", lineHeight: 1, color: "var(--red)" }}>{value}</p>
             <p style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "#999", marginTop: "0.25rem" }}>{label}</p>
         </div>
     );

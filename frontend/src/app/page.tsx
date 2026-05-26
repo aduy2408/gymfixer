@@ -27,13 +27,6 @@ const workoutTypes = [
   },
 ];
 
-const stats = [
-  { value: "99.2%", label: "Keypoint Accuracy" },
-  { value: "12+", label: "Exercises Supported" },
-  { value: "< 2min", label: "Analysis Time" },
-  { value: "18", label: "Joints Tracked" },
-];
-
 const steps = [
   { num: "01", title: "Upload Your Video", desc: "Record your workout and upload a short clip. Any smartphone video works." },
   { num: "02", title: "AI Pose Analysis", desc: "Our pipeline extracts frames, detects 33 body keypoints, and computes joint angles." },
@@ -84,7 +77,7 @@ export default function LandingPage() {
             </div>
             <span
               className="heading-condensed text-xl tracking-wider"
-              style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, letterSpacing: "0.05em" }}
+              style={{ fontFamily: "var(--font-display)", fontWeight: 900, letterSpacing: "0.05em" }}
             >
               PTT<span style={{ color: "var(--red)" }}>.</span>
             </span>
@@ -92,11 +85,11 @@ export default function LandingPage() {
         </div>
 
         {/* Center: Links */}
-        <div className="hidden md:flex flex-1 justify-center items-center gap-12">
-          {["Features", "How It Works", "FAQ"].map((item) => (
+        <div className="hidden md:flex flex-1 justify-center items-center gap-8 lg:gap-10 whitespace-nowrap">
+          {["Home", "Features", "How It Works", "FAQ"].map((item) => (
             <a
               key={item}
-              href={`/#${item.toLowerCase().replace(/ /g, "-")}`}
+              href={item === "Home" ? "/#home" : `/#${item.toLowerCase().replace(/ /g, "-")}`}
               className="text-sm font-bold uppercase tracking-wider transition-colors"
               style={{ color: "var(--black)", letterSpacing: "0.08em" }}
               onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--red)")}
@@ -129,8 +122,9 @@ export default function LandingPage() {
 
       {/* ─── Hero ─── */}
       <section
+        id="home"
         className="relative flex flex-col justify-center overflow-hidden"
-        style={{ minHeight: "100vh" }}
+        style={{ minHeight: "calc(100vh - 54px)", paddingTop: 68, scrollMarginTop: 68 }}
       >
         {/* Background image */}
         <div
@@ -148,7 +142,7 @@ export default function LandingPage() {
         </div>
 
         {/* Content */}
-        <div className="relative z-10 px-6 md:px-16 pt-28 pb-24 max-w-3xl">
+        <div className="relative z-10 px-6 md:px-16 py-8" style={{ maxWidth: "min(92vw, 980px)" }}>
           {/* <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -163,8 +157,8 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="heading-condensed mb-6"
-            style={{ fontSize: "clamp(3.5rem, 8vw, 6.5rem)", color: "var(--white)" }}
+            className="heading-condensed mb-4"
+            style={{ fontSize: "clamp(2.8rem, 6.2vw, 5.1rem)", color: "var(--white)" }}
           >
             PERFECT YOUR FORM.
             <br />
@@ -175,7 +169,7 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-lg mb-10 max-w-xl leading-relaxed"
+            className="text-base mb-6 max-w-xl leading-relaxed"
             style={{ color: "var(--text-on-dark)", fontWeight: 300 }}
           >
             Upload your workout video and get instant AI-powered pose analysis — joint angle tracking,
@@ -186,14 +180,14 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="flex flex-wrap gap-4"
+            className="flex flex-wrap gap-3"
           >
             <Link href="/auth/register">
-              <button className="btn-red px-8 py-4 text-base">
+              <button className="btn-red px-7 py-3 text-sm">
                 Start For Free <ArrowRight size={18} />
               </button>
             </Link>
-            <button className="btn-outline-white px-8 py-4 text-base">
+            <button className="btn-outline-white px-7 py-3 text-sm">
               <Play size={16} fill="currentColor" /> Watch Demo
             </button>
           </motion.div>
@@ -211,49 +205,10 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* ─── Stats ─── */}
-      <section className="py-20 px-6 md:px-16" style={{ background: "var(--white)" }}>
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14">
-            <div className="flex justify-center gap-2 mb-4">
-              {["★", "★", "★"].map((s, i) => <span key={i} className="star-red">{s}</span>)}
-            </div>
-            <p className="label-small mb-3" style={{ color: "var(--red)" }}>Backed by Science</p>
-            <h2 className="heading-condensed" style={{ fontSize: "clamp(2.5rem, 5vw, 4rem)" }}>
-              WHY PTT WORKS
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {stats.map((s, i) => (
-              <motion.div
-                key={s.label}
-                custom={i}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                variants={fadeUp}
-                className="text-center"
-              >
-                <p
-                  className="heading-condensed mb-2"
-                  style={{ fontSize: "clamp(2.5rem, 5vw, 3.5rem)", color: "var(--red)" }}
-                >
-                  {s.value}
-                </p>
-                <div className="divider-red mx-auto mb-3" />
-                <p className="label-small" style={{ color: "var(--gray-dark)" }}>{s.label}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-
 
       {/* ─── Workout Types ─── */}
-      <section id="features" style={{ background: "var(--white)", overflow: "hidden" }}>
-        <div style={{ padding: "4rem 4rem 0" }}>
+      <section id="features" style={{ minHeight: "calc(100vh - 68px)", display: "flex", flexDirection: "column", background: "var(--white)", overflow: "hidden", scrollMarginTop: 68 }}>
+        <div style={{ padding: "2.5rem 4rem 0" }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "1.5rem" }}>
             <h2 className="heading-condensed" style={{ fontSize: "clamp(1.8rem, 4vw, 2.8rem)" }}>
               PTT WORKOUT TYPES
@@ -267,7 +222,7 @@ export default function LandingPage() {
         </div>
 
         {/* Full-bleed image strip */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 0 }}>
+        <div style={{ flex: 1, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 0, minHeight: 0 }}>
           {workoutTypes.map((w, i) => (
             <motion.div
               key={w.name}
@@ -276,7 +231,7 @@ export default function LandingPage() {
               whileInView="visible"
               viewport={{ once: true }}
               variants={fadeUp}
-              style={{ position: "relative", aspectRatio: "3/4", overflow: "hidden" }}
+              style={{ position: "relative", minHeight: "clamp(440px, calc(100vh - 170px), 680px)", overflow: "hidden" }}
             >
               {/* Background image */}
               <img
@@ -308,7 +263,7 @@ export default function LandingPage() {
               {/* Label overlay */}
               <div style={{
                 position: "absolute", bottom: 0, left: 0, right: 0,
-                padding: "1.5rem",
+                padding: "1rem",
               }}>
                 <p style={{
                   fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase",
@@ -319,12 +274,12 @@ export default function LandingPage() {
                 <div style={{
                   display: "inline-block",
                   background: w.color,
-                  padding: "0.3rem 0.85rem",
-                  marginBottom: "1rem",
+                  padding: "0.25rem 0.7rem",
+                  marginBottom: "0.6rem",
                 }}>
                   <p style={{
-                    fontFamily: "'Barlow Condensed', sans-serif",
-                    fontWeight: 800, fontSize: "1.4rem",
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 800, fontSize: "1.1rem",
                     textTransform: "uppercase", color: "#fff", lineHeight: 1,
                   }}>
                     {w.name}
@@ -354,18 +309,18 @@ export default function LandingPage() {
       {/* ─── How It Works ─── */}
       <section
         id="how-it-works"
-        className="py-24 px-6 md:px-16"
-        style={{ background: "var(--navy)" }}
+        className="px-6 md:px-16"
+        style={{ minHeight: "calc(100vh - 68px)", display: "flex", alignItems: "center", paddingTop: "3rem", paddingBottom: "3rem", background: "var(--navy)", scrollMarginTop: 68 }}
       >
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
-            <p className="label-small mb-3" style={{ color: "var(--red)" }}>Simple Process</p>
-            <h2 className="heading-condensed" style={{ fontSize: "clamp(2.5rem, 5vw, 4rem)", color: "var(--white)" }}>
+          <div className="text-center mb-8">
+            <p className="label-small mb-2" style={{ color: "var(--red)" }}>Simple Process</p>
+            <h2 className="heading-condensed" style={{ fontSize: "clamp(2rem, 4vw, 3rem)", color: "var(--white)" }}>
               HOW IT <span style={{ color: "var(--red)" }}>WORKS</span>
             </h2>
-            <div className="divider-red mx-auto mt-5" />
+            <div className="divider-red mx-auto mt-3" />
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-3 gap-5">
             {steps.map((s, i) => (
               <motion.div
                 key={s.num}
@@ -380,7 +335,7 @@ export default function LandingPage() {
                   <p
                     className="heading-condensed select-none"
                     style={{
-                      fontSize: "clamp(5rem, 10vw, 8rem)",
+                      fontSize: "clamp(3.5rem, 7vw, 5.5rem)",
                       color: "rgba(255,255,255,0.07)",
                       lineHeight: 1,
                       position: "absolute",
@@ -390,17 +345,17 @@ export default function LandingPage() {
                   >
                     {s.num}
                   </p>
-                  <div className="relative pt-10 pl-1">
+                  <div className="relative pt-7 pl-1">
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center mb-4"
-                      style={{ background: "var(--red)", color: "white", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "1rem" }}
+                      className="w-9 h-9 rounded-full flex items-center justify-center mb-3"
+                      style={{ background: "var(--red)", color: "white", fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1rem" }}
                     >
                       {parseInt(s.num)}
                     </div>
-                    <h3 className="heading-condensed text-2xl mb-3" style={{ color: "var(--white)" }}>
+                    <h3 className="heading-condensed text-xl mb-2" style={{ color: "var(--white)" }}>
                       {s.title.toUpperCase()}
                     </h3>
-                    <p style={{ color: "var(--text-muted-dark)", lineHeight: 1.7, fontSize: "0.9rem", fontWeight: 300 }}>{s.desc}</p>
+                    <p style={{ color: "var(--text-muted-dark)", lineHeight: 1.55, fontSize: "0.82rem", fontWeight: 300 }}>{s.desc}</p>
                   </div>
                 </div>
               </motion.div>
@@ -421,11 +376,11 @@ export default function LandingPage() {
       </div>
 
       {/* ─── Testimonials ─── */}
-      <section className="py-24 px-6 md:px-16" style={{ background: "var(--white)" }}>
+      <section className="px-6 md:px-16" style={{ minHeight: "calc(100vh - 68px)", display: "flex", alignItems: "center", paddingTop: "3rem", paddingBottom: "3rem", background: "var(--white)" }}>
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <p className="label-small mb-3" style={{ color: "var(--red)" }}>Feel the Love</p>
-            <h2 className="heading-condensed" style={{ fontSize: "clamp(2.5rem, 5vw, 4rem)" }}>
+          <div className="text-center mb-8">
+            <p className="label-small mb-2" style={{ color: "var(--red)" }}>Feel the Love</p>
+            <h2 className="heading-condensed" style={{ fontSize: "clamp(2rem, 4vw, 3rem)" }}>
               WHAT MEMBERS SAY
             </h2>
           </div>
@@ -457,10 +412,10 @@ export default function LandingPage() {
                 style={{
                   background: "var(--white)",
                   border: "1px solid var(--gray-mid)",
-                  padding: "2rem",
+                  padding: "1.25rem",
                   display: "flex",
                   flexDirection: "column" as const,
-                  gap: "1.25rem",
+                  gap: "0.8rem",
                 }}
               >
                 {/* Stars */}
@@ -470,16 +425,16 @@ export default function LandingPage() {
                   ))}
                 </div>
                 {/* Quote */}
-                <p style={{ fontSize: "0.9rem", lineHeight: 1.75, color: "#333", fontWeight: 300, flex: 1 }}>
+                <p style={{ fontSize: "0.82rem", lineHeight: 1.55, color: "#333", fontWeight: 300, flex: 1 }}>
                   {t.review}
                 </p>
                 {/* Attribution */}
                 <div style={{ borderTop: "1px solid var(--gray-mid)", paddingTop: "1rem" }}>
-                  <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "0.9rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t.name}</p>
+                  <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "0.9rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t.name}</p>
                   <p style={{ fontSize: "0.75rem", color: "#aaa", marginTop: "0.1rem" }}>{t.location}</p>
                 </div>
                 {/* Big red quotemark */}
-                <p style={{ fontFamily: "Georgia, serif", fontSize: "4rem", color: "var(--red)", lineHeight: 0.6, userSelect: "none" }}>&ldquo;</p>
+                <p style={{ fontFamily: "Georgia, serif", fontSize: "2.5rem", color: "var(--red)", lineHeight: 0.6, userSelect: "none" }}>&ldquo;</p>
               </motion.div>
             ))}
           </div>
@@ -487,16 +442,16 @@ export default function LandingPage() {
       </section>
 
       {/* ─── FAQ ─── */}
-      <section id="faq" className="py-24 px-6 md:px-16" style={{ background: "var(--gray-light)" }}>
+      <section id="faq" className="px-6 md:px-16" style={{ minHeight: "calc(100vh - 68px)", display: "flex", alignItems: "center", paddingTop: "3rem", paddingBottom: "3rem", background: "var(--gray-light)", scrollMarginTop: 68 }}>
         <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-14">
-            <p className="label-small mb-3" style={{ color: "var(--red)" }}>Get Answers</p>
-            <h2 className="heading-condensed" style={{ fontSize: "clamp(2.5rem, 5vw, 4rem)" }}>
+          <div className="text-center mb-8">
+            <p className="label-small mb-2" style={{ color: "var(--red)" }}>Get Answers</p>
+            <h2 className="heading-condensed" style={{ fontSize: "clamp(2rem, 4vw, 3rem)" }}>
               FREQUENTLY ASKED <span style={{ color: "var(--red)" }}>QUESTIONS</span>
             </h2>
-            <div className="divider-red mx-auto mt-5" />
+            <div className="divider-red mx-auto mt-3" />
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {faqs.map((fq, i) => (
               <motion.div
                 key={i}
@@ -505,19 +460,19 @@ export default function LandingPage() {
                 whileInView="visible"
                 viewport={{ once: true }}
                 variants={fadeUp}
-                className="rounded-2xl p-6"
+                className="rounded-xl p-4"
                 style={{ background: "var(--white)", border: "1px solid var(--gray-mid)" }}
               >
                 <div className="flex items-start gap-4">
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                    className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
                     style={{ background: "var(--red)" }}
                   >
-                    <CheckCircle size={16} color="white" />
+                    <CheckCircle size={14} color="white" />
                   </div>
                   <div>
-                    <p className="font-bold text-base mb-1" style={{ fontFamily: "'Barlow', sans-serif" }}>{fq.q}</p>
-                    <p className="text-sm leading-relaxed" style={{ color: "var(--gray-dark)", fontWeight: 400 }}>{fq.a}</p>
+                    <p className="font-bold text-sm mb-1" style={{ fontFamily: "var(--font-ui)" }}>{fq.q}</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "var(--gray-dark)", fontWeight: 400 }}>{fq.a}</p>
                   </div>
                 </div>
               </motion.div>
@@ -528,8 +483,8 @@ export default function LandingPage() {
 
       {/* ─── CTA ─── */}
       <section
-        className="py-28 px-6 md:px-16 text-center"
-        style={{ background: "var(--navy)" }}
+        className="px-6 md:px-16 text-center"
+        style={{ minHeight: "calc(100vh - 68px)", display: "flex", alignItems: "center", paddingTop: "3rem", paddingBottom: "3rem", background: "var(--navy)" }}
       >
         <motion.div
           initial="hidden"
@@ -538,27 +493,27 @@ export default function LandingPage() {
           variants={fadeUp}
           className="max-w-2xl mx-auto"
         >
-          <div className="flex justify-center gap-2 mb-5">
+          <div className="flex justify-center gap-2 mb-3">
             {["★", "★", "★"].map((s, i) => <span key={i} className="star-red">{s}</span>)}
           </div>
           <h2
-            className="heading-condensed mb-6"
-            style={{ fontSize: "clamp(2.5rem, 6vw, 4.5rem)", color: "var(--white)" }}
+            className="heading-condensed mb-4"
+            style={{ fontSize: "clamp(2rem, 5vw, 3.4rem)", color: "var(--white)" }}
           >
             READY TO TRAIN
             <br />
             <span style={{ color: "var(--red)" }}>SMARTER?</span>
           </h2>
-          <p className="text-lg mb-10" style={{ color: "var(--text-on-dark)", fontWeight: 300 }}>
+          <p className="text-base mb-6" style={{ color: "var(--text-on-dark)", fontWeight: 300 }}>
             Join thousands of athletes improving their form with PTT.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link href="/auth/register">
-              <button className="btn-red px-10 py-4 text-base">
+              <button className="btn-red px-8 py-3 text-sm">
                 Create Free Account <ArrowRight size={18} />
               </button>
             </Link>
-            <button className="btn-outline-white px-10 py-4 text-base">
+            <button className="btn-outline-white px-8 py-3 text-sm">
               <MapPin size={16} /> Find a Gym
             </button>
           </div>
@@ -567,41 +522,11 @@ export default function LandingPage() {
 
       {/* ─── Footer ─── */}
       <footer
-        className="px-6 md:px-16 py-10"
+        className="px-6 md:px-16 py-6"
         style={{ background: "var(--black)", color: "rgba(255,255,255,0.5)" }}
       >
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: "var(--red)" }}>
-              <Activity size={12} color="white" />
-            </div>
-            <span
-              className="font-bold text-base uppercase tracking-widest"
-              style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "var(--white)", fontWeight: 900 }}
-            >
-              PTT<span style={{ color: "var(--red)" }}>.</span>
-            </span>
-          </div>
-          <p className="text-xs text-center">© 2026 PTT. All rights reserved. · Privacy Policy · Terms of Service</p>
-          <div className="flex gap-4">
-            {["Features", "How It Works", "FAQ"].map((item) => (
-              <a
-                key={item}
-                href={`/#${item.toLowerCase().replace(/ /g, "-")}`}
-                className="text-xs uppercase tracking-wide hover:text-white transition-colors"
-                style={{ letterSpacing: "0.08em" }}
-              >
-                {item}
-              </a>
-            ))}
-            <Link
-              href="/pricing"
-              className="text-xs uppercase tracking-wide hover:text-white transition-colors"
-              style={{ letterSpacing: "0.08em" }}
-            >
-              Pricing
-            </Link>
-          </div>
+        <div className="max-w-6xl mx-auto text-center">
+          <p className="text-xs">© 2026 PTT. All rights reserved. · Privacy Policy · Terms of Service</p>
         </div>
       </footer>
 
