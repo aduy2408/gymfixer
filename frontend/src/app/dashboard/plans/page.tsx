@@ -58,6 +58,8 @@ export default function PlansPage() {
     const [activeTab, setActiveTab] = useState<Tab>("workout");
     const [workoutPlan, setWorkoutPlan] = useState<WorkoutPlan | null>(null);
     const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
+    const [showWorkoutForm, setShowWorkoutForm] = useState(false);
+    const [showMealForm, setShowMealForm] = useState(false);
     const [workoutLoading, setWorkoutLoading] = useState(false);
     const [mealLoading, setMealLoading] = useState(false);
     const [latestLoading, setLatestLoading] = useState(true);
@@ -180,6 +182,7 @@ export default function PlansPage() {
                 focus_muscles: splitCsv(workoutForm.focus_muscles),
             };
             setWorkoutPlan(await createWorkoutPlan(payload));
+            setShowWorkoutForm(false);
         } catch (err) {
             setWorkoutError(err instanceof Error ? err.message : "Could not create workout plan.");
         } finally {
@@ -218,6 +221,7 @@ export default function PlansPage() {
                 adjust_for_workout_plan: mealForm.adjust_for_workout_plan,
             };
             setMealPlan(await createMealPlan(payload));
+            setShowMealForm(false);
         } catch (err) {
             setMealError(err instanceof Error ? err.message : "Could not create meal plan.");
         } finally {
@@ -258,76 +262,90 @@ export default function PlansPage() {
                     </div>
 
                     {activeTab === "workout" ? (
-                        <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
-                            <PlanForm title="Workout Inputs" subtitle="Build a conservative week of training." onSubmit={handleWorkoutSubmit} loading={workoutLoading} buttonLabel="Generate Workout Plan">
-                                <MetricsFields form={workoutForm} update={updateWorkout} />
-                                <SelectField label="Goal" value={workoutForm.goal} onChange={updateWorkout("goal")} options={goalOptions} />
-                                <SelectField label="Level" value={workoutForm.level} onChange={updateWorkout("level")} options={[
-                                    { id: "beginner", label: "Beginner" },
-                                    { id: "intermediate", label: "Intermediate" },
-                                    { id: "advanced", label: "Advanced" },
-                                ]} />
-                                <div className="grid grid-cols-2 gap-3">
-                                    <TextField label="Days / Week" type="number" min={1} max={7} value={workoutForm.days_per_week} onChange={updateWorkout("days_per_week")} />
-                                    <TextField label="Minutes" type="number" min={15} max={180} value={workoutForm.session_minutes} onChange={updateWorkout("session_minutes")} />
-                                </div>
-                                <TextField label="Equipment" value={workoutForm.equipment} onChange={updateWorkout("equipment")} />
-                                <TextField label="Focus Muscles" value={workoutForm.focus_muscles} onChange={updateWorkout("focus_muscles")} />
-                                <TextAreaField label="Injuries / Limits" value={workoutForm.injuries} onChange={updateWorkout("injuries")} />
-                                {workoutError && <ErrorBox text={workoutError} />}
-                            </PlanForm>
-                            <WorkoutPlanView plan={workoutPlan} loading={workoutLoading} />
-                        </div>
+                        <PlanWorkspace
+                            hasPlan={Boolean(workoutPlan)}
+                            showForm={showWorkoutForm || !workoutPlan}
+                            loading={workoutLoading}
+                            updateActionLabel="Update Workout Plan"
+                            onShowForm={() => setShowWorkoutForm(true)}
+                            form={(
+                                <PlanForm title={workoutPlan ? "Update Workout Plan" : "Workout Inputs"} subtitle="Build a conservative week of training." onSubmit={handleWorkoutSubmit} loading={workoutLoading} buttonLabel={workoutPlan ? "Regenerate Workout Plan" : "Generate Workout Plan"} onCancel={workoutPlan ? () => { setWorkoutError(""); setShowWorkoutForm(false); } : undefined}>
+                                    <MetricsFields form={workoutForm} update={updateWorkout} />
+                                    <SelectField label="Goal" value={workoutForm.goal} onChange={updateWorkout("goal")} options={goalOptions} />
+                                    <SelectField label="Level" value={workoutForm.level} onChange={updateWorkout("level")} options={[
+                                        { id: "beginner", label: "Beginner" },
+                                        { id: "intermediate", label: "Intermediate" },
+                                        { id: "advanced", label: "Advanced" },
+                                    ]} />
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <TextField label="Days / Week" type="number" min={1} max={7} value={workoutForm.days_per_week} onChange={updateWorkout("days_per_week")} />
+                                        <TextField label="Minutes" type="number" min={15} max={180} value={workoutForm.session_minutes} onChange={updateWorkout("session_minutes")} />
+                                    </div>
+                                    <TextField label="Equipment" value={workoutForm.equipment} onChange={updateWorkout("equipment")} />
+                                    <TextField label="Focus Muscles" value={workoutForm.focus_muscles} onChange={updateWorkout("focus_muscles")} />
+                                    <TextAreaField label="Injuries / Limits" value={workoutForm.injuries} onChange={updateWorkout("injuries")} />
+                                    {workoutError && <ErrorBox text={workoutError} />}
+                                </PlanForm>
+                            )}
+                            plan={<WorkoutPlanView plan={workoutPlan} loading={workoutLoading} />}
+                        />
                     ) : (
-                        <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
-                            <PlanForm title="Meal Inputs" subtitle="Create daily meals for the next week." onSubmit={handleMealSubmit} loading={mealLoading} buttonLabel="Generate Meal Plan">
-                                <MetricsFields form={mealForm} update={updateMeal} />
-                                <SelectField label="Goal" value={mealForm.goal} onChange={updateMeal("goal")} options={goalOptions.filter((goal) => goal.id !== "rehab")} />
-                                <div className="grid grid-cols-2 gap-3">
-                                    <TextField label="Meals / Day" type="number" min={1} max={6} value={mealForm.meals_per_day} onChange={updateMeal("meals_per_day")} />
-                                    <TextField label="Calories Optional" type="number" min={1200} max={6000} value={mealForm.target_calories} onChange={updateMeal("target_calories")} />
-                                </div>
-                                <SelectField label="Diet Preference" value={mealForm.diet_preference} onChange={updateMeal("diet_preference")} options={[
-                                    { id: "none", label: "No Preference" },
-                                    { id: "vegetarian", label: "Vegetarian" },
-                                    { id: "vegan", label: "Vegan" },
-                                    { id: "halal", label: "Halal" },
-                                    { id: "low_carb", label: "Low Carb" },
-                                ]} />
-                                <label style={{ display: "flex", gap: "0.65rem", alignItems: "flex-start", border: "1px solid #eee", background: mealForm.adjust_for_workout_plan ? "rgba(214,0,28,0.05)" : "#fafafa", borderRadius: 6, padding: "0.8rem", cursor: "pointer" }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={mealForm.adjust_for_workout_plan}
-                                        onChange={(event) => setMealForm((form) => ({ ...form, adjust_for_workout_plan: event.target.checked }))}
-                                        style={{ marginTop: 2 }}
-                                    />
-                                    <span>
-                                        <span style={{ display: "block", fontSize: "0.78rem", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#333" }}>
-                                            Adjust meals based on workout schedule
-                                        </span>
-                                        <span style={{ display: "block", fontSize: "0.74rem", color: "#888", lineHeight: 1.45, marginTop: "0.25rem" }}>
-                                            Uses your latest saved workout plan to raise carbs on training days and reduce them on rest days.
-                                        </span>
-                                    </span>
-                                </label>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <SelectField label="Budget" value={mealForm.budget} onChange={updateMeal("budget")} options={[
-                                        { id: "low", label: "Low" },
-                                        { id: "medium", label: "Medium" },
-                                        { id: "high", label: "High" },
+                        <PlanWorkspace
+                            hasPlan={Boolean(mealPlan)}
+                            showForm={showMealForm || !mealPlan}
+                            loading={mealLoading}
+                            updateActionLabel="Update Meal Plan"
+                            onShowForm={() => setShowMealForm(true)}
+                            form={(
+                                <PlanForm title={mealPlan ? "Update Meal Plan" : "Meal Inputs"} subtitle="Create daily meals for the next week." onSubmit={handleMealSubmit} loading={mealLoading} buttonLabel={mealPlan ? "Regenerate Meal Plan" : "Generate Meal Plan"} onCancel={mealPlan ? () => { setMealError(""); setShowMealForm(false); } : undefined}>
+                                    <MetricsFields form={mealForm} update={updateMeal} />
+                                    <SelectField label="Goal" value={mealForm.goal} onChange={updateMeal("goal")} options={goalOptions.filter((goal) => goal.id !== "rehab")} />
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <TextField label="Meals / Day" type="number" min={1} max={6} value={mealForm.meals_per_day} onChange={updateMeal("meals_per_day")} />
+                                        <TextField label="Calories Optional" type="number" min={1200} max={6000} value={mealForm.target_calories} onChange={updateMeal("target_calories")} />
+                                    </div>
+                                    <SelectField label="Diet Preference" value={mealForm.diet_preference} onChange={updateMeal("diet_preference")} options={[
+                                        { id: "none", label: "No Preference" },
+                                        { id: "vegetarian", label: "Vegetarian" },
+                                        { id: "vegan", label: "Vegan" },
+                                        { id: "halal", label: "Halal" },
+                                        { id: "low_carb", label: "Low Carb" },
                                     ]} />
-                                    <SelectField label="Cooking Time" value={mealForm.cooking_time} onChange={updateMeal("cooking_time")} options={[
-                                        { id: "minimal", label: "Minimal" },
-                                        { id: "normal", label: "Normal" },
-                                        { id: "meal_prep", label: "Meal Prep" },
-                                    ]} />
-                                </div>
-                                <TextAreaField label="Allergies" value={mealForm.allergies} onChange={updateMeal("allergies")} />
-                                <TextAreaField label="Disliked Foods" value={mealForm.disliked_foods} onChange={updateMeal("disliked_foods")} />
-                                {mealError && <ErrorBox text={mealError} />}
-                            </PlanForm>
-                            <MealPlanView plan={mealPlan} loading={mealLoading} />
-                        </div>
+                                    <label style={{ display: "flex", gap: "0.65rem", alignItems: "flex-start", border: "1px solid #eee", background: mealForm.adjust_for_workout_plan ? "rgba(214,0,28,0.05)" : "#fafafa", borderRadius: 6, padding: "0.8rem", cursor: "pointer" }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={mealForm.adjust_for_workout_plan}
+                                            onChange={(event) => setMealForm((form) => ({ ...form, adjust_for_workout_plan: event.target.checked }))}
+                                            style={{ marginTop: 2 }}
+                                        />
+                                        <span>
+                                            <span style={{ display: "block", fontSize: "0.78rem", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#333" }}>
+                                                Adjust meals based on workout schedule
+                                            </span>
+                                            <span style={{ display: "block", fontSize: "0.74rem", color: "#888", lineHeight: 1.45, marginTop: "0.25rem" }}>
+                                                Uses your latest saved workout plan to raise carbs on training days and reduce them on rest days.
+                                            </span>
+                                        </span>
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <SelectField label="Budget" value={mealForm.budget} onChange={updateMeal("budget")} options={[
+                                            { id: "low", label: "Low" },
+                                            { id: "medium", label: "Medium" },
+                                            { id: "high", label: "High" },
+                                        ]} />
+                                        <SelectField label="Cooking Time" value={mealForm.cooking_time} onChange={updateMeal("cooking_time")} options={[
+                                            { id: "minimal", label: "Minimal" },
+                                            { id: "normal", label: "Normal" },
+                                            { id: "meal_prep", label: "Meal Prep" },
+                                        ]} />
+                                    </div>
+                                    <TextAreaField label="Allergies" value={mealForm.allergies} onChange={updateMeal("allergies")} />
+                                    <TextAreaField label="Disliked Foods" value={mealForm.disliked_foods} onChange={updateMeal("disliked_foods")} />
+                                    {mealError && <ErrorBox text={mealError} />}
+                                </PlanForm>
+                            )}
+                            plan={<MealPlanView plan={mealPlan} loading={mealLoading} />}
+                        />
                     )}
                 </div>
             </main>
@@ -342,6 +360,7 @@ function PlanForm({
     onSubmit,
     loading,
     buttonLabel,
+    onCancel,
 }: {
     title: string;
     subtitle: string;
@@ -349,6 +368,7 @@ function PlanForm({
     onSubmit: (event: React.FormEvent) => void;
     loading: boolean;
     buttonLabel: string;
+    onCancel?: () => void;
 }) {
     return (
         <form onSubmit={onSubmit} style={{ ...cardStyle, padding: "1.25rem", height: "fit-content" }}>
@@ -357,11 +377,75 @@ function PlanForm({
             </h2>
             <p style={{ fontSize: "0.8rem", color: "#888", marginTop: "0.35rem", marginBottom: "1rem" }}>{subtitle}</p>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>{children}</div>
-            <button type="submit" className="btn-red" disabled={loading} style={{ width: "100%", justifyContent: "center", marginTop: "1rem", borderRadius: 4, opacity: loading ? 0.7 : 1 }}>
-                {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-                {loading ? "Generating..." : buttonLabel}
-            </button>
+            <div style={{ display: "flex", gap: "0.65rem", marginTop: "1rem" }}>
+                {onCancel && (
+                    <button type="button" onClick={onCancel} className="btn-outline-red" disabled={loading} style={{ flex: 1, justifyContent: "center", borderRadius: 4 }}>
+                        Cancel
+                    </button>
+                )}
+                <button type="submit" className="btn-red" disabled={loading} style={{ flex: 1, justifyContent: "center", borderRadius: 4, opacity: loading ? 0.7 : 1 }}>
+                    {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                    {loading ? "Generating..." : buttonLabel}
+                </button>
+            </div>
         </form>
+    );
+}
+
+function PlanWorkspace({
+    hasPlan,
+    showForm,
+    loading,
+    updateActionLabel,
+    onShowForm,
+    form,
+    plan,
+}: {
+    hasPlan: boolean;
+    showForm: boolean;
+    loading: boolean;
+    updateActionLabel: string;
+    onShowForm: () => void;
+    form: React.ReactNode;
+    plan: React.ReactNode;
+}) {
+    if (!hasPlan) {
+        return (
+            <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+                {form}
+                {plan}
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ ...cardStyle, padding: "0.85rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+                <div>
+                    <p style={{ fontSize: "0.68rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--red)" }}>
+                        Saved plan
+                    </p>
+                    <p style={{ fontSize: "0.82rem", color: "#777", marginTop: "0.25rem" }}>
+                        This is your latest saved plan. Generate a new one only when your goals or schedule change.
+                    </p>
+                </div>
+                {!showForm && (
+                    <button type="button" onClick={onShowForm} className="btn-red" disabled={loading} style={{ borderRadius: 4, padding: "0.65rem 1rem", fontSize: "0.78rem" }}>
+                        <RefreshCw size={15} />
+                        {updateActionLabel}
+                    </button>
+                )}
+            </div>
+
+            {showForm ? (
+                <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+                    {form}
+                    {plan}
+                </div>
+            ) : (
+                plan
+            )}
+        </div>
     );
 }
 
@@ -485,7 +569,7 @@ function WorkoutPlanView({ plan, loading }: { plan: WorkoutPlan | null; loading:
 
     return (
         <section style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <PlanHeader title="Workout Week" source={plan.generation_source} diagnostics={plan.generation_diagnostics} />
+            <PlanHeader title="Workout Week" />
             <SafetyNotes notes={plan.safety_notes} />
             <WeekDaySelector
                 days={plan.days}
@@ -531,7 +615,7 @@ function MealPlanView({ plan, loading }: { plan: MealPlan | null; loading: boole
 
     return (
         <section style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <PlanHeader title="Meal Week" source={plan.generation_source} diagnostics={plan.generation_diagnostics} />
+            <PlanHeader title="Meal Week" />
             <div
                 style={{
                     ...cardStyle,
@@ -610,7 +694,6 @@ function MealPlanView({ plan, loading }: { plan: MealPlan | null; loading: boole
 type Meal = MealPlan["days"][number]["meals"][number];
 type MealIngredient = Exclude<Meal["items"][number], string>;
 type MealDay = MealPlan["days"][number];
-type PlanDiagnostics = WorkoutPlan["generation_diagnostics"] | MealPlan["generation_diagnostics"];
 
 function WeekDaySelector<TDay extends { day: string },>({
     days,
@@ -778,8 +861,7 @@ function formatQuantity(item: MealIngredient) {
     return `${quantity} ${item.unit}`;
 }
 
-function PlanHeader({ title, source, diagnostics }: { title: string; source: string; diagnostics?: PlanDiagnostics }) {
-    const detail = formatGenerationDetail(source, diagnostics);
+function PlanHeader({ title }: { title: string }) {
     return (
         <div style={{ ...cardStyle, padding: "1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
             <div>
@@ -789,11 +871,7 @@ function PlanHeader({ title, source, diagnostics }: { title: string; source: str
                 <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "1.45rem", textTransform: "uppercase", lineHeight: 1 }}>
                     {title}
                 </h2>
-                {detail && <p style={{ fontSize: "0.74rem", color: "#888", marginTop: "0.35rem" }}>{detail}</p>}
             </div>
-            <span style={{ border: "1px solid #eee", background: "#fafafa", borderRadius: 4, padding: "0.45rem 0.65rem", fontSize: "0.72rem", fontWeight: 800, textTransform: "uppercase", color: source === "gemini" ? "var(--red)" : "#777" }}>
-                {source}
-            </span>
         </div>
     );
 }
@@ -843,29 +921,6 @@ function ErrorBox({ text }: { text: string }) {
             {text}
         </div>
     );
-}
-
-function formatGenerationDetail(source: string, diagnostics?: PlanDiagnostics) {
-    if (!diagnostics) return "";
-    if (source === "fallback" && diagnostics.fallback_reason) {
-        return `Fallback: ${formatFallbackReason(diagnostics.fallback_reason)}`;
-    }
-    if (source === "gemini" && diagnostics.duration_ms !== null && diagnostics.duration_ms !== undefined) {
-        return `Gemini completed in ${diagnostics.duration_ms}ms`;
-    }
-    return diagnostics.attempted_gemini ? "Gemini was attempted." : "Generated locally.";
-}
-
-function formatFallbackReason(reason: NonNullable<NonNullable<PlanDiagnostics>["fallback_reason"]>) {
-    const labels: Record<typeof reason, string> = {
-        missing_api_key: "Gemini API key is missing",
-        timeout: "Gemini timed out",
-        network_error: "Gemini network error",
-        http_error: "Gemini HTTP error",
-        invalid_response: "Gemini returned invalid JSON",
-        schema_error: "Gemini response failed validation",
-    };
-    return labels[reason] || reason;
 }
 
 function validateNumberFields(fields: Array<{ label: string; value: string; min: number; max: number }>) {
