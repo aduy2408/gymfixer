@@ -3,6 +3,7 @@
 -r requirements.txt
 Pillow>=10.0.0
 scipy>=1.10.0
-torch>=2.2.0
-torchvision>=0.17.0
-transformers>=4.53.0
+huggingface-hub>=0.24.0,<1.0.0
+torch>=2.2.0,<3.0.0
+torchvision>=0.17.0,<1.0.0
+transformers>=4.53.0,<5.0.0

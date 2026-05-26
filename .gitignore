@@ -60,6 +60,9 @@ backend/migrations/__pycache__/
 backend/logs/
 backend/*.log
 
+# Local model weights
+backend/model/
+
 
 ################################
 # GENERAL
