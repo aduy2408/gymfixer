@@ -53,14 +53,14 @@ export default function OnboardingMetricsPage() {
     };
 
     return (
-        <div style={{ minHeight: "100vh", background: "#fff", fontFamily: "'Barlow', sans-serif" }}>
+        <div style={{ minHeight: "100vh", background: "#fff", fontFamily: "var(--font-ui)" }}>
             {/* Top bar */}
             <div style={{ borderBottom: "1px solid #e8e8e8", padding: "1rem 2rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <div style={{ width: 30, height: 30, borderRadius: 4, background: "var(--red)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <Activity size={15} color="white" />
                     </div>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "1.1rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    <span style={{ fontFamily: "var(--font-display)", fontWeight: 900, fontSize: "1.1rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                         PTT<span style={{ color: "var(--red)" }}>.</span>
                     </span>
                 </div>
@@ -85,7 +85,7 @@ export default function OnboardingMetricsPage() {
                     <p style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--red)", marginBottom: "0.5rem" }}>
                         Step 2 of 2
                     </p>
-                    <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "clamp(2rem, 5vw, 3rem)", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.75rem" }}>
+                    <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(2rem, 5vw, 3rem)", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.75rem" }}>
                         TELL US ABOUT YOURSELF
                     </h1>
                     <p style={{ color: "#666", fontSize: "0.875rem", lineHeight: 1.7, fontWeight: 300, marginBottom: "2rem" }}>
@@ -153,7 +153,7 @@ export default function OnboardingMetricsPage() {
                                         }}
                                     >
                                         <p style={{ fontSize: "1.1rem", marginBottom: "0.2rem" }}>{g.emoji}</p>
-                                        <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: "0.95rem", textTransform: "uppercase", color: form.goal === g.id ? "#fff" : "#111", marginBottom: "0.1rem" }}>
+                                        <p style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.95rem", textTransform: "uppercase", color: form.goal === g.id ? "#fff" : "#111", marginBottom: "0.1rem" }}>
                                             {g.label}
                                         </p>
                                         <p style={{ fontSize: "0.72rem", color: form.goal === g.id ? "rgba(255,255,255,0.75)" : "#888", fontWeight: 300, lineHeight: 1.4 }}>

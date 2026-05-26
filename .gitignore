@@ -38,7 +38,7 @@ backend/__pycache__/
 backend/**/*.pyc
 
 # Environment variables
-backend/.env
+.env
 backend/*.env
 backend/req_env/
 .env
@@ -46,6 +46,7 @@ backend/req_env/
 
 p1_env/
 # Databases
+*.db
 backend/*.db
 backend/**/*.db
 

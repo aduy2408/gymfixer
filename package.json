@@ -5,16 +5,17 @@
     "concurrently": "^8.2.0"
   },
   "scripts": {
-    "start": "concurrently \"npm:backend\" \"npm:frontend\" --names BACKEND,FRONTEND --kill-others-on-fail",
+    "dev": "concurrently \"npm:backend\" \"npm:frontend\" --names BACKEND,FRONTEND --kill-others-on-fail",
+    "start": "npm run dev",
     "build:frontend": "npm --prefix frontend run build",
-    "backend": "cd backend && ../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000 --reload",
-    "backend:single": "cd backend && ../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000",
-    "frontend": "cd frontend && npm run dev",
-    "frontend:prod": "cd frontend && npm run start",
+    "backend": "python -m uvicorn main:app --host 0.0.0.0 --port 5000 --reload --reload-dir backend --app-dir backend",
+    "backend:single": "python -m uvicorn main:app --host 0.0.0.0 --port 5000 --app-dir backend",
+    "frontend": "npm --prefix frontend run dev",
+    "frontend:prod": "npm --prefix frontend run start",
     "tunnel:cloudflare": "cloudflared tunnel --config cloudflared-quick.yml --url http://127.0.0.1:3000",
     "tunnel:ngrok": "ngrok http 3000",
     "share:cloudflare": "npm run build:frontend && concurrently \"npm:backend:single\" \"npm:frontend:prod\" \"npm:tunnel:cloudflare\" --names BACKEND,FRONTEND,CLOUDFLARE --kill-others-on-fail",
     "share:ngrok": "npm run build:frontend && concurrently \"npm:backend:single\" \"npm:frontend:prod\" \"npm:tunnel:ngrok\" --names BACKEND,FRONTEND,NGROK --kill-others-on-fail",
-    "install:all": "npm install --prefix frontend && npm install --prefix . && pip install -r backend/requirements.txt"
+    "install:all": "npm install --prefix . && npm install --prefix frontend && python -m pip install -r backend/requirements.txt"
   }
 }

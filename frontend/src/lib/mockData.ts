@@ -113,27 +113,8 @@ export const mockProgress = [
     { week: "Feb W3", avgScore: 87 },
 ];
 
-// ----- Mock auth helpers (localStorage-based for prototype) -----
-export const mockLogin = (email: string, password: string): boolean => {
-    // Accept any non-empty credentials for prototype
-    return email.length > 0 && password.length >= 6;
-};
-
-export const mockRegister = (email: string, password: string): boolean => {
-    return email.includes("@") && password.length >= 6;
-};
-
-export const setAuthToken = (token: string) => {
-    if (typeof window !== "undefined") localStorage.setItem("fg_token", token);
-};
-export const getAuthToken = () => {
-    if (typeof window !== "undefined") return localStorage.getItem("fg_token");
-    return null;
-};
-export const clearAuth = () => {
-    if (typeof window !== "undefined") localStorage.removeItem("fg_token");
-};
-export const isAuthenticated = () => !!getAuthToken();
+// ----- Legacy auth helpers -----
+export { clearSession as clearAuth, getAuthToken, isAuthenticated, setSession as setAuthToken } from "@/lib/auth";
 
 // ----- Diet & Tracker mock data -----
 export const mockDiet = {

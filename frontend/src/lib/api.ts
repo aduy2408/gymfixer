@@ -1,10 +1,49 @@
 "use client";
 
-import { getAuthToken } from "./mockData";
+import { getAuthToken } from "@/lib/auth";
 
 export type ExerciseId = "squat" | "bicep_curl";
 export type CameraView = "side" | "front" | "three_quarter";
 export type PoseBackend = "mediapipe" | "vitpose";
+
+export type AuthUser = {
+  id: number | string;
+  name: string;
+  email: string;
+  is_verified?: boolean;
+  auth_provider?: string;
+  created_at?: string;
+  last_login_at?: string | null;
+};
+
+export type AuthResponse = {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
+};
+
+export type UserProfile = {
+  id: number | string;
+  name: string;
+  email: string;
+  height_cm: number | null;
+  weight_kg: number | null;
+  age: number | null;
+  gender: "male" | "female" | "other" | "";
+  goal: "fat_loss" | "muscle" | "strength" | "endurance" | "rehab" | "general" | "";
+  created_at: string;
+  updated_at?: string | null;
+};
+
+export type UserProfileUpdate = Partial<{
+  name: string;
+  email: string;
+  height_cm: number;
+  weight_kg: number;
+  age: number;
+  gender: UserProfile["gender"];
+  goal: UserProfile["goal"];
+}>;
 
 export type VideoAnalysisResult = {
   session_id?: number;
@@ -206,50 +245,118 @@ export type MealPlan = {
   safety_notes: string[];
 };
 
-type LoginResponse = {
-  access_token: string;
-  token_type: string;
-};
-
-type UserResponse = {
-  id: number | string;
-  name: string;
-  email: string;
-};
-
 let latestAnalysisMemory: StoredAnalysis | null = null;
 
 export function apiBase(): string {
   const envBase = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
   if (envBase) return envBase.replace(/\/$/, "");
-
   return "http://localhost:5000";
 }
 
-export async function login(email: string, password: string): Promise<LoginResponse> {
+async function parseResponse<T>(response: Response, fallback: string): Promise<T> {
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.detail || data?.message || fallback);
+  }
+  return data as T;
+}
+
+function apiPath(path: string): string {
+  return path.startsWith("http://") || path.startsWith("https://") ? path : `${apiBase()}${path}`;
+}
+
+async function authFetch(path: string, init: RequestInit = {}) {
+  const token = getAuthToken();
+  const headers = new Headers(init.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(apiPath(path), { ...init, headers });
+}
+
+export async function login(email: string, password: string): Promise<AuthResponse> {
   const response = await fetch(`${apiBase()}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.detail || "Invalid email or password.");
-  }
-  return data;
+  return parseResponse<AuthResponse>(response, "Invalid email or password.");
 }
 
-export async function register(name: string, email: string, password: string): Promise<UserResponse> {
+export async function register(name: string, email: string, password: string): Promise<AuthUser> {
   const response = await fetch(`${apiBase()}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, email, password }),
   });
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.detail || "Registration failed.");
-  }
-  return data;
+  return parseResponse<AuthUser>(response, "Registration failed.");
+}
+
+export async function getMe(): Promise<AuthUser> {
+  const response = await authFetch(`${apiBase()}/auth/me`);
+  return parseResponse<AuthUser>(response, "Could not load user.");
+}
+
+export async function fetchUserProfile(): Promise<UserProfile> {
+  const response = await authFetch("/auth/profile");
+  return parseResponse<UserProfile>(response, "Could not load profile.");
+}
+
+export async function updateUserProfile(params: UserProfileUpdate): Promise<UserProfile> {
+  const response = await authFetch("/auth/profile", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  return parseResponse<UserProfile>(response, "Could not save profile.");
+}
+
+export async function logout(): Promise<{ message: string }> {
+  const response = await authFetch(`${apiBase()}/auth/logout`, { method: "POST" });
+  return parseResponse<{ message: string }>(response, "Could not log out.");
+}
+
+export async function loginWithGoogle(token: string): Promise<AuthResponse> {
+  const response = await fetch(`${apiBase()}/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  return parseResponse<AuthResponse>(response, "Google sign-in failed.");
+}
+
+export async function forgotPassword(email: string): Promise<{ message: string }> {
+  const response = await fetch(`${apiBase()}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  return parseResponse<{ message: string }>(response, "Could not request password reset.");
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+  const response = await fetch(`${apiBase()}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+  return parseResponse<{ message: string }>(response, "Could not reset password.");
+}
+
+export async function verifyEmail(token: string): Promise<AuthUser> {
+  const response = await fetch(`${apiBase()}/auth/verify-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  return parseResponse<AuthUser>(response, "Could not verify email.");
+}
+
+export async function resendVerification(email: string): Promise<{ message: string }> {
+  const response = await fetch(`${apiBase()}/auth/resend-verification`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  return parseResponse<{ message: string }>(response, "Could not send verification email.");
 }
 
 export async function analyzeVideo(params: {
@@ -273,36 +380,21 @@ export async function analyzeVideo(params: {
   formData.append("max_frames", String(params.maxFrames));
   formData.append("include_preview", String(params.includePreview));
   formData.append("preview_max_frames", String(params.previewMaxFrames));
-  const token = getAuthToken();
-
-  const response = await fetch(`${apiBase()}/posture/analyze-video`, {
+  const response = await authFetch("/posture/analyze-video", {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
   });
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.detail || "Video analysis failed.");
-  }
-  return data;
+  return parseResponse<VideoAnalysisResult>(response, "Video analysis failed.");
 }
 
 export async function fetchAnalyticsSummary(): Promise<AnalyticsSummary> {
   const response = await authFetch("/analytics/summary");
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.detail || "Could not load analytics.");
-  }
-  return data;
+  return parseResponse<AnalyticsSummary>(response, "Could not load analytics.");
 }
 
 export async function fetchWorkout(sessionId: string | number): Promise<WorkoutSession> {
   const response = await authFetch(`/workouts/${sessionId}`);
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.detail || "Could not load workout.");
-  }
-  return data;
+  return parseResponse<WorkoutSession>(response, "Could not load workout.");
 }
 
 export async function createWorkoutPlan(params: WorkoutPlanRequest): Promise<WorkoutPlan> {
@@ -311,20 +403,12 @@ export async function createWorkoutPlan(params: WorkoutPlanRequest): Promise<Wor
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.detail || "Could not create workout plan.");
-  }
-  return data;
+  return parseResponse<WorkoutPlan>(response, "Could not create workout plan.");
 }
 
 export async function fetchLatestWorkoutPlan(): Promise<WorkoutPlan> {
   const response = await authFetch("/plans/workout/latest");
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.detail || "No workout plan found.");
-  }
-  return data;
+  return parseResponse<WorkoutPlan>(response, "No workout plan found.");
 }
 
 export async function createMealPlan(params: MealPlanRequest): Promise<MealPlan> {
@@ -333,20 +417,12 @@ export async function createMealPlan(params: MealPlanRequest): Promise<MealPlan>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.detail || "Could not create meal plan.");
-  }
-  return data;
+  return parseResponse<MealPlan>(response, "Could not create meal plan.");
 }
 
 export async function fetchLatestMealPlan(): Promise<MealPlan> {
   const response = await authFetch("/plans/meals/latest");
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.detail || "No meal plan found.");
-  }
-  return data;
+  return parseResponse<MealPlan>(response, "No meal plan found.");
 }
 
 export function workoutToStoredAnalysis(workout: WorkoutSession): StoredAnalysis {
@@ -379,18 +455,22 @@ export function workoutToStoredAnalysis(workout: WorkoutSession): StoredAnalysis
   };
 }
 
-async function authFetch(path: string, init: RequestInit = {}) {
-  const token = getAuthToken();
-  const headers = new Headers(init.headers);
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetch(`${apiBase()}${path}`, { ...init, headers });
-}
-
 export function saveLatestAnalysis(analysis: StoredAnalysis) {
   latestAnalysisMemory = analysis;
-  localStorage.removeItem("ptt_latest_analysis");
+  if (typeof window !== "undefined") {
+    sessionStorage.setItem("gf_latest_analysis", JSON.stringify(analysis));
+  }
 }
 
 export function readLatestAnalysis(): StoredAnalysis | null {
-  return latestAnalysisMemory;
+  if (latestAnalysisMemory) return latestAnalysisMemory;
+  if (typeof window === "undefined") return null;
+  const raw = sessionStorage.getItem("gf_latest_analysis");
+  if (!raw) return null;
+  try {
+    latestAnalysisMemory = JSON.parse(raw) as StoredAnalysis;
+    return latestAnalysisMemory;
+  } catch {
+    return null;
+  }
 }

@@ -27,9 +27,15 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.options("/{full_path:path}", include_in_schema=False)
+def options_handler(full_path: str):
+    return {}
+
 
 # Include posture websocket router and other routers
 app.include_router(posture_router)

@@ -30,14 +30,14 @@ export default function OnboardingIntroPage() {
     const router = useRouter();
 
     return (
-        <div style={{ minHeight: "100vh", background: "#fff", fontFamily: "'Barlow', sans-serif" }}>
+        <div style={{ minHeight: "100vh", background: "#fff", fontFamily: "var(--font-ui)" }}>
             {/* Top bar */}
             <div style={{ borderBottom: "1px solid #e8e8e8", padding: "1rem 2rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <div style={{ width: 30, height: 30, borderRadius: 4, background: "var(--red)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <Activity size={15} color="white" />
                     </div>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "1.1rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    <span style={{ fontFamily: "var(--font-display)", fontWeight: 900, fontSize: "1.1rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                         PTT<span style={{ color: "var(--red)" }}>.</span>
                     </span>
                 </div>
@@ -62,7 +62,7 @@ export default function OnboardingIntroPage() {
                     <p style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--red)", marginBottom: "0.5rem" }}>
                         Step 1 of 2
                     </p>
-                    <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "clamp(2rem, 5vw, 3rem)", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.75rem" }}>
+                    <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(2rem, 5vw, 3rem)", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.75rem" }}>
                         HOW FITFORM AI WORKS
                     </h1>
                     <p style={{ color: "#666", fontSize: "0.9rem", lineHeight: 1.7, maxWidth: 520, fontWeight: 300, marginBottom: "2.5rem" }}>
@@ -83,7 +83,7 @@ export default function OnboardingIntroPage() {
                                     <div style={{ width: 32, height: 32, borderRadius: 4, background: "#f2f2f2", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                         <f.icon size={16} color="#333" />
                                     </div>
-                                    <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: "1rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                    <p style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                                         {f.title}
                                     </p>
                                 </div>
