@@ -1,233 +1,410 @@
-# Hướng dẫn chạy dự án
+﻿# Hướng dẫn chạy GymFixer
 
-## Yêu cầu
+Dự án chạy theo mô hình:
 
-- Python 3.10+ với virtual env `p1_env` (đã có trong repo)
-- Node.js 18+
-- ngrok (nếu muốn share ra ngoài)
-- cloudflared (nếu muốn share bằng Cloudflare Tunnel)
+- Backend: chạy bằng Docker Compose để tránh lỗi môi trường Python/CUDA/MediaPipe.
+- Database: PostgreSQL chạy trong Docker Compose.
+- Frontend: chạy local bằng Next.js, không chạy bằng Docker.
 
 ---
 
-## 1. Chạy local (chỉ mình dùng)
+## 1. Yêu cầu cài sẵn
 
-### Terminal 1 — Backend
+Cần có:
 
-```bash
-cd /path/to/project/backend
-../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000 --reload
+- Docker Desktop
+- Node.js 18+ hoặc mới hơn
+- npm
+- Git
+
+Khuyến nghị kiểm tra nhanh:
+
+```powershell
+docker --version
+docker compose version
+node --version
+npm --version
 ```
 
-### Terminal 2 — Frontend dev server
+---
 
-```bash
-cd /path/to/project/frontend
+## 2. File môi trường `.env`
+
+Tạo file `.env` ở root dự án:
+
+```text
+D:\gymfixer\.env
+```
+
+Các biến tối thiểu cần có:
+
+```env
+DATABASE_URL=postgresql://gymfixer:gymfixer_password@postgres:5432/gymfixer
+JWT_SECRET_KEY=dev-local-change-me
+FRONTEND_URL=http://localhost:3000
+AUTH_EMAIL_VERIFICATION_ENABLED=false
+POSE_BACKEND=mediapipe
+```
+
+Nếu dùng AI Coaching bằng Gemini, thêm:
+
+```env
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-3-flash-preview
+```
+
+Lưu ý:
+
+- Không commit `.env` lên Git.
+- `.env` đã nằm trong `.gitignore`.
+- Nên giữ `.env.example` để người khác biết cần biến gì.
+
+---
+
+## 3. Chạy backend bằng Docker
+
+Mở PowerShell tại root dự án:
+
+```powershell
+cd D:\gymfixer
+```
+
+Build và chạy lần đầu:
+
+```powershell
+docker compose -f docker-compose1.yml up --build -d
+```
+
+Các lần sau chỉ cần:
+
+```powershell
+docker compose -f docker-compose1.yml up -d
+```
+
+Kiểm tra container:
+
+```powershell
+docker ps
+```
+
+Kết quả mong muốn:
+
+```text
+project1-backend    Up ... healthy    0.0.0.0:5000->5000/tcp
+project1-postgres   Up ... healthy    0.0.0.0:5432->5432/tcp
+```
+
+Mở backend docs:
+
+```text
+http://localhost:5000/docs
+```
+
+---
+
+## 4. Xem log backend
+
+Xem log backend:
+
+```powershell
+docker logs project1-backend
+```
+
+Xem realtime:
+
+```powershell
+docker logs -f project1-backend
+```
+
+Xem 100 dòng cuối:
+
+```powershell
+docker logs --tail 100 project1-backend
+```
+
+Xem bằng compose:
+
+```powershell
+docker compose -f docker-compose1.yml logs -f backend
+```
+
+Xem backend và PostgreSQL cùng lúc:
+
+```powershell
+docker compose -f docker-compose1.yml logs -f
+```
+
+---
+
+## 5. Dừng backend
+
+Dừng chỉ backend:
+
+```powershell
+docker compose -f docker-compose1.yml stop backend
+```
+
+Dừng cả backend và PostgreSQL:
+
+```powershell
+docker compose -f docker-compose1.yml down
+```
+
+Dừng và xóa volume database local:
+
+```powershell
+docker compose -f docker-compose1.yml down -v
+```
+
+Cẩn thận: `down -v` xóa dữ liệu PostgreSQL local.
+
+---
+
+## 6. Chạy frontend local
+
+Mở terminal khác:
+
+```powershell
+cd D:\gymfixer\frontend
+npm install
 npm run dev
 ```
 
-Mở trình duyệt: **http://localhost:8080**
+Mở frontend:
 
-> WebSocket tự kết nối tới backend tại `ws://localhost:5000/ws/posture`
+```text
+http://localhost:3000
+```
 
-> Lưu ý: `localhost` chỉ đúng trên chính máy đang chạy backend/frontend. Máy
-> khác trong cùng Wi-Fi không thể dùng `localhost` để trỏ về máy của bạn.
+Có thể chạy từ root:
+
+```powershell
+cd D:\gymfixer
+npm run frontend
+```
 
 ---
 
-## 1.1. Cho laptop/điện thoại khác trong cùng Wi-Fi vào test
+## 7. Lệnh chạy nhanh hằng ngày
 
-### Cách khuyên dùng: chạy single-port bằng backend
+Terminal 1 — backend:
 
-Build frontend rồi để backend serve luôn giao diện:
-
-```bash
-cd /path/to/project/frontend
-npm run build
-
-cd /path/to/project/backend
-../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000
+```powershell
+cd D:\gymfixer
+docker compose -f docker-compose1.yml up -d
 ```
 
-Lấy IP LAN của máy đang chạy server:
+Terminal 2 — frontend:
 
-```bash
-hostname -I
-```
-
-Ví dụ IP là `192.168.1.20`, mở trên laptop/điện thoại khác:
-
-```text
-http://192.168.1.20:5000
-```
-
-Vì frontend và backend cùng port `5000`, WebSocket sẽ tự đi đúng về:
-
-```text
-ws://192.168.1.20:5000/ws/posture
-```
-
-### Nếu vẫn muốn dùng frontend dev server `:8080`
-
-Tạo file `frontend/.env.local`:
-
-```bash
-VITE_WS_URL=ws://192.168.1.20:5000/ws/posture
-VITE_API_URL=http://192.168.1.20:5000
-```
-
-Sau đó chạy lại frontend:
-
-```bash
-cd /path/to/project/frontend
+```powershell
+cd D:\gymfixer\frontend
 npm run dev
 ```
 
-Mở máy khác:
+Mở:
 
 ```text
-http://192.168.1.20:8080
+http://localhost:3000
 ```
-
-Nếu không set `VITE_WS_URL`, máy khác mở `:8080` sẽ dễ bị lỗi WebSocket vì app
-có thể tìm `/ws/posture` trên port `8080` thay vì backend port `5000`.
-
-### Camera trên máy khác
-
-Trình duyệt thường chỉ cho dùng camera trên:
-
-- `localhost`
-- hoặc trang `HTTPS`
-
-Vì vậy nếu mở bằng `http://192.168.x.x:5000`, có thể giao diện vào được nhưng
-camera bị chặn. Để test camera từ máy khác, dùng ngrok hoặc Cloudflare Tunnel
-ở mục 2/3 để có link `https://...`.
 
 ---
 
-## 2. Share cho người khác qua ngrok
+## 8. Khi nào cần `--build` lại Docker?
 
-### Bước 1 — Build frontend (chạy 1 lần, hoặc sau khi sửa code)
+Cần build lại backend khi sửa các file như:
 
-```bash
-cd /path/to/project/frontend
+- `backend/Dockerfile`
+- `backend/requirements.txt`
+- dependency Python
+- cấu hình hệ thống trong image
+
+Lệnh build lại:
+
+```powershell
+docker compose -f docker-compose1.yml up --build -d
+```
+
+Nếu chỉ sửa code frontend, không cần build Docker.
+
+Nếu chỉ sửa code backend Python, image hiện tại copy code vào image nên nên build lại:
+
+```powershell
+docker compose -f docker-compose1.yml up --build -d backend
+```
+
+---
+
+## 9. Troubleshooting frontend
+
+### Lỗi: `Could not find a production build in the '.next' directory`
+
+Nguyên nhân: chạy production server `next start` khi chưa build.
+
+Fix cho dev:
+
+```powershell
+cd D:\gymfixer\frontend
+npm run dev
+```
+
+Nếu muốn chạy production:
+
+```powershell
+cd D:\gymfixer\frontend
 npm run build
-```
-
-Kết quả: tạo thư mục `frontend/dist/` — backend sẽ tự serve thư mục này.
-
-### Bước 2 — Chạy backend
-
-```bash
-cd /path/to/project/backend
-../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000
-```
-
-Kiểm tra tại **http://localhost:5000** — nếu thấy giao diện web là OK.
-
-### Bước 3 — Mở ngrok tunnel
-
-```bash
-ngrok http 5000
-```
-
-Copy link dạng `https://xxxx.ngrok-free.app` → gửi cho người khác.
-
-> **Lưu ý:** Lần đầu vào link ngrok sẽ hiện trang warning → bấm **"Visit Site"** là qua.
-> Link thay đổi mỗi lần restart ngrok. Nếu muốn link cố định → xem mục bên dưới.
-
----
-
-## 3. Link cố định (không cần trả tiền ngrok)
-
-Dùng **Cloudflare Tunnel** (miễn phí, link cố định):
-
-### Cách nhanh bằng npm script
-
-Từ repo root:
-
-```bash
-npm run share:cloudflare
-```
-
-Script này sẽ:
-
-- build frontend
-- chạy backend single-port tại `http://localhost:5000`
-- mở Cloudflare Tunnel tới `http://localhost:5000`
-
-Copy link dạng `https://something.trycloudflare.com`.
-
-### Cách thủ công
-
-```bash
-# Cài cloudflared
-yay -S cloudflared   # hoặc: sudo pacman -S cloudflared
-
-# Chạy (không cần tài khoản cho quick tunnel)
-cloudflared tunnel --config cloudflared-quick.yml --url http://127.0.0.1:5000
-```
-
-Sẽ hiện link dạng `https://something.trycloudflare.com` — cố định trong session.
-
-### Windows
-
-Có thể chạy file:
-
-```bat
-start-cloudflare.bat
-```
-
----
-
-## Tóm tắt lệnh nhanh
-
-```bash
-# === Build frontend (1 lần) ===
-cd frontend && npm run build && cd ..
-
-# === Chạy backend ===
-cd backend && ../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000
-
-# === Expose ra ngoài (terminal khác) ===
-ngrok http 5000
-# hoặc
-cloudflared tunnel --config cloudflared-quick.yml --url http://127.0.0.1:5000
-```
-
-Hoặc chạy Cloudflare một lệnh từ repo root:
-
-```bash
-npm run share:cloudflare
-```
-
-Nếu chạy bằng script ở repo root:
-
-```bash
 npm start
 ```
 
-Script này chạy chế độ dev frontend `:8080` và backend `:5000`. Nếu muốn share
-ra ngoài, khuyên dùng `npm run share:cloudflare` để frontend/backend đi chung
-port `5000`.
+Trong dự án hiện tại, khuyến nghị dùng `npm run dev`.
 
-Nếu vẫn muốn tự mở tunnel khi đang chạy backend port `5000`:
+---
 
-```bash
-ngrok http 5000
-# hoặc
-npm run tunnel:cloudflare
+### Lỗi: `.next\dev\lock`, port 3000 đang bị dùng
+
+Nguyên nhân: còn process Next.js cũ đang chạy.
+
+Fix nhanh:
+
+```powershell
+Get-Process node
+Stop-Process -Id <PID> -Force
+Remove-Item -Recurse -Force .next
+npm run dev
+```
+
+Nếu log báo port 3000 đang dùng nhưng app vẫn chạy port 3001, mở:
+
+```text
+http://localhost:3001
 ```
 
 ---
 
-## Troubleshooting
+### Lỗi: `package.json is not parseable` hoặc ký tự `﻿` đầu file
 
-| Lỗi | Nguyên nhân | Fix |
-|-----|------------|-----|
-| `connection refused` khi dùng ngrok | ngrok trỏ sai port | Đảm bảo backend chạy trên port 5000 và `ngrok http 5000` |
-| `lookup connect.ngrok-agent.com: i/o timeout` hoặc ngrok không tạo URL | Máy/mạng không resolve hoặc không kết nối được server ngrok | Kiểm tra DNS/mạng/VPN/firewall. Thử mạng khác, đổi DNS sang `1.1.1.1` hoặc `8.8.8.8`, hoặc dùng Cloudflare Tunnel |
-| Camera không hoạt động | Trang dùng HTTP, không HTTPS | Dùng ngrok/cloudflare (tự có HTTPS) hoặc localhost |
-| `No module named mediapipe` | Sai Python env | Dùng `../p1_env/bin/uvicorn`, không dùng `uvicorn` hệ thống |
-| Frontend không load | Chưa build | Chạy `cd frontend && npm run build` trước |
-| WebSocket lỗi trên máy khác | Frontend chưa rebuild sau khi sửa code | Rebuild frontend |
-| Signup/Login báo `NetworkError when attempting to fetch resource` | Frontend gọi sai backend URL/port | Backend phải chạy port 5000. Nếu dùng frontend dev `:8080`, set `VITE_API_URL=http://<IP-server>:5000` trong `frontend/.env.local` rồi restart `npm run dev` |
+Nguyên nhân: `package.json` bị lưu UTF-8 with BOM.
+
+Fix bằng PowerShell:
+
+```powershell
+$path = "D:\gymfixer\frontend\package.json"
+$json = Get-Content -Path $path -Raw -Encoding UTF8 | ConvertFrom-Json
+$content = $json | ConvertTo-Json -Depth 10
+[System.IO.File]::WriteAllText($path, $content, [System.Text.UTF8Encoding]::new($false))
+Remove-Item -Path "D:\gymfixer\frontend\.next" -Recurse -Force -ErrorAction SilentlyContinue
+npm run dev
+```
+
+---
+
+## 10. Troubleshooting backend Docker
+
+### Lỗi NVIDIA/CUDA
+
+Lỗi thường gặp:
+
+```text
+nvidia-container-cli: requirement error: unsatisfied condition: cuda>=13.0
+```
+
+Nguyên nhân: Docker image yêu cầu CUDA cao hơn driver NVIDIA trên máy.
+
+Fix hiện tại trong dự án:
+
+- `backend/Dockerfile` dùng CUDA 12.4:
+
+```dockerfile
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+```
+
+- `docker-compose1.yml` không ép GPU reservation để tránh NVIDIA prestart hook.
+
+Nếu vẫn lỗi, rebuild:
+
+```powershell
+docker compose -f docker-compose1.yml up --build -d
+```
+
+---
+
+### Backend không healthy
+
+Xem log:
+
+```powershell
+docker logs --tail 200 project1-backend
+```
+
+Kiểm tra docs:
+
+```text
+http://localhost:5000/docs
+```
+
+Kiểm tra container:
+
+```powershell
+docker ps -a --filter "name=project1"
+```
+
+---
+
+### Database lỗi hoặc muốn reset dữ liệu local
+
+Dừng và xóa volume:
+
+```powershell
+docker compose -f docker-compose1.yml down -v
+```
+
+Chạy lại:
+
+```powershell
+docker compose -f docker-compose1.yml up -d
+```
+
+Cẩn thận: lệnh này xóa dữ liệu PostgreSQL local.
+
+---
+
+## 11. Git trước khi push
+
+Không commit:
+
+```text
+.env
+.venv/
+frontend/.next/
+node_modules/
+backend/model/
+test_video/
+*.mp4
+```
+
+Kiểm tra trước khi commit:
+
+```powershell
+git status --short
+```
+
+Nếu `.env` xuất hiện trong status, không commit.
+
+---
+
+## 12. Tóm tắt cực nhanh
+
+```powershell
+cd D:\gymfixer
+docker compose -f docker-compose1.yml up -d
+```
+
+```powershell
+cd D:\gymfixer\frontend
+npm run dev
+```
+
+Mở:
+
+```text
+http://localhost:3000
+```
