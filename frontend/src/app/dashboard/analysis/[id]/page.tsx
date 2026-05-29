@@ -298,9 +298,7 @@ export default function AnalysisPage() {
                                             {result.llm.prompt_chars ? ` · Prompt: ${result.llm.prompt_chars} chars` : ""}
                                         </p>
                                     )}
-                                    <div style={{ whiteSpace: "pre-wrap", color: "#555", fontSize: "0.82rem", lineHeight: 1.55 }}>
-                                        {result.llm.recommendations}
-                                    </div>
+                                    <MarkdownContent content={result.llm.recommendations} />
                                     {result.llm.error && (
                                         <p style={{ color: "var(--red)", fontSize: "0.8rem", marginTop: "0.75rem" }}>{result.llm.error}</p>
                                     )}
@@ -312,6 +310,94 @@ export default function AnalysisPage() {
             </main>
         </div>
     );
+}
+
+function MarkdownContent({ content }: { content?: string }) {
+    if (!content?.trim()) {
+        return <p style={{ color: "#888", fontSize: "0.85rem" }}>No coaching recommendations were returned.</p>;
+    }
+
+    const lines = content.split(/\r?\n/);
+    const blocks: React.ReactNode[] = [];
+    let listItems: string[] = [];
+    let listType: "ul" | "ol" | null = null;
+
+    const flushList = () => {
+        if (!listType || listItems.length === 0) return;
+        const items = listItems.map((item, index) => <li key={index}>{renderInlineMarkdown(item)}</li>);
+        blocks.push(
+            listType === "ol" ? (
+                <ol key={`ol-${blocks.length}`} style={{ margin: "0.45rem 0 0.75rem 1.15rem", paddingLeft: "0.5rem", lineHeight: 1.65 }}>
+                    {items}
+                </ol>
+            ) : (
+                <ul key={`ul-${blocks.length}`} style={{ margin: "0.45rem 0 0.75rem 1.15rem", paddingLeft: "0.5rem", lineHeight: 1.65 }}>
+                    {items}
+                </ul>
+            )
+        );
+        listItems = [];
+        listType = null;
+    };
+
+    lines.forEach((rawLine) => {
+        const line = rawLine.trim();
+        if (!line) {
+            flushList();
+            return;
+        }
+
+        const heading = line.match(/^(#{1,3})\s+(.+)$/);
+        if (heading) {
+            flushList();
+            blocks.push(
+                <h3 key={`h-${blocks.length}`} style={{ fontSize: heading[1].length === 1 ? "1rem" : "0.9rem", fontWeight: 800, color: "#222", margin: blocks.length ? "0.9rem 0 0.4rem" : "0 0 0.4rem" }}>
+                    {renderInlineMarkdown(heading[2])}
+                </h3>
+            );
+            return;
+        }
+
+        const unordered = line.match(/^[-*]\s+(.+)$/);
+        if (unordered) {
+            if (listType !== "ul") flushList();
+            listType = "ul";
+            listItems.push(unordered[1]);
+            return;
+        }
+
+        const ordered = line.match(/^\d+[.)]\s+(.+)$/);
+        if (ordered) {
+            if (listType !== "ol") flushList();
+            listType = "ol";
+            listItems.push(ordered[1]);
+            return;
+        }
+
+        flushList();
+        blocks.push(
+            <p key={`p-${blocks.length}`} style={{ margin: "0 0 0.65rem", lineHeight: 1.65 }}>
+                {renderInlineMarkdown(line)}
+            </p>
+        );
+    });
+
+    flushList();
+
+    return (
+        <div style={{ color: "#4b5563", fontSize: "0.86rem", lineHeight: 1.6 }}>
+            {blocks}
+        </div>
+    );
+}
+
+function renderInlineMarkdown(text: string) {
+    return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+            return <strong key={index} style={{ color: "#111", fontWeight: 800 }}>{part.slice(2, -2)}</strong>;
+        }
+        return <span key={index}>{part}</span>;
+    });
 }
 
 function Metric({ label, value, color }: { label: string; value: string | number; color: string }) {

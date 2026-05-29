@@ -1,6 +1,6 @@
-# Backend - Python FastAPI application with NVIDIA CUDA 13.0 Support
+﻿# Backend - Python FastAPI application with NVIDIA CUDA 13.0 Support
 # Matches host CUDA version and p1_env Python 3.10 version
-FROM nvidia/cuda:13.0.0-runtime-ubuntu22.04
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 # Avoid prompt during installations
 ENV DEBIAN_FRONTEND=noninteractive
@@ -39,11 +39,6 @@ RUN python -c "from huggingface_hub import snapshot_download; \
 snapshot_download(repo_id='usyd-community/vitpose-base-simple', local_dir='model/vitpose', \
 allow_patterns=['config.json', 'preprocessor_config.json', '*.safetensors', '*.bin', '*.json', '*.txt'])"
 
-# Pre-download MediaPipe Pose models so they are baked into the image and ready offline
-RUN python -c "import mediapipe as mp; \
-mp.solutions.pose.Pose(model_complexity=0); \
-mp.solutions.pose.Pose(model_complexity=1); \
-mp.solutions.pose.Pose(model_complexity=2)"
 
 # Copy application code
 COPY . .
@@ -55,5 +50,5 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:5000/docs || exit 1
 
-# Run with uvicorn — workers=1 keeps the MediaPipe singleton in one process
+# Run with uvicorn â€” workers=1 keeps the MediaPipe singleton in one process
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000", "--workers", "1"]

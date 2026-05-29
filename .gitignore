@@ -93,3 +93,29 @@ env/
 __pycache__/
 *.pyc
 node_modules
+
+################################
+# LOCAL / GENERATED
+################################
+
+# Next.js cache/build
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+
+# Local Claude / tool state
+.claude/
+.qodo/
+
+# Docker/local runtime data
+*.sqlite
+*.sqlite3
+postgres-data/
+backend-data/
+
+# Uploaded/test media
+test_video/
+*.mp4
+*.mov
+*.avi
+*.mkv
