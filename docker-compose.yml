@@ -3,6 +3,7 @@ version: '3.8'
 services:
   # Backend service
   backend:
+    image: aduy2408/gymfixer-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
