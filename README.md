@@ -1,6 +1,6 @@
 # GymFixer
 
-AI-assisted workout posture analysis. The active product flow is after-session video analysis: upload a short squat or bicep-curl video, the backend samples frames, runs the selected pose backend, computes angles and reps, returns distinct mistake frames, and optionally calls Gemini for coaching.
+AI-assisted workout posture analysis. The active product flow is after-session video analysis: upload a short squat or bicep-curl video, the backend samples frames, runs the selected pose backend, computes angles and reps, groups detected errors by rep, and optionally calls Gemini for coaching.
 
 ## Current Stack
 
@@ -23,7 +23,8 @@ gymfixer/
 ├── backend/                  # FastAPI backend
 │   ├── main.py               # App setup, CORS, routers
 │   ├── authentication/       # Register/login/JWT/database code
-│   └── posture/              # Pose analysis, phase detection, feedback
+│   └── posture/              # Pose processing + session analysis
+│       └── exercises/        # Per-exercise angles, feedback, phase detectors
 ├── package.json              # Root helper scripts
 ├── LLM.md                    # Technical notes for posture + Gemini flow
 └── RUNNING.md                # Older run notes; prefer this README for current flow
@@ -187,6 +188,9 @@ psql -U postgres -h localhost -d gymfixer -c "\dt"
 Expected tables include `users`, `workout_sessions`, `analysis_results`,
 `usage_events`, and `alembic_version`.
 
+Recent migrations add `analysis_results.rep_breakdown_json`, which stores
+per-rep analysis summaries used by the report UI and history views.
+
 ### Choosing a Pose Backend
 
 Default MediaPipe run:
@@ -251,10 +255,10 @@ npm run install:all
 7. Review the analysis page:
    - rep count
    - analyzed frame count
-   - angle chart
-   - key correction frames with skeleton overlays
-   - per-frame feedback
+   - errors detected by rep
+   - representative correction frame for each rep with form issues
    - rule-based or Gemini coaching
+8. Open `History` from the dashboard sidebar to revisit previous sessions.
 
 ## API Endpoints
 
@@ -313,9 +317,9 @@ To compare pose backends, run the same upload twice with the same form fields, c
 -F "pose_backend=vitpose"    # optional quality experiment
 ```
 
-Compare `frames_analyzed`, `rep_count`, `phase_counts`, `top_feedback`, `angle_stats`, and the key correction frames.
+Compare `frames_analyzed`, `rep_count`, `phase_counts`, `top_feedback`, `angle_stats`, `rep_breakdown`, and the errors detected by rep.
 
-Successful video analysis returns the normal analysis payload plus `session_id` and `analysis_id`. The backend persists only summary/statistics data in PostgreSQL; uploaded videos, preview images, and full frame logs are not stored in the database.
+Successful video analysis returns the normal analysis payload plus `session_id` and `analysis_id`. The backend persists summary/statistics and `rep_breakdown_json` in PostgreSQL; uploaded videos, preview images, and full frame logs are not stored in the database.
 
 ### User History and Analytics
 
@@ -328,6 +332,9 @@ Authorization: Bearer <access_token>
 ```
 
 `/analytics/summary` returns user-level statistics such as total sessions, total reps, reps by exercise, average quality ratio, top feedback, LLM run count, and recent sessions.
+
+The Next frontend also includes `/dashboard/history`, which calls `GET /workouts`
+and links each saved session back to `/dashboard/analysis/{session_id}`.
 
 ### Frame Session Analysis
 
@@ -365,6 +372,13 @@ The active session-analysis flow supports:
 
 The backend still contains some rules/utilities for other exercises, but the Next dashboard only exposes the two exercises currently supported by the batch video-analysis flow.
 
+Implementation notes:
+
+- `backend/posture/mediapipe_utils.py` owns pose backend processing and visibility gates.
+- `backend/posture/exercises/<exercise>.py` owns each exercise's angle extraction, feedback rules, and phase detector when available.
+- `backend/posture/feedback.py` and `backend/posture/phase_detector.py` are compatibility facades over the exercise registry.
+- Bicep curl rep counting is tracked per arm, so a visible non-working arm no longer suppresses reps from the working arm.
+
 ## Development Checks
 
 Frontend:
@@ -379,7 +393,7 @@ Backend syntax check:
 
 ```bash
 cd backend
-../p1_env/bin/python -m py_compile posture/session_analysis.py
+../p1_env/bin/python -m py_compile posture/*.py posture/exercises/*.py
 ```
 
 ## Common Commands

@@ -22,12 +22,13 @@ Backend
   -> apply subject-ready gate
   -> apply exercise visibility gate
   -> compute angles
-  -> update phase detector and rep count
+  -> update exercise-specific phase detector and rep count
   -> generate rule feedback
+  -> group form issues by rep
   -> optionally send analyzed-frame log to Gemini
   -> persist summary/statistics to PostgreSQL
   -> mark workout_sessions row completed or failed
-  -> return summary + rule/LLM coaching + distinct mistake frames
+  -> return summary + rep breakdown + rule/LLM coaching + representative error frames
 ```
 
 The old WebSocket path still exists in backend code, but the active `frontend/` Dashboard no longer uses live realtime posture detection.
@@ -88,6 +89,20 @@ Response includes:
     "frames_analyzed": 59,
     "waiting_for_subject_frames": 36,
     "rep_count": 1,
+    "rep_breakdown": [
+      {
+        "rep_number": 1,
+        "completed": true,
+        "start_frame": 18,
+        "end_frame": 62,
+        "duration_ms": 2400,
+        "issues": ["Finish the curl higher — don't stop short at the top."],
+        "issue_counts": {
+          "Finish the curl higher — don't stop short at the top.": 4
+        },
+        "angle_stats": {}
+      }
+    ],
     "phase_counts": {},
     "top_feedback": {},
     "angle_stats": {},
@@ -107,7 +122,8 @@ Response includes:
 Persistence behavior:
 
 - `workout_sessions` stores request/session metadata and status.
-- `analysis_results` stores summary/statistics, top feedback, angle stats, quality, and LLM metadata.
+- `analysis_results` stores summary/statistics, top feedback, angle stats, per-rep breakdown, quality, and LLM metadata.
+- `analysis_results.rep_breakdown_json` stores the per-rep issue summary used by the report UI.
 - `usage_events` stores register/login/analysis lifecycle events.
 - The database does not store uploaded videos, base64 preview images, or full frame logs in v1.
 
@@ -137,6 +153,11 @@ GET /analytics/summary
   "recent_sessions": []
 }
 ```
+
+The Next frontend includes `/dashboard/history`, backed by `GET /workouts`,
+so users can revisit saved session reports. Full preview images are only
+available immediately after analysis from browser session storage; persisted
+history relies on summary/statistics and `rep_breakdown_json`.
 
 ### `POST /posture/analyze-session`
 
@@ -189,7 +210,7 @@ MP_VIS_THRESHOLD=0.5
 Current behavior:
 
 - The ViTPose backend predicts COCO-17 body keypoints.
-- Those 17 keypoints are mapped into the existing MediaPipe-style 33-landmark slots so the current gates, angle extraction, phase detector, skeleton preview, and feedback rules can be reused.
+- Those 17 keypoints are mapped into the existing MediaPipe-style 33-landmark slots so the current gates, exercise-specific angle extraction, phase detector, skeleton preview, and feedback rules can be reused.
 - Missing MediaPipe-only landmarks are marked invisible.
 - The prototype uses the whole frame as the single-person box. This is fine for controlled single-person videos, but a detector/crop stage should be added for loose framing or multiple people.
 - ViTPose has no MediaPipe-style `z` depth. Any rule using `z` should be treated as less informative under ViTPose.
@@ -241,7 +262,7 @@ Recommended comparison workflow:
 -F "pose_backend=vitpose"
 ```
 
-Upload the same video with the same `sample_fps`, `camera_view`, and internal frame limits, then compare `pose_backend`, `frames_analyzed`, `phase_counts`, `rep_count`, `top_feedback`, `angle_stats`, and mistake-frame quality.
+Upload the same video with the same `sample_fps`, `camera_view`, and internal frame limits, then compare `pose_backend`, `frames_analyzed`, `phase_counts`, `rep_count`, `rep_breakdown`, `top_feedback`, `angle_stats`, and representative error-frame quality.
 
 ## 4. Subject-Ready Gate
 
@@ -287,6 +308,10 @@ Bicep curls support one-arm videos. If both arms are visible, both are used. If 
 
 ## 6. Angle Extraction
 
+Exercise-specific angle extraction now lives in `backend/posture/exercises/`.
+`backend/posture/mediapipe_utils.py` remains the pose-backend and visibility
+facade, and dispatches angle extraction through `posture.exercises.registry`.
+
 ### Squat
 
 Computed values include:
@@ -324,7 +349,13 @@ POSTURE_CURL_SHOULDER_ELEVATION_THRESH=0.38
 
 ## 7. Phase Detection
 
-Phase detection uses median angle buffers to reduce frame jitter.
+Phase detection is exercise-specific and is dispatched through
+`backend/posture/phase_detector.py`. The implementation lives beside the
+exercise rules in `backend/posture/exercises/<exercise>.py`.
+
+Squat still uses a median knee-angle buffer to reduce frame jitter. Bicep curl
+now tracks each arm separately, which prevents a visible static arm from
+suppressing the working arm's rep count.
 
 ### Squat phases
 
@@ -340,7 +371,9 @@ Rep count increments when the user returns from `ASCENDING` to `STANDING`.
 EXTENDED -> CURLING -> CONTRACTED -> LOWERING -> EXTENDED
 ```
 
-Rep count increments when the user returns from `LOWERING` to `EXTENDED`.
+Rep count increments per arm when the arm has reached the contracted threshold
+and then returns to the extended threshold. The session-level bicep rep count is
+the max completed count across visible arms.
 
 Mid-range direction is inferred from angle deltas:
 
@@ -351,12 +384,16 @@ Mid-range direction is inferred from angle deltas:
 
 This avoids sticking in `LOWERING` or `ASCENDING` solely because of the previous phase.
 
-## 8. Key Correction Frames
+## 8. Rep Breakdown and Errors Detected
 
-`/posture/analyze-video` can return mistake frames with skeleton overlays. The
-selector prioritizes spaced-apart frames that introduce different problem
-feedback. It is intended to show distinct correction moments, not every repeated
-bad frame.
+`/posture/analyze-video` groups form issues by rep in `summary.rep_breakdown`.
+The analysis page uses this data to show `Errors Detected`: each listed rep has
+the distinct issues found in that rep and, when available, one representative
+skeleton frame. The UI intentionally hides setup/no-person frames and repeated
+frame counts because they are not actionable for the user.
+
+Preview frame selection still exists as a support mechanism. It returns a small
+set of skeleton overlays for problem frames, not every bad frame.
 
 Frontend options:
 
@@ -377,12 +414,14 @@ Each preview item includes:
   "phase": "LOWERING",
   "rep_count": 1,
   "feedback": ["..."],
+  "problem_feedback": ["..."],
   "preview_reason": "new_issue",
   "image": "data:image/jpeg;base64,..."
 }
 ```
 
-The frontend displays mistake-frame images with `object-contain`, so vertical videos are not cropped.
+The frontend displays representative error images with `object-contain`, so
+vertical videos are not cropped.
 
 ## 9. LLM Coaching
 
@@ -425,7 +464,8 @@ POSTURE_LLM_MAX_LOG_FRAMES=60
 
 ## 10. Frontend State
 
-The active frontend is `frontend/`, a Next.js app. The Dashboard has been simplified to session analysis only.
+The active frontend is `frontend/`, a Next.js app. The Dashboard is focused on
+session video analysis and history.
 
 Kept:
 
@@ -435,11 +475,10 @@ Kept:
 - Gemini toggle
 - automatic mistake-frame selection
 - result metrics: reps, analyzed frames, quality, processing time
-- angle chart from analyzed frame log
-- mistake frames returned by backend
-- per-mistake-frame feedback
-- form-issue summary and all-feedback summary
+- Errors Detected grouped by rep
+- representative correction frame per rep when preview data is available
 - rule-based or Gemini coaching
+- History page for previous saved sessions
 
 Removed from Dashboard:
 
@@ -447,6 +486,30 @@ Removed from Dashboard:
 - live WebSocket connection status
 - Start/Stop realtime session buttons
 - live realtime feedback panel
+- joint-angle chart from the report view
+
+## 11. Code Organization
+
+Exercise-specific posture code is split by exercise:
+
+```text
+backend/posture/exercises/
+  common.py
+  registry.py
+  squat.py
+  bicep_curl.py
+  lunge.py
+  deadlift.py
+  pushup.py
+  shoulder_press.py
+```
+
+Rules for adding or changing an exercise:
+
+- Put angle extraction, feedback generation, and any phase detector in that exercise file.
+- Register the functions/classes in `posture/exercises/registry.py`.
+- Keep `mediapipe_utils.py` focused on pose backends, smoothing, and visibility gates.
+- Keep `feedback.py` and `phase_detector.py` as compatibility facades.
 
 Dev commands:
 
@@ -458,7 +521,7 @@ cd frontend
 npm run dev
 ```
 
-## 11. Future Improvements
+## 12. Future Improvements
 
 ### YOLO Pose Backend
 
@@ -491,13 +554,14 @@ Tradeoffs:
 
 ### Rep Tempo
 
-Use timestamps of phase transitions to compute eccentric/concentric duration.
+`rep_breakdown` already stores rep start/end timestamps when available. A next
+step is splitting each rep into eccentric/concentric durations.
 
 ### Calibration
 
 Use first few valid reps to tune thresholds per user and camera setup.
 
-## 12. Known Limitations
+## 13. Known Limitations
 
 | Limitation | Impact | Current mitigation |
 |---|---|---|
