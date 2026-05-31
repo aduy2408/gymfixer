@@ -12,7 +12,7 @@ Usage:
 
 from __future__ import annotations
 import logging
-from enum import Enum, auto
+from enum import Enum
 from collections import deque
 
 logger = logging.getLogger("posture.phase_detector")
@@ -136,63 +136,91 @@ class _SquatDetector:
 #
 # Rep counted when: LOWERING → EXTENDED
 
-_CURL_EXTEND_THRESH      = 150   # above this = arms extended (rest position)
-_CURL_CONTRACTED_THRESH  = 60    # below this = fully curled
+_CURL_EXTEND_THRESH = 120      # above this = returned to bottom/extended enough
+_CURL_CONTRACTED_THRESH = 100  # below this = curled high enough to count the rep
 
-class _BicepCurlDetector:
+
+class _SingleArmCurlDetector:
     def __init__(self):
         self.phase: BicepCurlPhase = BicepCurlPhase.EXTENDED
         self.rep_count: int = 0
-        self._elbow_buf = _AngleBuffer(size=4)
-        self._last_avg_elbow: float | None = None
+        self._angle_buf = _AngleBuffer(size=1)
+        self._last_angle: float | None = None
 
-    def update(self, angles: dict) -> tuple[BicepCurlPhase, int]:
-        elbows = [
-            value
-            for value in (angles.get('right_elbow'), angles.get('left_elbow'))
-            if value is not None
-        ]
-        if not elbows:
-            return self.phase, self.rep_count
-        raw_avg = sum(elbows) / len(elbows)
-        avg_elbow = self._elbow_buf.push(raw_avg)
-
+    def update(self, raw_angle: float) -> tuple[BicepCurlPhase, int]:
+        angle = self._angle_buf.push(raw_angle)
         prev = self.phase
         delta = None
-        if self._last_avg_elbow is not None:
-            delta = avg_elbow - self._last_avg_elbow
+        if self._last_angle is not None:
+            delta = angle - self._last_angle
 
-        if avg_elbow > _CURL_EXTEND_THRESH:
-            if prev == BicepCurlPhase.LOWERING:
+        if angle >= _CURL_EXTEND_THRESH:
+            if prev in (BicepCurlPhase.CONTRACTED, BicepCurlPhase.LOWERING):
                 self.rep_count += 1
-                logger.info(f"Bicep curl rep counted: {self.rep_count}")
+                logger.info(f"Bicep curl arm rep counted: {self.rep_count}")
             self.phase = BicepCurlPhase.EXTENDED
-
-        elif avg_elbow <= _CURL_CONTRACTED_THRESH:
+        elif angle <= _CURL_CONTRACTED_THRESH:
             self.phase = BicepCurlPhase.CONTRACTED
-
         else:
-            # Mid-range: elbow angle decreases while curling up and increases
-            # while lowering. Previous-phase fallback handles pauses/isometrics.
             if delta is not None and delta < -_ANGLE_DIRECTION_EPS:
                 self.phase = BicepCurlPhase.CURLING
             elif delta is not None and delta > _ANGLE_DIRECTION_EPS:
                 self.phase = BicepCurlPhase.LOWERING
             elif prev in (BicepCurlPhase.EXTENDED, BicepCurlPhase.CURLING):
                 self.phase = BicepCurlPhase.CURLING
-            elif prev in (BicepCurlPhase.CONTRACTED, BicepCurlPhase.LOWERING):
-                self.phase = BicepCurlPhase.LOWERING
             else:
-                self.phase = BicepCurlPhase.CURLING
+                self.phase = BicepCurlPhase.LOWERING
 
-        self._last_avg_elbow = avg_elbow
+        self._last_angle = angle
         return self.phase, self.rep_count
 
     def reset(self):
         self.phase = BicepCurlPhase.EXTENDED
         self.rep_count = 0
-        self._elbow_buf.reset()
-        self._last_avg_elbow = None
+        self._angle_buf.reset()
+        self._last_angle = None
+
+
+class _BicepCurlDetector:
+    def __init__(self):
+        self.phase: BicepCurlPhase = BicepCurlPhase.EXTENDED
+        self.rep_count: int = 0
+        self._arms = {
+            "left": _SingleArmCurlDetector(),
+            "right": _SingleArmCurlDetector(),
+        }
+
+    def update(self, angles: dict) -> tuple[BicepCurlPhase, int]:
+        updated_phases: list[BicepCurlPhase] = []
+        for side in ("left", "right"):
+            value = angles.get(f"{side}_elbow")
+            if value is None:
+                continue
+            phase, _reps = self._arms[side].update(float(value))
+            updated_phases.append(phase)
+
+        if not updated_phases:
+            return self.phase, self.rep_count
+
+        self.rep_count = max(arm.rep_count for arm in self._arms.values())
+        self.phase = self._combined_phase(updated_phases)
+        return self.phase, self.rep_count
+
+    def reset(self):
+        self.phase = BicepCurlPhase.EXTENDED
+        self.rep_count = 0
+        for arm in self._arms.values():
+            arm.reset()
+
+    def _combined_phase(self, phases: list[BicepCurlPhase]) -> BicepCurlPhase:
+        for phase in (
+            BicepCurlPhase.LOWERING,
+            BicepCurlPhase.CONTRACTED,
+            BicepCurlPhase.CURLING,
+        ):
+            if phase in phases:
+                return phase
+        return BicepCurlPhase.EXTENDED
 
 
 # ---------------------------------------------------------------------------

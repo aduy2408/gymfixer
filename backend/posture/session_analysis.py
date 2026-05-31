@@ -514,6 +514,7 @@ def _persist_analysis_result(
         angle_stats_json=summary.get("angle_stats") or {},
         top_feedback_json=summary.get("top_feedback") or {},
         visibility_failures_json=summary.get("visibility_failures") or {},
+        rep_breakdown_json=summary.get("rep_breakdown") or [],
         llm_enabled=bool(llm.get("enabled")),
         llm_model=llm.get("model"),
         llm_usage_json=llm.get("usage_metadata"),
@@ -606,6 +607,7 @@ def _summary_for_llm(
         "pose_backend": summary.get("pose_backend", "mediapipe"),
         "analyzed_frames": len(coaching_log),
         "rep_count": summary.get("rep_count", 0),
+        "rep_breakdown": summary.get("rep_breakdown", []),
         "phase_counts": summary.get("phase_counts", {}),
         "top_form_feedback": top_feedback,
         "angle_stats": summary.get("angle_stats", {}),
@@ -766,6 +768,7 @@ def _maybe_add_preview_frame(
             "phase": entry.get("phase"),
             "rep_count": entry.get("rep_count"),
             "feedback": entry.get("feedback"),
+            "problem_feedback": _problem_feedback(entry.get("feedback") or []),
             "preview_reason": _preview_reason(preview_frames, entry, force=force),
             "image": (
                 "data:image/jpeg;base64,"
@@ -1048,6 +1051,148 @@ def _frame_log_entry_for_prompt(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _build_rep_breakdown(
+    frame_log: list[dict[str, Any]],
+    *,
+    exercise: str,
+    total_reps: int,
+) -> list[dict[str, Any]]:
+    phase_sets = {
+        "bicep_curl": {
+            "idle": {"EXTENDED"},
+            "active": {"CURLING", "CONTRACTED", "LOWERING"},
+        },
+        "squat": {
+            "idle": {"STANDING"},
+            "active": {"DESCENDING", "BOTTOM", "ASCENDING"},
+        },
+    }
+    phases = phase_sets.get(exercise)
+    if not phases:
+        return []
+
+    reps: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    completed_reps_seen = 0
+
+    for entry in frame_log:
+        if entry.get("status") != "ok":
+            continue
+
+        phase = entry.get("phase")
+        rep_count = int(entry.get("rep_count") or 0)
+        is_active = phase in phases["active"]
+
+        if current is None and is_active:
+            current = _new_rep_accumulator(
+                rep_number=completed_reps_seen + 1,
+                entry=entry,
+            )
+
+        if current is not None:
+            _add_entry_to_rep(current, entry)
+
+        if current is not None and rep_count > completed_reps_seen:
+            current["rep_number"] = rep_count
+            reps.append(_finalise_rep_accumulator(current, completed=True))
+            current = None
+            completed_reps_seen = rep_count
+
+    if current is not None:
+        reps.append(_finalise_rep_accumulator(current, completed=False))
+
+    # If the detector counted a rep on a sparse transition before we had enough
+    # active frames to open an accumulator, keep the API honest about the gap.
+    completed_numbers = {
+        int(rep["rep_number"])
+        for rep in reps
+        if rep["completed"] and rep.get("rep_number") is not None
+    }
+    for missing_number in range(1, total_reps + 1):
+        if missing_number in completed_numbers:
+            continue
+        reps.append(
+            {
+                "rep_number": missing_number,
+                "completed": True,
+                "start_frame": None,
+                "end_frame": None,
+                "start_ms": None,
+                "end_ms": None,
+                "duration_ms": None,
+                "frame_count": 0,
+                "phases": [],
+                "issues": [],
+                "issue_counts": {},
+                "angle_stats": {},
+            }
+        )
+
+    return sorted(reps, key=lambda rep: (int(rep["rep_number"]), not rep["completed"]))
+
+
+def _new_rep_accumulator(rep_number: int, entry: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "rep_number": rep_number,
+        "start_frame": entry.get("frame_index"),
+        "end_frame": entry.get("frame_index"),
+        "start_ms": entry.get("timestamp_ms"),
+        "end_ms": entry.get("timestamp_ms"),
+        "frame_count": 0,
+        "phases": Counter(),
+        "issue_counts": Counter(),
+        "angle_values": defaultdict(list),
+    }
+
+
+def _add_entry_to_rep(rep: dict[str, Any], entry: dict[str, Any]) -> None:
+    rep["end_frame"] = entry.get("frame_index")
+    rep["end_ms"] = entry.get("timestamp_ms")
+    rep["frame_count"] += 1
+    phase = entry.get("phase")
+    if phase:
+        rep["phases"].update([phase])
+
+    rep["issue_counts"].update(entry.get("problem_feedback") or _problem_feedback(entry.get("feedback") or []))
+
+    for name, value in (entry.get("angles") or {}).items():
+        rep["angle_values"][name].append(float(value))
+
+
+def _finalise_rep_accumulator(rep: dict[str, Any], *, completed: bool) -> dict[str, Any]:
+    start_ms = rep.get("start_ms")
+    end_ms = rep.get("end_ms")
+    duration_ms = None
+    if start_ms is not None and end_ms is not None:
+        duration_ms = max(0, int(end_ms) - int(start_ms))
+
+    angle_stats = {}
+    for name, values in rep["angle_values"].items():
+        if not values:
+            continue
+        angle_stats[name] = {
+            "min": round(min(values), 2),
+            "max": round(max(values), 2),
+            "avg": round(sum(values) / len(values), 2),
+        }
+
+    issue_counts = dict(rep["issue_counts"].most_common())
+    return {
+        "rep_number": int(rep["rep_number"]),
+        "completed": completed,
+        "start_frame": rep.get("start_frame"),
+        "end_frame": rep.get("end_frame"),
+        "start_ms": start_ms,
+        "end_ms": end_ms,
+        "duration_ms": duration_ms,
+        "frame_count": int(rep["frame_count"]),
+        "phases": list(rep["phases"].keys()),
+        "issues": list(issue_counts.keys()),
+        "issue_counts": issue_counts,
+        "angle_stats": angle_stats,
+    }
+
+
 def _build_session_summary(
     *,
     exercise: str,
@@ -1082,6 +1227,12 @@ def _build_session_summary(
             "avg": round(sum(values) / len(values), 2),
         }
 
+    rep_breakdown = _build_rep_breakdown(
+        frame_log,
+        exercise=exercise,
+        total_reps=rep_count,
+    )
+
     return {
         "exercise": exercise,
         "camera_view": camera_view,
@@ -1094,6 +1245,7 @@ def _build_session_summary(
         "waiting_for_subject_frames": waiting_for_subject_frames,
         "decode_errors": decode_errors,
         "rep_count": rep_count,
+        "rep_breakdown": rep_breakdown,
         "phase_counts": dict(phase_counts),
         "top_feedback": dict(issue_counts.most_common(8)),
         "visibility_failures": dict(visibility_failures.most_common()),

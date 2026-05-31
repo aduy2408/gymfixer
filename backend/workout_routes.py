@@ -134,6 +134,7 @@ def _session_to_response(
     include_analysis: bool,
 ) -> dict[str, Any]:
     result = session.analysis_result
+    summary = _summary_with_rep_breakdown(result) if result else None
     response: dict[str, Any] = {
         "id": session.id,
         "user_id": session.user_id,
@@ -153,7 +154,7 @@ def _session_to_response(
         "completed_at": session.completed_at,
         "created_at": session.created_at,
         "analysis_id": result.id if result else None,
-        "summary": result.summary_json if result else None,
+        "summary": summary,
     }
     if include_analysis and result:
         response["analysis"] = {
@@ -167,10 +168,11 @@ def _session_to_response(
             "visibility_failed_frames": result.visibility_failed_frames,
             "waiting_for_subject_frames": result.waiting_for_subject_frames,
             "decode_errors": result.decode_errors,
-            "summary": result.summary_json,
+            "summary": summary,
             "angle_stats": result.angle_stats_json,
             "top_feedback": result.top_feedback_json,
             "visibility_failures": result.visibility_failures_json,
+            "rep_breakdown": result.rep_breakdown_json or [],
             "llm": {
                 "enabled": result.llm_enabled,
                 "model": result.llm_model,
@@ -181,3 +183,12 @@ def _session_to_response(
             "created_at": result.created_at,
         }
     return response
+
+
+def _summary_with_rep_breakdown(result: AnalysisResult | None) -> dict[str, Any] | None:
+    if not result:
+        return None
+    summary = dict(result.summary_json or {})
+    if "rep_breakdown" not in summary:
+        summary["rep_breakdown"] = result.rep_breakdown_json or []
+    return summary

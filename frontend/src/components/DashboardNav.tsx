@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, BarChart3, CalendarDays, ChevronsLeft, ChevronsRight, LayoutDashboard, User, LogOut, Menu, X } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, ChevronsLeft, ChevronsRight, History, LayoutDashboard, User, LogOut, Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { clearSession, getStoredUser, AuthUser } from "@/lib/auth";
 import { logout } from "@/lib/api";
 
 const navLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard/history", label: "History", icon: History },
   { href: "/dashboard/plans", label: "Plans", icon: CalendarDays },
   { href: "/dashboard/statistics", label: "Statistics", icon: BarChart3 },
   { href: "/dashboard/profile", label: "Profile", icon: User },

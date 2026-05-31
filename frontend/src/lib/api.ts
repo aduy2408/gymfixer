@@ -58,6 +58,20 @@ export type VideoAnalysisResult = {
     frames_analyzed: number;
     waiting_for_subject_frames?: number;
     rep_count: number;
+    rep_breakdown?: Array<{
+      rep_number: number;
+      completed: boolean;
+      start_frame: number | null;
+      end_frame: number | null;
+      start_ms: number | null;
+      end_ms: number | null;
+      duration_ms: number | null;
+      frame_count: number;
+      phases: string[];
+      issues: string[];
+      issue_counts: Record<string, number>;
+      angle_stats?: Record<string, { min?: number; avg?: number; max?: number }>;
+    }>;
     processing_ms: number;
     top_feedback?: Record<string, number>;
     angle_stats?: Record<string, { min?: number; avg?: number; max?: number }>;
@@ -395,6 +409,11 @@ export async function fetchAnalyticsSummary(): Promise<AnalyticsSummary> {
 export async function fetchWorkout(sessionId: string | number): Promise<WorkoutSession> {
   const response = await authFetch(`/workouts/${sessionId}`);
   return parseResponse<WorkoutSession>(response, "Could not load workout.");
+}
+
+export async function fetchWorkouts(limit = 100): Promise<WorkoutSession[]> {
+  const response = await authFetch(`/workouts?limit=${encodeURIComponent(String(limit))}`);
+  return parseResponse<WorkoutSession[]>(response, "Could not load workout history.");
 }
 
 export async function createWorkoutPlan(params: WorkoutPlanRequest): Promise<WorkoutPlan> {

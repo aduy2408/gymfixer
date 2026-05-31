@@ -98,6 +98,7 @@ class AnalysisResult(Base):
     angle_stats_json = Column(JSONB, nullable=False, default=dict)
     top_feedback_json = Column(JSONB, nullable=False, default=dict)
     visibility_failures_json = Column(JSONB, nullable=False, default=dict)
+    rep_breakdown_json = Column(JSONB, nullable=False, default=list)
     llm_enabled = Column(Boolean, nullable=False, default=False)
     llm_model = Column(String, nullable=True)
     llm_usage_json = Column(JSONB, nullable=True)

@@ -6,15 +6,13 @@ import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
     Activity,
-    AlertTriangle,
     ArrowLeft,
-    BarChart2,
     FileVideo,
     Info,
     Play,
 } from "lucide-react";
 import DashboardNav from "@/components/DashboardNav";
-import { fetchWorkout, readLatestAnalysis, StoredAnalysis, workoutToStoredAnalysis } from "@/lib/api";
+import { fetchWorkout, readLatestAnalysis, StoredAnalysis, VideoAnalysisResult, workoutToStoredAnalysis } from "@/lib/api";
 
 const metricStyle: React.CSSProperties = {
     background: "#fff",
@@ -64,6 +62,155 @@ function isProblemFeedback(item: string) {
     ].some((marker) => lower.includes(marker));
 }
 
+type RepBreakdown = NonNullable<VideoAnalysisResult["summary"]["rep_breakdown"]>;
+type PreviewFrame = NonNullable<VideoAnalysisResult["preview_frames"]>[number];
+type CorrectionRep = RepBreakdown[number] & { representativeFrame?: PreviewFrame };
+
+function buildRepBreakdownFromFrameLog(result: VideoAnalysisResult): RepBreakdown {
+    const totalReps = result.summary.rep_count || 0;
+    const frameLog = result.frame_log || [];
+    if (totalReps <= 0) return [];
+    if (!frameLog.length) return buildPlaceholderReps(totalReps);
+
+    const activePhasesByExercise: Record<string, Set<string>> = {
+        bicep_curl: new Set(["CURLING", "CONTRACTED", "LOWERING"]),
+        squat: new Set(["DESCENDING", "BOTTOM", "ASCENDING"]),
+    };
+    const activePhases = activePhasesByExercise[result.exercise] || activePhasesByExercise.bicep_curl;
+    const reps: RepBreakdown = [];
+    let current: {
+        rep_number: number;
+        start_frame: number | null;
+        end_frame: number | null;
+        start_ms: number | null;
+        end_ms: number | null;
+        frame_count: number;
+        phases: Set<string>;
+        issue_counts: Record<string, number>;
+    } | null = null;
+    let completedSeen = 0;
+
+    for (const entry of frameLog) {
+        if (entry.status !== "ok") continue;
+        const phase = entry.phase || "";
+        const repCount = entry.rep_count || 0;
+        const isActive = activePhases.has(phase);
+
+        if (!current && (isActive || repCount > completedSeen)) {
+            current = {
+                rep_number: repCount > completedSeen ? repCount : completedSeen + 1,
+                start_frame: entry.frame_index,
+                end_frame: entry.frame_index,
+                start_ms: entry.timestamp_ms,
+                end_ms: entry.timestamp_ms,
+                frame_count: 0,
+                phases: new Set(),
+                issue_counts: {},
+            };
+        }
+
+        if (current) {
+            current.end_frame = entry.frame_index;
+            current.end_ms = entry.timestamp_ms;
+            current.frame_count += 1;
+            if (phase) current.phases.add(phase);
+            for (const issue of entry.problem_feedback?.length ? entry.problem_feedback : (entry.feedback || []).filter(isProblemFeedback)) {
+                current.issue_counts[issue] = (current.issue_counts[issue] || 0) + 1;
+            }
+        }
+
+        if (current && repCount > completedSeen) {
+            current.rep_number = repCount;
+            reps.push(finalizeClientRep(current, true));
+            current = null;
+            completedSeen = repCount;
+        }
+    }
+
+    if (current) reps.push(finalizeClientRep(current, false));
+
+    const existing = new Set(reps.filter((rep) => rep.completed).map((rep) => rep.rep_number));
+    for (let repNumber = 1; repNumber <= totalReps; repNumber += 1) {
+        if (!existing.has(repNumber)) reps.push(buildPlaceholderReps(1, repNumber)[0]);
+    }
+
+    return reps.sort((a, b) => a.rep_number - b.rep_number);
+}
+
+function finalizeClientRep(
+    rep: {
+        rep_number: number;
+        start_frame: number | null;
+        end_frame: number | null;
+        start_ms: number | null;
+        end_ms: number | null;
+        frame_count: number;
+        phases: Set<string>;
+        issue_counts: Record<string, number>;
+    },
+    completed: boolean,
+): RepBreakdown[number] {
+    const duration_ms = rep.start_ms !== null && rep.end_ms !== null
+        ? Math.max(0, rep.end_ms - rep.start_ms)
+        : null;
+    return {
+        rep_number: rep.rep_number,
+        completed,
+        start_frame: rep.start_frame,
+        end_frame: rep.end_frame,
+        start_ms: rep.start_ms,
+        end_ms: rep.end_ms,
+        duration_ms,
+        frame_count: rep.frame_count,
+        phases: Array.from(rep.phases),
+        issues: Object.keys(rep.issue_counts),
+        issue_counts: rep.issue_counts,
+        angle_stats: {},
+    };
+}
+
+function buildPlaceholderReps(total: number, startAt = 1): RepBreakdown {
+    return Array.from({ length: total }, (_, index) => ({
+        rep_number: startAt + index,
+        completed: true,
+        start_frame: null,
+        end_frame: null,
+        start_ms: null,
+        end_ms: null,
+        duration_ms: null,
+        frame_count: 0,
+        phases: [],
+        issues: [],
+        issue_counts: {},
+        angle_stats: {},
+    }));
+}
+
+function buildCorrectionReps(result: VideoAnalysisResult, repBreakdown: RepBreakdown): CorrectionRep[] {
+    const frames = (result.preview_frames || []).filter((frame) => {
+        if (frame.status !== "ok") return false;
+        const issues = frame.problem_feedback?.length
+            ? frame.problem_feedback
+            : (frame.feedback || []).filter(isProblemFeedback);
+        return issues.length > 0;
+    });
+
+    return repBreakdown.map((rep) => {
+        const issues = rep.issues?.filter(isProblemFeedback) || [];
+        const representativeFrame = frames.find((frame) => {
+            const inRepWindow = rep.start_frame !== null && rep.end_frame !== null
+                ? frame.frame_index >= rep.start_frame && frame.frame_index <= rep.end_frame
+                : frame.rep_count === rep.rep_number || frame.rep_count === rep.rep_number - 1;
+            if (!inRepWindow) return false;
+            const frameIssues = frame.problem_feedback?.length
+                ? frame.problem_feedback
+                : (frame.feedback || []).filter(isProblemFeedback);
+            return frameIssues.some((issue) => issues.includes(issue));
+        });
+        return { ...rep, representativeFrame };
+    }).filter((rep) => rep.issues?.filter(isProblemFeedback).length || rep.representativeFrame);
+}
+
 export default function AnalysisPage() {
     const params = useParams<{ id: string }>();
     const [analysis, setAnalysis] = useState<StoredAnalysis | null>(() => {
@@ -84,6 +231,9 @@ export default function AnalysisPage() {
                 if (matchingCached) {
                     persisted.result.frame_log = matchingCached.result.frame_log;
                     persisted.result.preview_frames = matchingCached.result.preview_frames;
+                    if (!persisted.result.summary.rep_breakdown?.length && matchingCached.result.summary.rep_breakdown?.length) {
+                        persisted.result.summary.rep_breakdown = matchingCached.result.summary.rep_breakdown;
+                    }
                 }
                 setAnalysis(persisted);
             })
@@ -126,11 +276,10 @@ export default function AnalysisPage() {
     const qualityScore = qualityRatio === undefined
         ? Math.round((result.summary.frames_analyzed / Math.max(1, result.summary.frames_received)) * 100)
         : Math.round(qualityRatio * 100);
-    const mistakeFrames = result.preview_frames || [];
-    const angleStats = Object.entries(result.summary.angle_stats || {}).slice(0, 8);
-    const formIssues = Object.keys(result.summary.top_feedback || {})
-        .filter(isProblemFeedback)
-        .slice(0, 8);
+    const repBreakdown = result.summary.rep_breakdown?.length
+        ? result.summary.rep_breakdown
+        : buildRepBreakdownFromFrameLog(result);
+    const correctionReps = buildCorrectionReps(result, repBreakdown);
 
     return (
         <div style={{ display: "flex", minHeight: "100vh", background: "#f7f7f7", fontFamily: "var(--font-ui)" }}>
@@ -188,43 +337,47 @@ export default function AnalysisPage() {
                             className="md:col-span-2"
                         >
                             <h2 className="font-bold text-base mb-3 flex items-center gap-2">
-                                <FileVideo size={16} style={{ color: "var(--navy)" }} /> Key Correction Frames
-                                {mistakeFrames.length > 0 && (
+                                <FileVideo size={16} style={{ color: "var(--navy)" }} /> Errors Detected
+                                {correctionReps.length > 0 && (
                                     <span style={{ color: "#999", fontSize: "0.75rem", fontWeight: 500 }}>
-                                        ({mistakeFrames.length} frames)
+                                        ({correctionReps.length} reps)
                                     </span>
                                 )}
                             </h2>
                             <div style={{ ...metricStyle, padding: "0.75rem" }}>
-                                {mistakeFrames.length > 0 ? (
+                                {correctionReps.length > 0 ? (
                                     <div className="grid gap-3">
-                                        {mistakeFrames.map((frame) => (
-                                            <figure key={`${frame.frame_index}-${frame.status}`} style={{ border: "1px solid #e8e8e8", borderRadius: 4, overflow: "hidden", background: "#fafafa" }}>
-                                                <img src={frame.image} alt={`Frame ${frame.frame_index}`} style={{ width: "100%", aspectRatio: "16 / 9", objectFit: "contain", background: "#111" }} />
-                                                <figcaption style={{ padding: "0.65rem", fontSize: "0.72rem", color: "#777" }}>
-                                                    <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", marginBottom: frame.feedback?.length ? "0.35rem" : 0 }}>
-                                                        <span>Frame {frame.frame_index}</span>
-                                                        <span>{frame.preview_reason === "new_issue" ? "new issue" : frame.phase || frame.status}</span>
-                                                    </div>
-                                                    {frame.feedback?.length ? (
-                                                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                                                            {(frame.problem_feedback?.length ? frame.problem_feedback : (frame.feedback || []).filter(isProblemFeedback)).map((item) => (
-                                                                <span
-                                                                    key={item}
-                                                                    style={{ color: "var(--red)", lineHeight: 1.35 }}
-                                                                >
-                                                                    {item}
+                                        {correctionReps.map((rep) => {
+                                            const issues = rep.issues.filter(isProblemFeedback);
+                                            return (
+                                                <figure key={`rep-${rep.rep_number}-${rep.start_frame ?? "missing"}`} style={{ border: "1px solid #e8e8e8", borderRadius: 4, overflow: "hidden", background: "#fafafa" }}>
+                                                    {rep.representativeFrame ? (
+                                                        <img src={rep.representativeFrame.image} alt={`Rep ${rep.rep_number} correction frame`} style={{ width: "100%", aspectRatio: "16 / 9", objectFit: "contain", background: "#111" }} />
+                                                    ) : (
+                                                        <div style={{ width: "100%", aspectRatio: "16 / 9", background: "#f1f1f1", display: "flex", alignItems: "center", justifyContent: "center", color: "#999", fontSize: "0.8rem" }}>
+                                                            No representative frame
+                                                        </div>
+                                                    )}
+                                                    <figcaption style={{ padding: "0.75rem", fontSize: "0.78rem", color: "#777" }}>
+                                                        <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                                                            <span style={{ fontWeight: 800, color: "var(--red)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Rep {rep.rep_number}</span>
+                                                            <span>{rep.duration_ms ? `${(rep.duration_ms / 1000).toFixed(1)}s` : rep.completed ? "completed" : "incomplete"}</span>
+                                                        </div>
+                                                        <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                                                            {issues.map((issue) => (
+                                                                <span key={issue} style={{ color: "#555", lineHeight: 1.35 }}>
+                                                                    <span style={{ color: "var(--red)", fontWeight: 800 }}>Issue:</span> {issue}
                                                                 </span>
                                                             ))}
                                                         </div>
-                                                    ) : null}
-                                                </figcaption>
-                                            </figure>
-                                        ))}
+                                                    </figcaption>
+                                                </figure>
+                                            );
+                                        })}
                                     </div>
                                 ) : (
                                     <p style={{ fontSize: "0.85rem", color: "#888", lineHeight: 1.6 }}>
-                                        No key correction frames were returned. Enable skeleton preview before running the next analysis.
+                                        No rep-level form issues were detected in the usable exercise frames.
                                     </p>
                                 )}
                             </div>
@@ -236,76 +389,32 @@ export default function AnalysisPage() {
                             transition={{ delay: 0.3 }}
                             className="md:col-span-3"
                         >
-                            <h2 className="font-bold text-sm mb-2 flex items-center gap-2">
-                                <BarChart2 size={16} style={{ color: "var(--red)" }} /> Joint Angles
+                            <h2 className="font-bold text-base mb-2 flex items-center gap-2">
+                                <Activity size={18} style={{ color: "var(--red)" }} /> Coaching
                             </h2>
-                            <div style={{ ...metricStyle, padding: "1rem", marginBottom: "1rem" }}>
-                                {angleStats.length > 0 ? (
-                                    <div className="grid gap-3 sm:grid-cols-2">
-                                        {angleStats.map(([name, stats]) => (
-                                            <div key={name} style={{ border: "1px solid #eee", borderRadius: 4, padding: "0.8rem", background: "#fafafa" }}>
-                                                <p style={{ fontSize: "0.72rem", color: "#777", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700, marginBottom: "0.55rem" }}>
-                                                    {name.replaceAll("_", " ")}
-                                                </p>
-                                                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem" }}>
-                                                    <AngleValue label="Min" value={stats.min} />
-                                                    <AngleValue label="Avg" value={stats.avg} emphasis />
-                                                    <AngleValue label="Max" value={stats.max} />
-                                                </div>
-                                            </div>
-                                        ))}
+                            <div style={{ ...metricStyle, padding: "0.9rem" }}>
+                                <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
+                                    <Info size={16} style={{ color: "var(--red)", marginTop: 2, flexShrink: 0 }} />
+                                    <div>
+                                        <p style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--red)", marginBottom: "0.5rem" }}>
+                                            {result.llm.enabled ? `Gemini ${result.llm.model}` : "Recommendations"}
+                                        </p>
+                                        {result.llm.enabled && (
+                                            <p style={{ fontSize: "0.72rem", color: "#999", marginBottom: "0.75rem" }}>
+                                                Max output: {result.llm.max_output_tokens ?? "n/a"}
+                                                {result.llm.finish_reason ? ` · Finish: ${result.llm.finish_reason}` : ""}
+                                                {result.llm.prompt_chars ? ` · Prompt: ${result.llm.prompt_chars} chars` : ""}
+                                            </p>
+                                        )}
+                                        <MarkdownContent content={result.llm.recommendations} />
+                                        {result.llm.error && (
+                                            <p style={{ color: "var(--red)", fontSize: "0.8rem", marginTop: "0.75rem" }}>{result.llm.error}</p>
+                                        )}
                                     </div>
-                                ) : (
-                                    <p style={{ color: "#888", fontSize: "0.85rem" }}>No usable angle stats were returned.</p>
-                                )}
-                            </div>
-
-                            <div style={{ ...metricStyle, padding: "0.75rem" }}>
-                                <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
-                                    <AlertTriangle size={15} style={{ color: "#f59e0b" }} /> Form Issues
-                                </h3>
-                                {formIssues.length > 0 ? (
-                                    <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-                                        {formIssues.map((item) => (
-                                            <div key={item} style={{ display: "flex", gap: "0.65rem", alignItems: "flex-start", fontSize: "0.88rem", color: "#555", lineHeight: 1.45 }}>
-                                                <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--red)", marginTop: "0.43rem", flexShrink: 0 }} />
-                                                <span>{item}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p style={{ color: "#888", fontSize: "0.85rem" }}>No reliable form issues were detected in usable frames.</p>
-                                )}
+                                </div>
                             </div>
                         </motion.section>
                     </div>
-
-                    <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-                        <h2 className="font-bold text-base mb-2 flex items-center gap-2">
-                            <Activity size={18} style={{ color: "var(--red)" }} /> Coaching
-                        </h2>
-                        <div style={{ ...metricStyle, padding: "0.9rem" }}>
-                            <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
-                                <Info size={16} style={{ color: "var(--red)", marginTop: 2, flexShrink: 0 }} />
-                                <div>
-                                    <p style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--red)", marginBottom: "0.5rem" }}>
-                                        {result.llm.enabled ? `Gemini ${result.llm.model}` : "Recommendations"}
-                                    </p>
-                                    {result.llm.enabled && (
-                                        <p style={{ fontSize: "0.72rem", color: "#999", marginBottom: "0.75rem" }}>
-                                            Max output: {result.llm.max_output_tokens ?? "n/a"}
-                                            {result.llm.finish_reason ? ` · Finish: ${result.llm.finish_reason}` : ""}
-                                            {result.llm.prompt_chars ? ` · Prompt: ${result.llm.prompt_chars} chars` : ""}
-                                        </p>
-                                    )}
-                                    <MarkdownContent content={result.llm.recommendations} />
-                                    {result.llm.error && (
-                                        <p style={{ color: "var(--red)", fontSize: "0.8rem", marginTop: "0.75rem" }}>{result.llm.error}</p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </motion.section>
                 </div>
             </main>
         </div>
@@ -409,17 +518,6 @@ function Metric({ label, value, color }: { label: string; value: string | number
             <p style={{ fontSize: "0.7rem", color: "#999", marginTop: "0.35rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 {label}
             </p>
-        </div>
-    );
-}
-
-function AngleValue({ label, value, emphasis = false }: { label: string; value?: number; emphasis?: boolean }) {
-    return (
-        <div>
-            <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: emphasis ? "1.45rem" : "1.15rem", lineHeight: 1, color: emphasis ? "var(--red)" : "#333" }}>
-                {value === undefined ? "n/a" : `${Math.round(value)}°`}
-            </p>
-            <p style={{ fontSize: "0.62rem", color: "#999", marginTop: "0.25rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</p>
         </div>
     );
 }
