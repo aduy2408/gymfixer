@@ -35,54 +35,70 @@ GenerationSource = Literal["gemini", "fallback"]
 FallbackReason = Literal["missing_api_key", "timeout", "network_error", "http_error", "invalid_response", "schema_error"]
 WeekDay = Literal["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 PortionUnit = Literal["g", "ml", "large", "piece", "slice", "scoop", "tbsp", "cup"]
+TrainingLocation = Literal["home", "gym"]
+ActivityLevel = Literal["sedentary", "light", "moderate", "active", "very_active"]
 
 DAYS: list[WeekDay] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 FOOD_DATABASE: dict[str, dict[str, Any]] = {
-    "Chicken breast": {"unit": "g", "basis": 100, "calories": 165, "protein_g": 31, "carbs_g": 0, "fat_g": 3.6, "min": 80, "max": 260},
-    "Lean beef": {"unit": "g", "basis": 100, "calories": 176, "protein_g": 26, "carbs_g": 0, "fat_g": 7, "min": 80, "max": 240},
-    "Salmon fillet": {"unit": "g", "basis": 100, "calories": 208, "protein_g": 20, "carbs_g": 0, "fat_g": 13, "min": 90, "max": 240},
-    "Eggs": {"unit": "large", "basis": 1, "calories": 72, "protein_g": 6.3, "carbs_g": 0.4, "fat_g": 4.8, "min": 1, "max": 5},
-    "Greek yogurt": {"unit": "g", "basis": 100, "calories": 59, "protein_g": 10, "carbs_g": 3.6, "fat_g": 0.4, "min": 120, "max": 350},
-    "Whey protein": {"unit": "scoop", "basis": 1, "calories": 120, "protein_g": 24, "carbs_g": 3, "fat_g": 2, "min": 1, "max": 2},
-    "Tofu": {"unit": "g", "basis": 100, "calories": 144, "protein_g": 15.7, "carbs_g": 3.9, "fat_g": 8.7, "min": 100, "max": 300},
-    "Tempeh": {"unit": "g", "basis": 100, "calories": 192, "protein_g": 20, "carbs_g": 7.6, "fat_g": 10.8, "min": 100, "max": 280},
-    "Cooked lentils": {"unit": "g", "basis": 100, "calories": 116, "protein_g": 9, "carbs_g": 20, "fat_g": 0.4, "min": 120, "max": 350},
-    "Soy yogurt": {"unit": "g", "basis": 100, "calories": 66, "protein_g": 4, "carbs_g": 6, "fat_g": 3, "min": 140, "max": 350},
-    "Cooked brown rice": {"unit": "g", "basis": 100, "calories": 123, "protein_g": 2.7, "carbs_g": 25.6, "fat_g": 1, "min": 80, "max": 320},
-    "Cooked quinoa": {"unit": "g", "basis": 100, "calories": 120, "protein_g": 4.4, "carbs_g": 21.3, "fat_g": 1.9, "min": 80, "max": 320},
-    "Sweet potato": {"unit": "g", "basis": 100, "calories": 86, "protein_g": 1.6, "carbs_g": 20, "fat_g": 0.1, "min": 100, "max": 360},
-    "Oats": {"unit": "g", "basis": 100, "calories": 389, "protein_g": 16.9, "carbs_g": 66.3, "fat_g": 6.9, "min": 35, "max": 120},
-    "Whole-grain toast": {"unit": "slice", "basis": 1, "calories": 90, "protein_g": 4, "carbs_g": 16, "fat_g": 1.5, "min": 1, "max": 3},
-    "Banana": {"unit": "piece", "basis": 1, "calories": 105, "protein_g": 1.3, "carbs_g": 27, "fat_g": 0.4, "min": 1, "max": 2},
-    "Berries": {"unit": "g", "basis": 100, "calories": 57, "protein_g": 0.7, "carbs_g": 14, "fat_g": 0.3, "min": 80, "max": 200},
-    "Mixed vegetables": {"unit": "g", "basis": 100, "calories": 45, "protein_g": 2, "carbs_g": 9, "fat_g": 0.3, "min": 100, "max": 250},
-    "Green salad": {"unit": "g", "basis": 100, "calories": 20, "protein_g": 1.2, "carbs_g": 4, "fat_g": 0.2, "min": 80, "max": 220},
-    "Spinach": {"unit": "g", "basis": 100, "calories": 23, "protein_g": 2.9, "carbs_g": 3.6, "fat_g": 0.4, "min": 80, "max": 220},
-    "Avocado": {"unit": "g", "basis": 100, "calories": 160, "protein_g": 2, "carbs_g": 8.5, "fat_g": 14.7, "min": 40, "max": 160},
-    "Olive oil": {"unit": "tbsp", "basis": 1, "calories": 119, "protein_g": 0, "carbs_g": 0, "fat_g": 13.5, "min": 0.5, "max": 2},
-    "Mixed nuts": {"unit": "g", "basis": 100, "calories": 576, "protein_g": 17, "carbs_g": 20, "fat_g": 50, "min": 15, "max": 60},
-    "Pumpkin seeds": {"unit": "g", "basis": 100, "calories": 559, "protein_g": 30, "carbs_g": 11, "fat_g": 49, "min": 10, "max": 50},
+    "Ức gà": {"unit": "g", "basis": 100, "calories": 165, "protein_g": 31, "carbs_g": 0, "fat_g": 3.6, "min": 80, "max": 260, "cost_vnd": 10500},
+    "Đùi gà bỏ da": {"unit": "g", "basis": 100, "calories": 175, "protein_g": 25, "carbs_g": 0, "fat_g": 8, "min": 80, "max": 260, "cost_vnd": 10000},
+    "Thịt bò nạc": {"unit": "g", "basis": 100, "calories": 176, "protein_g": 26, "carbs_g": 0, "fat_g": 7, "min": 80, "max": 220, "cost_vnd": 30000},
+    "Cá basa": {"unit": "g", "basis": 100, "calories": 130, "protein_g": 22, "carbs_g": 0, "fat_g": 4, "min": 90, "max": 260, "cost_vnd": 13000},
+    "Cá ngừ": {"unit": "g", "basis": 100, "calories": 132, "protein_g": 28, "carbs_g": 0, "fat_g": 1.3, "min": 90, "max": 240, "cost_vnd": 22000},
+    "Trứng gà": {"unit": "large", "basis": 1, "calories": 72, "protein_g": 6.3, "carbs_g": 0.4, "fat_g": 4.8, "min": 1, "max": 5, "cost_vnd": 2700},
+    "Sữa chua không đường": {"unit": "g", "basis": 100, "calories": 61, "protein_g": 3.5, "carbs_g": 4.7, "fat_g": 3.3, "min": 100, "max": 350, "cost_vnd": 8500},
+    "Whey protein": {"unit": "scoop", "basis": 1, "calories": 120, "protein_g": 24, "carbs_g": 3, "fat_g": 2, "min": 1, "max": 2, "cost_vnd": 22000},
+    "Đậu phụ": {"unit": "g", "basis": 100, "calories": 144, "protein_g": 15.7, "carbs_g": 3.9, "fat_g": 8.7, "min": 100, "max": 300, "cost_vnd": 4700},
+    "Đậu hũ non": {"unit": "g", "basis": 100, "calories": 76, "protein_g": 8, "carbs_g": 2, "fat_g": 4.8, "min": 120, "max": 350, "cost_vnd": 4500},
+    "Đậu xanh nấu chín": {"unit": "g", "basis": 100, "calories": 105, "protein_g": 7, "carbs_g": 19, "fat_g": 0.4, "min": 120, "max": 350, "cost_vnd": 3000},
+    "Sữa đậu nành không đường": {"unit": "ml", "basis": 100, "calories": 45, "protein_g": 3.6, "carbs_g": 3, "fat_g": 2, "min": 200, "max": 500, "cost_vnd": 2200},
+    "Cơm trắng": {"unit": "g", "basis": 100, "calories": 130, "protein_g": 2.7, "carbs_g": 28, "fat_g": 0.3, "min": 80, "max": 350, "cost_vnd": 1300},
+    "Cơm gạo lứt": {"unit": "g", "basis": 100, "calories": 123, "protein_g": 2.7, "carbs_g": 25.6, "fat_g": 1, "min": 80, "max": 320, "cost_vnd": 1800},
+    "Bún tươi": {"unit": "g", "basis": 100, "calories": 110, "protein_g": 1.7, "carbs_g": 25, "fat_g": 0.2, "min": 100, "max": 350, "cost_vnd": 1800},
+    "Phở tươi": {"unit": "g", "basis": 100, "calories": 128, "protein_g": 2.4, "carbs_g": 28, "fat_g": 0.5, "min": 100, "max": 350, "cost_vnd": 2500},
+    "Khoai lang": {"unit": "g", "basis": 100, "calories": 86, "protein_g": 1.6, "carbs_g": 20, "fat_g": 0.1, "min": 100, "max": 360, "cost_vnd": 2900},
+    "Yến mạch": {"unit": "g", "basis": 100, "calories": 389, "protein_g": 16.9, "carbs_g": 66.3, "fat_g": 6.9, "min": 35, "max": 120, "cost_vnd": 12000},
+    "Chuối": {"unit": "piece", "basis": 1, "calories": 105, "protein_g": 1.3, "carbs_g": 27, "fat_g": 0.4, "min": 1, "max": 2, "cost_vnd": 2500},
+    "Rau muống": {"unit": "g", "basis": 100, "calories": 19, "protein_g": 2.6, "carbs_g": 3.1, "fat_g": 0.2, "min": 100, "max": 250, "cost_vnd": 2200},
+    "Cải xanh": {"unit": "g", "basis": 100, "calories": 27, "protein_g": 2.9, "carbs_g": 4.7, "fat_g": 0.4, "min": 100, "max": 250, "cost_vnd": 3500},
+    "Dưa leo": {"unit": "g", "basis": 100, "calories": 15, "protein_g": 0.7, "carbs_g": 3.6, "fat_g": 0.1, "min": 80, "max": 220, "cost_vnd": 2200},
+    "Cà chua": {"unit": "g", "basis": 100, "calories": 18, "protein_g": 0.9, "carbs_g": 3.9, "fat_g": 0.2, "min": 80, "max": 220, "cost_vnd": 3000},
+    "Dầu ăn": {"unit": "tbsp", "basis": 1, "calories": 119, "protein_g": 0, "carbs_g": 0, "fat_g": 13.5, "min": 0.5, "max": 2, "cost_vnd": 900},
+    "Bơ": {"unit": "g", "basis": 100, "calories": 160, "protein_g": 2, "carbs_g": 8.5, "fat_g": 14.7, "min": 40, "max": 160, "cost_vnd": 7000},
+    "Đậu phộng": {"unit": "g", "basis": 100, "calories": 567, "protein_g": 25.8, "carbs_g": 16, "fat_g": 49, "min": 15, "max": 60, "cost_vnd": 6500},
+    "Hạt bí": {"unit": "g", "basis": 100, "calories": 559, "protein_g": 30, "carbs_g": 11, "fat_g": 49, "min": 10, "max": 50, "cost_vnd": 30000},
 }
 CARB_SOURCE_NAMES = {
-    "Cooked brown rice",
-    "Cooked quinoa",
-    "Sweet potato",
-    "Oats",
-    "Whole-grain toast",
-    "Banana",
-    "Berries",
-    "Cooked lentils",
+    "Cơm trắng",
+    "Cơm gạo lứt",
+    "Bún tươi",
+    "Phở tươi",
+    "Khoai lang",
+    "Yến mạch",
+    "Chuối",
+    "Đậu xanh nấu chín",
 }
-FAT_SOURCE_NAMES = {"Avocado", "Olive oil", "Mixed nuts", "Pumpkin seeds"}
+FAT_SOURCE_NAMES = {"Bơ", "Dầu ăn", "Đậu phộng", "Hạt bí"}
 PROTEIN_SOURCE_NAMES = {
-    "Chicken breast",
-    "Lean beef",
-    "Salmon fillet",
-    "Eggs",
-    "Greek yogurt",
+    "Ức gà",
+    "Đùi gà bỏ da",
+    "Thịt bò nạc",
+    "Cá basa",
+    "Cá ngừ",
+    "Trứng gà",
+    "Sữa chua không đường",
     "Whey protein",
-    "Tofu",
-    "Tempeh",
+    "Đậu phụ",
+    "Đậu hũ non",
+    "Đậu xanh nấu chín",
+    "Sữa đậu nành không đường",
+}
+ACTIVITY_FACTORS: dict[str, float] = {
+    "sedentary": 1.2,
+    "light": 1.375,
+    "moderate": 1.55,
+    "active": 1.725,
+    "very_active": 1.9,
 }
 CALORIE_TARGET_TOLERANCE = 35
 REST_DAY_CALORIE_MARGIN = 150
@@ -104,9 +120,11 @@ class WorkoutPlanRequest(BaseModel):
     gender: Gender = ""
     goal: Goal
     level: Literal["beginner", "intermediate", "advanced"]
+    training_location: TrainingLocation = "gym"
     days_per_week: int = Field(..., ge=1, le=7)
     session_minutes: int = Field(..., ge=15, le=180)
     equipment: list[str] = Field(default_factory=list, max_length=12)
+    current_loads: str = Field(default="", max_length=1000)
     injuries: str = Field(default="", max_length=500)
     focus_muscles: list[str] = Field(default_factory=list, max_length=12)
 
@@ -122,6 +140,7 @@ class ExerciseItem(BaseModel):
     reps: str
     rest_sec: int = Field(..., ge=15, le=300)
     notes: str = ""
+    load_recommendation: str = ""
 
 
 class WorkoutDay(BaseModel):
@@ -162,12 +181,15 @@ class MealPlanRequest(BaseModel):
     weight_kg: int = Field(..., ge=30, le=300)
     gender: Gender = ""
     goal: Literal["fat_loss", "muscle", "strength", "endurance", "general"]
+    activity_level: ActivityLevel = "moderate"
     meals_per_day: int = Field(..., ge=1, le=6)
     diet_preference: Literal["none", "vegetarian", "vegan", "halal", "low_carb"] = "none"
     allergies: str = Field(default="", max_length=500)
     disliked_foods: str = Field(default="", max_length=500)
     budget: Literal["low", "medium", "high"] = "medium"
     cooking_time: Literal["minimal", "normal", "meal_prep"] = "normal"
+    budget_vnd_per_day: int = Field(default=120000, ge=30000, le=1000000)
+    cooking_time_hours_per_day: float = Field(default=1.0, ge=0.25, le=8)
     target_calories: int | None = Field(default=None, ge=1200, le=6000)
     adjust_for_workout_plan: bool = False
 
@@ -187,6 +209,7 @@ class MealIngredient(BaseModel):
     protein_g: int = Field(..., ge=0, le=250)
     carbs_g: int = Field(..., ge=0, le=400)
     fat_g: int = Field(..., ge=0, le=200)
+    estimated_cost_vnd: int = Field(default=0, ge=0)
 
 
 class MealItem(BaseModel):
@@ -197,6 +220,7 @@ class MealItem(BaseModel):
     protein_g: int = Field(..., ge=0, le=400)
     carbs_g: int = Field(..., ge=0, le=900)
     fat_g: int = Field(..., ge=0, le=250)
+    estimated_cost_vnd: int = Field(default=0, ge=0)
 
     @field_validator("items", mode="before")
     @classmethod
@@ -214,6 +238,7 @@ class MealItem(BaseModel):
                             "protein_g": 0,
                             "carbs_g": 0,
                             "fat_g": 0,
+                            "estimated_cost_vnd": 0,
                         }
                     )
                 else:
@@ -225,6 +250,18 @@ class MealItem(BaseModel):
 class MealDay(BaseModel):
     day: WeekDay
     meals: list[MealItem] = Field(default_factory=list)
+    estimated_cost_vnd: int = Field(default=0, ge=0)
+
+
+class NutritionMetrics(BaseModel):
+    bmr: int
+    tdee: int
+    activity_level: ActivityLevel
+    activity_factor: float
+    goal_adjustment_calories: int
+    target_calories: int
+    budget_vnd_per_day: int
+    cooking_time_hours_per_day: float
 
 
 class WorkoutSync(BaseModel):
@@ -239,6 +276,7 @@ class MealPlanPayload(BaseModel):
     daily_targets: DailyTargets
     days: list[MealDay] = Field(..., min_length=7, max_length=7)
     safety_notes: list[str] = Field(default_factory=list)
+    nutrition_metrics: NutritionMetrics | None = None
     workout_sync: WorkoutSync | None = None
     generation_diagnostics: GenerationDiagnostics | None = None
 
@@ -360,15 +398,19 @@ def _generate_workout_plan(request: WorkoutPlanRequest) -> tuple[WorkoutPlanPayl
         "exercises must be an array. For rest days use estimated_minutes 0 and exercises []. "
         "For mobility days use estimated_minutes 10-30 and 2-5 low-intensity mobility exercises. "
         "For training days include 4-8 exercises. Each exercise must have name string, sets integer 1-10, "
-        "reps string, rest_sec integer 15-300, and notes string. "
+        "reps string, rest_sec integer 15-300, notes string, and load_recommendation string. "
         "safety_notes must be a JSON array of short strings; if there is one note, return [\"note\"], never a plain string. "
         "Do not include null values or extra top-level keys. "
     )
+    effective_equipment = _effective_workout_equipment(request)
     prompt = (
         "You are a conservative strength and conditioning coach. Return only strict JSON. "
         "Do not include markdown. Do not diagnose injuries. Build a 7-day workout plan from this input. "
         f"{workout_schema}"
         "Use exactly Mon-Sun once. Use exactly days_per_week training days; if days_per_week is less than 7, include rest or mobility days. "
+        "Choose exercises only from the effective equipment context. "
+        "For load_recommendation, use kg when current_loads gives useful numbers; otherwise use bodyweight, RPE 6-8, or a conservative kg range. "
+        f"Effective equipment context: {json.dumps(effective_equipment, ensure_ascii=False)}. "
         f"Input JSON: {json.dumps(request.model_dump(), ensure_ascii=False)}"
     )
     raw_payload, diagnostics = _call_gemini_json_with_diagnostics(prompt)
@@ -431,8 +473,10 @@ def _generate_meal_plan(
         "Avoid allergies and disliked foods. Every food item must include a practical portion quantity. "
         f"{meal_schema}"
         f"Use only these exact food names for item.name: {allowed_foods_json}. "
-        "Use the matching practical units: grams for meat, fish, tofu, tempeh, lentils, rice, quinoa, potatoes, oats, vegetables, yogurt, nuts, seeds, berries, and avocado; "
-        "large for Eggs, scoop for Whey protein, slice for Whole-grain toast, piece for Banana, and tbsp for Olive oil. "
+        "Use Vietnamese, Vietnam-friendly meals and ingredient combinations. "
+        "Use matching practical units: grams for meat, fish, tofu, beans, rice, noodles, potatoes, oats, vegetables, yogurt, nuts, seeds, and avocado; "
+        "ml for soy milk, large for Trứng gà, scoop for Whey protein, piece for Chuối, and tbsp for Dầu ăn. "
+        "Keep foods practical for Vietnam and respect budget_vnd_per_day and cooking_time_hours_per_day when feasible. "
         "Meal calories and macros must equal the sum of that meal's item calories and macros within normal rounding. "
         "Use exactly Mon-Sun once. "
         f"Use exactly these meal slots for every day, in this order: {meal_slots_json}. "
@@ -580,7 +624,7 @@ def _fallback_workout_plan(request: WorkoutPlanRequest) -> WorkoutPlanPayload:
                 type="training",
                 title=template["title"],
                 estimated_minutes=request.session_minutes,
-                exercises=[ExerciseItem(**exercise) for exercise in template["exercises"]],
+                exercises=[_exercise_with_load_recommendation(ExerciseItem(**exercise), request) for exercise in template["exercises"]],
             )
         )
         training_index += 1
@@ -615,6 +659,7 @@ def _normalize_workout_plan_payload(
 
         if desired_type == "training":
             exercises = source_day.exercises if source_day.type == "training" and source_day.exercises else fallback_day.exercises
+            exercises = [_exercise_with_load_recommendation(exercise, request) for exercise in exercises]
             estimated_minutes = source_day.estimated_minutes if source_day.estimated_minutes > 0 else fallback_day.estimated_minutes
             normalized_days.append(
                 WorkoutDay(
@@ -645,8 +690,8 @@ def _normalize_workout_plan_payload(
 
 
 def _workout_templates(request: WorkoutPlanRequest) -> list[dict[str, Any]]:
-    equipment = {item.lower() for item in request.equipment}
-    bodyweight_only = not equipment or "bodyweight" in equipment
+    equipment = {item.lower() for item in _effective_workout_equipment(request)}
+    bodyweight_only = request.training_location == "home" and not request.equipment
     strength_reps = "4-6" if request.goal == "strength" else "8-12"
     accessory_reps = "10-15" if request.goal != "strength" else "8-10"
     rest_main = 150 if request.goal == "strength" else 90
@@ -705,6 +750,31 @@ def _workout_templates(request: WorkoutPlanRequest) -> list[dict[str, Any]]:
     ]
 
 
+def _effective_workout_equipment(request: WorkoutPlanRequest) -> list[str]:
+    if request.equipment:
+        return request.equipment
+    if request.training_location == "home":
+        return ["bodyweight", "floor space", "chair or bench", "backpack optional"]
+    return ["barbell", "dumbbells", "bench", "cable machine", "lat pulldown", "leg press", "pull-up station"]
+
+
+def _exercise_with_load_recommendation(exercise: ExerciseItem, request: WorkoutPlanRequest) -> ExerciseItem:
+    if exercise.load_recommendation.strip():
+        return exercise
+
+    current_loads = request.current_loads.strip()
+    lower_name = exercise.name.lower()
+    if request.training_location == "home" and not request.equipment:
+        load = "Bodyweight; add a backpack only if you can keep 2 reps in reserve."
+    elif current_loads:
+        load = "Start around 85-90% of your logged load for this movement pattern; keep RPE 6-8 and clean reps."
+    elif any(token in lower_name for token in {"squat", "deadlift", "press", "bench", "row"}):
+        load = "Choose a conservative working weight you can control for all sets at RPE 6-8."
+    else:
+        load = "Use a light to moderate load that leaves 1-3 reps in reserve."
+    return exercise.model_copy(update={"load_recommendation": load})
+
+
 def _mobility_exercises() -> list[ExerciseItem]:
     return [
         ExerciseItem(name="Hip Flexor Stretch", sets=2, reps="45 sec each side", rest_sec=30, notes="Easy breathing."),
@@ -750,40 +820,55 @@ def _fallback_meal_plan(
                     protein_g=totals["protein_g"],
                     carbs_g=totals["carbs_g"],
                     fat_g=totals["fat_g"],
+                    estimated_cost_vnd=totals["estimated_cost_vnd"],
                 )
             )
-        days.append(MealDay(day=day, meals=meals))
+        days.append(_recompute_day(MealDay(day=day, meals=meals)))
 
     safety_notes = [
         "Use this as general nutrition guidance, not medical advice.",
         "Adjust portions based on hunger, training performance, and weekly body-weight trend.",
     ]
+    if any(day.estimated_cost_vnd > request.budget_vnd_per_day for day in days):
+        safety_notes.append("Estimated food cost may exceed your daily budget on some days; reduce premium protein portions or swap to eggs, tofu, chicken, or basa.")
     if workout_schedule:
         safety_notes.append("Meals are adjusted from your latest workout plan: higher carbs on training days and lower carbs on rest days.")
     if request.allergies.strip():
         safety_notes.append("Your listed allergies were considered; verify packaged foods and restaurant meals yourself.")
-    return MealPlanPayload(daily_targets=targets, days=days, safety_notes=safety_notes)
+    return MealPlanPayload(daily_targets=targets, days=days, safety_notes=safety_notes, nutrition_metrics=_nutrition_metrics(request))
 
 
 def _base_meal_targets(request: MealPlanRequest) -> DailyTargets:
-    calories = request.target_calories or _estimate_calories(request)
+    calories = request.target_calories or _nutrition_metrics(request).target_calories
     protein = max(70, round(request.weight_kg * (2.0 if request.goal in {"muscle", "strength", "fat_loss"} else 1.6)))
     fat = round((calories * 0.25) / 9)
     carbs = max(80, round((calories - protein * 4 - fat * 9) / 4))
     return DailyTargets(calories=calories, protein_g=protein, carbs_g=carbs, fat_g=fat)
 
 
-def _estimate_calories(request: MealPlanRequest) -> int:
+def _nutrition_metrics(request: MealPlanRequest) -> NutritionMetrics:
     gender_factor = 5 if request.gender == "male" else -161 if request.gender == "female" else -78
     bmr = 10 * request.weight_kg + 6.25 * request.height_cm - 5 * request.age + gender_factor
-    maintenance = bmr * 1.45
+    activity_factor = ACTIVITY_FACTORS.get(request.activity_level, ACTIVITY_FACTORS["moderate"])
+    tdee = bmr * activity_factor
+    goal_adjustment = 0
     if request.goal == "fat_loss":
-        maintenance -= 350
+        goal_adjustment = -350
     elif request.goal in {"muscle", "strength"}:
-        maintenance += 250
+        goal_adjustment = 250
     elif request.goal == "endurance":
-        maintenance += 150
-    return int(round(max(1200, min(6000, maintenance)) / 50) * 50)
+        goal_adjustment = 150
+    target = request.target_calories or _round_to_nearest_50(tdee + goal_adjustment)
+    return NutritionMetrics(
+        bmr=round(bmr),
+        tdee=round(tdee),
+        activity_level=request.activity_level,
+        activity_factor=activity_factor,
+        goal_adjustment_calories=goal_adjustment,
+        target_calories=target,
+        budget_vnd_per_day=request.budget_vnd_per_day,
+        cooking_time_hours_per_day=request.cooking_time_hours_per_day,
+    )
 
 
 def _latest_workout_plan(db: Session, user_id: int) -> WeeklyWorkoutPlan | None:
@@ -880,12 +965,13 @@ def _normalize_meal_plan_payload(
                 )
             )
 
-        normalized_days.append(MealDay(day=day_name, meals=meals))
+        normalized_days.append(_recompute_day(MealDay(day=day_name, meals=meals)))
 
     return MealPlanPayload(
         daily_targets=_base_meal_targets(request),
         days=normalized_days,
         safety_notes=_unique_notes(payload.safety_notes + fallback.safety_notes),
+        nutrition_metrics=_nutrition_metrics(request),
         workout_sync=payload.workout_sync,
         generation_diagnostics=payload.generation_diagnostics,
     )
@@ -955,6 +1041,7 @@ def _enforce_workout_calorie_order(
         daily_targets=base_targets,
         days=normalized_days,
         safety_notes=safety_notes,
+        nutrition_metrics=_nutrition_metrics(request),
         workout_sync=payload.workout_sync,
     )
 
@@ -1116,7 +1203,7 @@ def _increase_day_calories(
         if not changed:
             break
 
-    return MealDay(day=day.day, meals=meals)
+    return _recompute_day(MealDay(day=day.day, meals=meals))
 
 
 def _decrease_day_calories(day: MealDay, calories_to_remove: int) -> MealDay:
@@ -1144,11 +1231,12 @@ def _decrease_day_calories(day: MealDay, calories_to_remove: int) -> MealDay:
         if remaining <= CALORIE_TARGET_TOLERANCE:
             break
 
-    return MealDay(day=day.day, meals=meals)
+    return _recompute_day(MealDay(day=day.day, meals=meals))
 
 
 def _recompute_day(day: MealDay) -> MealDay:
-    return MealDay(day=day.day, meals=[_recompute_meal(meal) for meal in day.meals])
+    meals = [_recompute_meal(meal) for meal in day.meals]
+    return MealDay(day=day.day, meals=meals, estimated_cost_vnd=sum(meal.estimated_cost_vnd for meal in meals))
 
 
 def _recompute_meal(meal: MealItem) -> MealItem:
@@ -1161,6 +1249,7 @@ def _recompute_meal(meal: MealItem) -> MealItem:
         protein_g=totals["protein_g"],
         carbs_g=totals["carbs_g"],
         fat_g=totals["fat_g"],
+        estimated_cost_vnd=totals["estimated_cost_vnd"],
     )
 
 
@@ -1261,6 +1350,7 @@ def _merge_ingredient(items: list[MealIngredient], ingredient: MealIngredient) -
                 protein_g=existing.protein_g + ingredient.protein_g,
                 carbs_g=existing.carbs_g + ingredient.carbs_g,
                 fat_g=existing.fat_g + ingredient.fat_g,
+                estimated_cost_vnd=existing.estimated_cost_vnd + ingredient.estimated_cost_vnd,
             )
         return items
     items.append(ingredient)
@@ -1292,6 +1382,7 @@ def _ingredient_with_calorie_delta(item: MealIngredient, calorie_delta: int) -> 
         protein_g=max(0, round(item.protein_g * scale)),
         carbs_g=max(0, round(item.carbs_g * scale)),
         fat_g=max(0, round(item.fat_g * scale)),
+        estimated_cost_vnd=max(0, round(item.estimated_cost_vnd * scale)),
     )
 
 
@@ -1311,6 +1402,7 @@ def _ingredient_from_food_unbounded(food: dict[str, Any], quantity: float) -> Me
         protein_g=max(0, round(float(food["protein_g"]) * scale)),
         carbs_g=max(0, round(float(food["carbs_g"]) * scale)),
         fat_g=max(0, round(float(food["fat_g"]) * scale)),
+        estimated_cost_vnd=max(0, round(float(food.get("cost_vnd", 0)) * scale)),
     )
 
 
@@ -1339,9 +1431,9 @@ def _ingredient_food(name: str) -> dict[str, Any] | None:
 def _booster_food(request: MealPlanRequest, prefer: str) -> dict[str, Any]:
     avoid_text = f"{request.allergies} {request.disliked_foods}"
     if prefer == "fat" or request.diet_preference == "low_carb":
-        candidates = ["Mixed nuts", "Avocado", "Pumpkin seeds", "Olive oil"]
+        candidates = ["Đậu phộng", "Bơ", "Hạt bí", "Dầu ăn"]
     else:
-        candidates = ["Cooked brown rice", "Cooked quinoa", "Sweet potato", "Oats", "Banana"]
+        candidates = ["Cơm trắng", "Cơm gạo lứt", "Khoai lang", "Yến mạch", "Chuối"]
     for name in candidates + _safe_food_candidates("fat" if prefer == "fat" else "carb", request.diet_preference):
         if _diet_allows_food(name, request.diet_preference) and not _food_blocked(name, avoid_text):
             return FOOD_DATABASE[name] | {"name": name}
@@ -1428,39 +1520,39 @@ def _meal_templates(request: MealPlanRequest) -> list[dict[str, Any]]:
 
     if vegan:
         return [
-            {"name": "Breakfast", "protein": pick(["Tofu", "Soy yogurt"], "protein"), "carb": pick(["Whole-grain toast", "Oats"], "carb"), "fat": pick(["Avocado", "Pumpkin seeds"], "fat"), "produce": pick(["Spinach", "Berries"], "produce")},
-            {"name": "Lunch", "protein": pick(["Cooked lentils", "Tempeh", "Tofu"], "protein"), "carb": pick(["Cooked brown rice", "Cooked quinoa"], "carb"), "fat": pick(["Olive oil", "Avocado"], "fat"), "produce": pick(["Mixed vegetables", "Green salad"], "produce")},
-            {"name": "Snack", "protein": pick(["Soy yogurt", "Tofu"], "protein"), "carb": pick(["Berries", "Banana"], "carb"), "fat": pick(["Pumpkin seeds", "Mixed nuts"], "fat"), "produce": pick(["Berries", "Banana"], "produce")},
-            {"name": "Dinner", "protein": pick(["Tempeh", "Tofu", "Cooked lentils"], "protein"), "carb": pick(["Cooked quinoa", "Sweet potato"], "carb"), "fat": pick(["Olive oil", "Avocado"], "fat"), "produce": pick(["Mixed vegetables", "Spinach"], "produce")},
+            {"name": "Breakfast", "protein": pick(["Đậu phụ", "Sữa đậu nành không đường"], "protein"), "carb": pick(["Khoai lang", "Yến mạch"], "carb"), "fat": pick(["Bơ", "Hạt bí"], "fat"), "produce": pick(["Cải xanh", "Chuối"], "produce")},
+            {"name": "Lunch", "protein": pick(["Đậu xanh nấu chín", "Đậu phụ", "Đậu hũ non"], "protein"), "carb": pick(["Cơm trắng", "Cơm gạo lứt"], "carb"), "fat": pick(["Dầu ăn", "Bơ"], "fat"), "produce": pick(["Rau muống", "Dưa leo"], "produce")},
+            {"name": "Snack", "protein": pick(["Sữa đậu nành không đường", "Đậu phụ"], "protein"), "carb": pick(["Chuối", "Khoai lang"], "carb"), "fat": pick(["Hạt bí", "Đậu phộng"], "fat"), "produce": pick(["Chuối", "Cà chua"], "produce")},
+            {"name": "Dinner", "protein": pick(["Đậu phụ", "Đậu hũ non", "Đậu xanh nấu chín"], "protein"), "carb": pick(["Bún tươi", "Cơm gạo lứt"], "carb"), "fat": pick(["Dầu ăn", "Bơ"], "fat"), "produce": pick(["Rau muống", "Cải xanh"], "produce")},
         ]
     if vegetarian:
         return [
-            {"name": "Breakfast", "protein": pick(["Greek yogurt", "Eggs", "Tofu"], "protein"), "carb": pick(["Oats", "Whole-grain toast"], "carb"), "fat": pick(["Mixed nuts", "Avocado"], "fat"), "produce": pick(["Banana", "Berries"], "produce")},
-            {"name": "Lunch", "protein": pick(["Eggs", "Tofu", "Cooked lentils"], "protein"), "carb": pick(["Sweet potato", "Cooked brown rice"], "carb"), "fat": pick(["Olive oil", "Avocado"], "fat"), "produce": pick(["Green salad", "Mixed vegetables"], "produce")},
-            {"name": "Snack", "protein": pick(["Greek yogurt", "Whey protein", "Soy yogurt"], "protein"), "carb": pick(["Berries", "Banana"], "carb"), "fat": pick(["Mixed nuts", "Pumpkin seeds"], "fat"), "produce": pick(["Berries", "Banana"], "produce")},
-            {"name": "Dinner", "protein": pick(["Tofu", "Tempeh", "Eggs"], "protein"), "carb": pick(["Cooked brown rice", "Cooked quinoa"], "carb"), "fat": pick(["Olive oil", "Avocado"], "fat"), "produce": pick(["Mixed vegetables", "Spinach"], "produce")},
+            {"name": "Breakfast", "protein": pick(["Sữa chua không đường", "Trứng gà", "Đậu phụ"], "protein"), "carb": pick(["Yến mạch", "Khoai lang"], "carb"), "fat": pick(["Đậu phộng", "Bơ"], "fat"), "produce": pick(["Chuối", "Cà chua"], "produce")},
+            {"name": "Lunch", "protein": pick(["Trứng gà", "Đậu phụ", "Đậu xanh nấu chín"], "protein"), "carb": pick(["Cơm trắng", "Cơm gạo lứt"], "carb"), "fat": pick(["Dầu ăn", "Bơ"], "fat"), "produce": pick(["Rau muống", "Dưa leo"], "produce")},
+            {"name": "Snack", "protein": pick(["Sữa chua không đường", "Whey protein", "Sữa đậu nành không đường"], "protein"), "carb": pick(["Chuối", "Khoai lang"], "carb"), "fat": pick(["Đậu phộng", "Hạt bí"], "fat"), "produce": pick(["Chuối", "Cà chua"], "produce")},
+            {"name": "Dinner", "protein": pick(["Đậu phụ", "Đậu hũ non", "Trứng gà"], "protein"), "carb": pick(["Bún tươi", "Cơm gạo lứt"], "carb"), "fat": pick(["Dầu ăn", "Bơ"], "fat"), "produce": pick(["Cải xanh", "Rau muống"], "produce")},
         ]
     if low_carb:
         return [
-            {"name": "Breakfast", "protein": pick(["Eggs", "Greek yogurt"], "protein"), "carb": pick(["Spinach", "Berries"], "carb"), "fat": pick(["Avocado", "Mixed nuts"], "fat"), "produce": pick(["Spinach", "Berries"], "produce")},
-            {"name": "Lunch", "protein": pick(["Chicken breast", "Lean beef", "Tofu"], "protein"), "carb": pick(["Green salad", "Mixed vegetables"], "carb"), "fat": pick(["Olive oil", "Avocado"], "fat"), "produce": pick(["Green salad", "Mixed vegetables"], "produce")},
-            {"name": "Snack", "protein": pick(["Whey protein", "Greek yogurt"], "protein"), "carb": pick(["Berries", "Spinach"], "carb"), "fat": pick(["Mixed nuts", "Pumpkin seeds"], "fat"), "produce": pick(["Berries", "Spinach"], "produce")},
-            {"name": "Dinner", "protein": pick(["Salmon fillet", "Chicken breast", "Tempeh"], "protein"), "carb": pick(["Mixed vegetables", "Green salad"], "carb"), "fat": pick(["Olive oil", "Avocado"], "fat"), "produce": pick(["Mixed vegetables", "Green salad"], "produce")},
+            {"name": "Breakfast", "protein": pick(["Trứng gà", "Sữa chua không đường"], "protein"), "carb": pick(["Cải xanh", "Dưa leo"], "carb"), "fat": pick(["Bơ", "Đậu phộng"], "fat"), "produce": pick(["Cải xanh", "Dưa leo"], "produce")},
+            {"name": "Lunch", "protein": pick(["Ức gà", "Cá basa", "Đậu phụ"], "protein"), "carb": pick(["Rau muống", "Dưa leo"], "carb"), "fat": pick(["Dầu ăn", "Bơ"], "fat"), "produce": pick(["Rau muống", "Dưa leo"], "produce")},
+            {"name": "Snack", "protein": pick(["Whey protein", "Sữa chua không đường"], "protein"), "carb": pick(["Cà chua", "Dưa leo"], "carb"), "fat": pick(["Đậu phộng", "Hạt bí"], "fat"), "produce": pick(["Cà chua", "Dưa leo"], "produce")},
+            {"name": "Dinner", "protein": pick(["Cá ngừ", "Ức gà", "Cá basa"], "protein"), "carb": pick(["Cải xanh", "Rau muống"], "carb"), "fat": pick(["Dầu ăn", "Bơ"], "fat"), "produce": pick(["Cải xanh", "Rau muống"], "produce")},
         ]
     return [
-        {"name": "Breakfast", "protein": pick(["Eggs", "Greek yogurt", "Whey protein"], "protein"), "carb": pick(["Oats", "Whole-grain toast"], "carb"), "fat": pick(["Mixed nuts", "Avocado"], "fat"), "produce": pick(["Banana", "Berries"], "produce")},
-        {"name": "Lunch", "protein": pick(["Chicken breast", "Lean beef", "Tofu"], "protein"), "carb": pick(["Cooked brown rice", "Cooked quinoa"], "carb"), "fat": pick(["Olive oil", "Avocado"], "fat"), "produce": pick(["Mixed vegetables", "Green salad"], "produce")},
-        {"name": "Snack", "protein": pick(["Greek yogurt", "Whey protein", "Soy yogurt"], "protein"), "carb": pick(["Berries", "Banana"], "carb"), "fat": pick(["Mixed nuts", "Pumpkin seeds"], "fat"), "produce": pick(["Berries", "Banana"], "produce")},
-        {"name": "Dinner", "protein": pick(["Salmon fillet", "Lean beef", "Chicken breast"], "protein"), "carb": pick(["Sweet potato", "Cooked brown rice"], "carb"), "fat": pick(["Olive oil", "Avocado"], "fat"), "produce": pick(["Green salad", "Mixed vegetables"], "produce")},
+        {"name": "Breakfast", "protein": pick(["Trứng gà", "Sữa chua không đường", "Whey protein"], "protein"), "carb": pick(["Yến mạch", "Khoai lang"], "carb"), "fat": pick(["Đậu phộng", "Bơ"], "fat"), "produce": pick(["Chuối", "Cà chua"], "produce")},
+        {"name": "Lunch", "protein": pick(["Ức gà", "Đùi gà bỏ da", "Đậu phụ"], "protein"), "carb": pick(["Cơm trắng", "Cơm gạo lứt"], "carb"), "fat": pick(["Dầu ăn", "Bơ"], "fat"), "produce": pick(["Rau muống", "Dưa leo"], "produce")},
+        {"name": "Snack", "protein": pick(["Sữa chua không đường", "Whey protein", "Sữa đậu nành không đường"], "protein"), "carb": pick(["Chuối", "Khoai lang"], "carb"), "fat": pick(["Đậu phộng", "Hạt bí"], "fat"), "produce": pick(["Chuối", "Cà chua"], "produce")},
+        {"name": "Dinner", "protein": pick(["Cá basa", "Thịt bò nạc", "Ức gà"], "protein"), "carb": pick(["Bún tươi", "Cơm trắng"], "carb"), "fat": pick(["Dầu ăn", "Bơ"], "fat"), "produce": pick(["Cải xanh", "Rau muống"], "produce")},
     ]
 
 
 def _safe_food_candidates(role: str, diet_preference: str) -> list[str]:
     candidates = {
-        "protein": ["Tofu", "Tempeh", "Cooked lentils", "Soy yogurt", "Greek yogurt", "Eggs", "Lean beef", "Chicken breast"],
-        "carb": ["Cooked brown rice", "Cooked quinoa", "Sweet potato", "Oats", "Berries", "Banana"],
-        "fat": ["Olive oil", "Avocado", "Pumpkin seeds", "Mixed nuts"],
-        "produce": ["Spinach", "Green salad", "Mixed vegetables", "Berries", "Banana"],
+        "protein": ["Đậu phụ", "Đậu hũ non", "Đậu xanh nấu chín", "Sữa đậu nành không đường", "Sữa chua không đường", "Trứng gà", "Cá basa", "Ức gà"],
+        "carb": ["Cơm trắng", "Cơm gạo lứt", "Khoai lang", "Yến mạch", "Bún tươi", "Chuối"],
+        "fat": ["Dầu ăn", "Bơ", "Hạt bí", "Đậu phộng"],
+        "produce": ["Rau muống", "Cải xanh", "Dưa leo", "Cà chua", "Chuối"],
     }.get(role, list(FOOD_DATABASE.keys()))
     return [name for name in candidates if _diet_allows_food(name, diet_preference)]
 
@@ -1469,12 +1561,12 @@ def _diet_allows_food(food_name: str, diet_preference: str) -> bool:
     lower_name = food_name.lower()
     if diet_preference == "halal" and any(token in lower_name for token in {"pork", "bacon", "ham"}):
         return False
-    if diet_preference == "vegan" and "soy yogurt" not in lower_name and any(token in lower_name for token in {"chicken", "beef", "salmon", "fish", "egg", "yogurt", "whey", "milk", "meat"}):
+    if diet_preference == "vegan" and "sữa đậu nành" not in lower_name and any(token in lower_name for token in {"chicken", "beef", "salmon", "fish", "egg", "yogurt", "whey", "milk", "meat", "gà", "bò", "cá", "trứng", "sữa chua"}):
         return False
-    if diet_preference == "vegetarian" and any(token in lower_name for token in {"chicken", "beef", "salmon", "fish", "meat"}):
+    if diet_preference == "vegetarian" and any(token in lower_name for token in {"chicken", "beef", "salmon", "fish", "meat", "gà", "bò", "cá"}):
         return False
-    animal_foods = {"Chicken breast", "Lean beef", "Salmon fillet", "Eggs", "Greek yogurt", "Whey protein"}
-    meat_and_fish = {"Chicken breast", "Lean beef", "Salmon fillet"}
+    animal_foods = {"Ức gà", "Đùi gà bỏ da", "Thịt bò nạc", "Cá basa", "Cá ngừ", "Trứng gà", "Sữa chua không đường", "Whey protein"}
+    meat_and_fish = {"Ức gà", "Đùi gà bỏ da", "Thịt bò nạc", "Cá basa", "Cá ngừ"}
     if diet_preference == "vegan":
         return food_name not in animal_foods
     if diet_preference == "vegetarian":
@@ -1488,14 +1580,17 @@ def _food_blocked(food_name: str, avoid_text: str) -> bool:
         return False
     words = {word for word in re.split(r"[^a-zA-Z]+", food_name.lower()) if len(word) >= 3}
     aliases = {
-        "eggs": {"egg", "eggs"},
-        "chicken breast": {"chicken"},
-        "salmon fillet": {"salmon", "fish"},
-        "greek yogurt": {"yogurt", "dairy"},
-        "soy yogurt": {"soy", "yogurt"},
+        "trứng gà": {"egg", "eggs", "trứng"},
+        "ức gà": {"chicken", "gà"},
+        "đùi gà bỏ da": {"chicken", "gà"},
+        "cá basa": {"fish", "cá", "basa"},
+        "cá ngừ": {"fish", "cá", "ngừ", "tuna"},
+        "thịt bò nạc": {"beef", "bò"},
+        "sữa chua không đường": {"yogurt", "dairy", "sữa"},
+        "sữa đậu nành không đường": {"soy", "đậu nành"},
         "whey protein": {"whey", "dairy"},
-        "mixed nuts": {"nuts", "peanut", "almond"},
-        "pumpkin seeds": {"seed", "seeds"},
+        "đậu phộng": {"nuts", "peanut", "đậu phộng"},
+        "hạt bí": {"seed", "seeds", "hạt"},
     }
     words.update(aliases.get(food_name.lower(), set()))
     return any(word in avoid for word in words)
@@ -1540,7 +1635,7 @@ def _quantity_for_macro(food: dict[str, Any], macro: str, target: float) -> floa
 def _default_produce_quantity(food: dict[str, Any]) -> float:
     if food["unit"] in {"piece", "slice"}:
         return _round_quantity(food, 1)
-    if food["name"] in {"Avocado"}:
+    if food["name"] in {"Bơ"}:
         return _round_quantity(food, 60)
     return _round_quantity(food, 120)
 
@@ -1569,6 +1664,7 @@ def _ingredient_from_food(food: dict[str, Any], quantity: float) -> MealIngredie
         protein_g=round(float(food["protein_g"]) * scale),
         carbs_g=round(float(food["carbs_g"]) * scale),
         fat_g=round(float(food["fat_g"]) * scale),
+        estimated_cost_vnd=round(float(food.get("cost_vnd", 0)) * scale),
     )
 
 
@@ -1578,6 +1674,7 @@ def _sum_ingredients(items: list[MealIngredient]) -> dict[str, int]:
         "protein_g": sum(item.protein_g for item in items),
         "carbs_g": sum(item.carbs_g for item in items),
         "fat_g": sum(item.fat_g for item in items),
+        "estimated_cost_vnd": sum(item.estimated_cost_vnd for item in items),
     }
 
 

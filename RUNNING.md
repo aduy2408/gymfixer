@@ -1,100 +1,148 @@
-﻿# Hướng dẫn chạy GymFixer
+# Huong dan chay GymFixer
 
-Dự án chạy theo mô hình:
+Tai lieu nay khop voi cau truc hien tai cua repo tai:
 
-- Backend: chạy bằng Docker Compose để tránh lỗi môi trường Python/CUDA/MediaPipe.
-- Database: PostgreSQL chạy trong Docker Compose.
-- Frontend: chạy local bằng Next.js, không chạy bằng Docker.
+```powershell
+D:\racs\gymfixer
+```
+
+Mo hinh chay khuyen nghi:
+
+- PostgreSQL va backend FastAPI chay bang Docker Compose.
+- Frontend Next.js chay local bang npm.
+- File compose dung trong repo la `docker-compose.yml`.
+
+> Luu y: tai thoi diem cap nhat tai lieu nay, `.env.example` dang bi xoa trong working tree. Neu can, tao lai `.env` theo mau o muc 2.
 
 ---
 
-## 1. Yêu cầu cài sẵn
+## 1. Yeu cau cai san
 
-Cần có:
+Can co:
 
-- Docker Desktop
-- Node.js 18+ hoặc mới hơn
+- Docker Desktop, gom lenh `docker`
+- Node.js 18+ hoac moi hon
 - npm
 - Git
 
-Khuyến nghị kiểm tra nhanh:
+Kiem tra nhanh:
 
 ```powershell
 docker --version
 docker compose version
 node --version
 npm --version
+git --version
 ```
+
+Neu PowerShell bao `docker : The term 'docker' is not recognized`, may chua cai Docker Desktop hoac Docker chua nam trong `PATH`. Cai/mo Docker Desktop, mo lai terminal, roi chay lai lenh kiem tra.
 
 ---
 
-## 2. File môi trường `.env`
+## 2. File moi truong `.env`
 
-Tạo file `.env` ở root dự án:
+Tao file `.env` o root du an:
 
 ```text
-D:\gymfixer\.env
+D:\racs\gymfixer\.env
 ```
 
-Các biến tối thiểu cần có:
+Bien toi thieu de backend Docker noi toi PostgreSQL trong compose:
 
 ```env
-DATABASE_URL=postgresql://gymfixer:gymfixer_password@postgres:5432/gymfixer
+DATABASE_URL=postgresql+psycopg://gymfixer:gymfixer_password@postgres:5432/gymfixer
 JWT_SECRET_KEY=dev-local-change-me
 FRONTEND_URL=http://localhost:3000
 AUTH_EMAIL_VERIFICATION_ENABLED=false
 POSE_BACKEND=mediapipe
 ```
 
-Nếu dùng AI Coaching bằng Gemini, thêm:
+Neu dung Google auth:
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-3-flash-preview
+GOOGLE_CLIENT_ID=your-google-client-id
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-google-client-id
 ```
 
-Lưu ý:
+Neu dung Gemini cho AI coaching hoac weekly planning:
 
-- Không commit `.env` lên Git.
-- `.env` đã nằm trong `.gitignore`.
-- Nên giữ `.env.example` để người khác biết cần biến gì.
+```env
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-3-flash-preview
+GEMINI_MAX_OUTPUT_TOKENS=12000
+POSTURE_LLM_MAX_LOG_FRAMES=60
+```
+
+Neu test posture/video analysis, co the them cac bien tuy chinh:
+
+```env
+POSTURE_SUBJECT_READY_MIN_FRAMES=10
+POSTURE_SUBJECT_MIN_BBOX_AREA=0.035
+POSTURE_SUBJECT_MIN_BBOX_WIDTH=0.12
+POSTURE_SUBJECT_MIN_BBOX_HEIGHT=0.20
+MP_MIN_DET_CONF=0.5
+MP_MIN_TRACK_CONF=0.5
+MP_VIS_THRESHOLD=0.5
+```
+
+Khong commit `.env`.
 
 ---
 
-## 3. Chạy backend bằng Docker
+## 3. Cai dependencies
 
-Mở PowerShell tại root dự án:
-
-```powershell
-cd D:\gymfixer
-```
-
-Build và chạy lần đầu:
+Tu root repo:
 
 ```powershell
-docker compose -f docker-compose1.yml up --build -d
+cd D:\racs\gymfixer
+npm install
+npm --prefix frontend install
 ```
 
-Các lần sau chỉ cần:
+Neu muon chay backend local khong Docker, cai Python dependencies:
 
 ```powershell
-docker compose -f docker-compose1.yml up -d
+python -m pip install -r backend\requirements.txt
 ```
 
-Kiểm tra container:
+Backend local can PostgreSQL local rieng va `DATABASE_URL` tro toi host local, khac voi Docker URL trong muc 2.
+
+---
+
+## 4. Chay backend va database bang Docker Compose
+
+Mo PowerShell tai root:
 
 ```powershell
-docker ps
+cd D:\racs\gymfixer
 ```
 
-Kết quả mong muốn:
+Lan dau hoac sau khi doi Dockerfile/dependency:
+
+```powershell
+docker compose up --build -d
+```
+
+Nhung lan chay hang ngay:
+
+```powershell
+docker compose up -d
+```
+
+Kiem tra service:
+
+```powershell
+docker compose ps
+```
+
+Ky vong:
 
 ```text
-project1-backend    Up ... healthy    0.0.0.0:5000->5000/tcp
-project1-postgres   Up ... healthy    0.0.0.0:5432->5432/tcp
+project1-postgres   running/healthy
+project1-backend    running/healthy, port 5000
 ```
 
-Mở backend docs:
+Mo backend docs:
 
 ```text
 http://localhost:5000/docs
@@ -102,7 +150,84 @@ http://localhost:5000/docs
 
 ---
 
-## 4. Xem log backend
+## 5. Chay frontend local
+
+Mo terminal thu hai:
+
+```powershell
+cd D:\racs\gymfixer
+npm --prefix frontend run dev
+```
+
+Hoac:
+
+```powershell
+cd D:\racs\gymfixer\frontend
+npm run dev
+```
+
+Mo frontend:
+
+```text
+http://localhost:3000
+```
+
+Frontend mac dinh goi backend tai `http://localhost:5000`. Neu can doi backend URL:
+
+```powershell
+$env:NEXT_PUBLIC_API_BASE_URL="http://localhost:5000"
+npm --prefix frontend run dev
+```
+
+---
+
+## 6. Lenh nhanh hang ngay
+
+Terminal 1:
+
+```powershell
+cd D:\racs\gymfixer
+docker compose up -d
+```
+
+Terminal 2:
+
+```powershell
+cd D:\racs\gymfixer
+npm --prefix frontend run dev
+```
+
+Mo:
+
+```text
+http://localhost:3000
+http://localhost:5000/docs
+```
+
+---
+
+## 7. Chay bang npm scripts tu root
+
+Repo co cac script:
+
+```powershell
+npm run frontend
+npm run backend
+npm run dev
+npm run build:frontend
+```
+
+`npm run backend` chay FastAPI local bang:
+
+```powershell
+python -m uvicorn main:app --host 0.0.0.0 --port 5000 --reload --reload-dir backend --app-dir backend
+```
+
+Chi dung script backend local khi da co PostgreSQL local va `DATABASE_URL` phu hop. Voi setup Docker, uu tien `docker compose up -d`.
+
+---
+
+## 8. Xem log va kiem tra backend
 
 Xem log backend:
 
@@ -116,260 +241,176 @@ Xem realtime:
 docker logs -f project1-backend
 ```
 
-Xem 100 dòng cuối:
+Xem 100 dong cuoi:
 
 ```powershell
 docker logs --tail 100 project1-backend
 ```
 
-Xem bằng compose:
+Xem qua compose:
 
 ```powershell
-docker compose -f docker-compose1.yml logs -f backend
+docker compose logs -f backend
+docker compose logs -f postgres
+docker compose logs -f
 ```
 
-Xem backend và PostgreSQL cùng lúc:
-
-```powershell
-docker compose -f docker-compose1.yml logs -f
-```
-
----
-
-## 5. Dừng backend
-
-Dừng chỉ backend:
-
-```powershell
-docker compose -f docker-compose1.yml stop backend
-```
-
-Dừng cả backend và PostgreSQL:
-
-```powershell
-docker compose -f docker-compose1.yml down
-```
-
-Dừng và xóa volume database local:
-
-```powershell
-docker compose -f docker-compose1.yml down -v
-```
-
-Cẩn thận: `down -v` xóa dữ liệu PostgreSQL local.
-
----
-
-## 6. Chạy frontend local
-
-Mở terminal khác:
-
-```powershell
-cd D:\gymfixer\frontend
-npm install
-npm run dev
-```
-
-Mở frontend:
-
-```text
-http://localhost:3000
-```
-
-Có thể chạy từ root:
-
-```powershell
-cd D:\gymfixer
-npm run frontend
-```
-
----
-
-## 7. Lệnh chạy nhanh hằng ngày
-
-Terminal 1 — backend:
-
-```powershell
-cd D:\gymfixer
-docker compose -f docker-compose1.yml up -d
-```
-
-Terminal 2 — frontend:
-
-```powershell
-cd D:\gymfixer\frontend
-npm run dev
-```
-
-Mở:
-
-```text
-http://localhost:3000
-```
-
----
-
-## 8. Khi nào cần `--build` lại Docker?
-
-Cần build lại backend khi sửa các file như:
-
-- `backend/Dockerfile`
-- `backend/requirements.txt`
-- dependency Python
-- cấu hình hệ thống trong image
-
-Lệnh build lại:
-
-```powershell
-docker compose -f docker-compose1.yml up --build -d
-```
-
-Nếu chỉ sửa code frontend, không cần build Docker.
-
-Nếu chỉ sửa code backend Python, image hiện tại copy code vào image nên nên build lại:
-
-```powershell
-docker compose -f docker-compose1.yml up --build -d backend
-```
-
----
-
-## 9. Troubleshooting frontend
-
-### Lỗi: `Could not find a production build in the '.next' directory`
-
-Nguyên nhân: chạy production server `next start` khi chưa build.
-
-Fix cho dev:
-
-```powershell
-cd D:\gymfixer\frontend
-npm run dev
-```
-
-Nếu muốn chạy production:
-
-```powershell
-cd D:\gymfixer\frontend
-npm run build
-npm start
-```
-
-Trong dự án hiện tại, khuyến nghị dùng `npm run dev`.
-
----
-
-### Lỗi: `.next\dev\lock`, port 3000 đang bị dùng
-
-Nguyên nhân: còn process Next.js cũ đang chạy.
-
-Fix nhanh:
-
-```powershell
-Get-Process node
-Stop-Process -Id <PID> -Force
-Remove-Item -Recurse -Force .next
-npm run dev
-```
-
-Nếu log báo port 3000 đang dùng nhưng app vẫn chạy port 3001, mở:
-
-```text
-http://localhost:3001
-```
-
----
-
-### Lỗi: `package.json is not parseable` hoặc ký tự `﻿` đầu file
-
-Nguyên nhân: `package.json` bị lưu UTF-8 with BOM.
-
-Fix bằng PowerShell:
-
-```powershell
-$path = "D:\gymfixer\frontend\package.json"
-$json = Get-Content -Path $path -Raw -Encoding UTF8 | ConvertFrom-Json
-$content = $json | ConvertTo-Json -Depth 10
-[System.IO.File]::WriteAllText($path, $content, [System.Text.UTF8Encoding]::new($false))
-Remove-Item -Path "D:\gymfixer\frontend\.next" -Recurse -Force -ErrorAction SilentlyContinue
-npm run dev
-```
-
----
-
-## 10. Troubleshooting backend Docker
-
-### Lỗi NVIDIA/CUDA
-
-Lỗi thường gặp:
-
-```text
-nvidia-container-cli: requirement error: unsatisfied condition: cuda>=13.0
-```
-
-Nguyên nhân: Docker image yêu cầu CUDA cao hơn driver NVIDIA trên máy.
-
-Fix hiện tại trong dự án:
-
-- `backend/Dockerfile` dùng CUDA 12.4:
-
-```dockerfile
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
-```
-
-- `docker-compose1.yml` không ép GPU reservation để tránh NVIDIA prestart hook.
-
-Nếu vẫn lỗi, rebuild:
-
-```powershell
-docker compose -f docker-compose1.yml up --build -d
-```
-
----
-
-### Backend không healthy
-
-Xem log:
-
-```powershell
-docker logs --tail 200 project1-backend
-```
-
-Kiểm tra docs:
+Kiem tra docs:
 
 ```text
 http://localhost:5000/docs
 ```
 
-Kiểm tra container:
+---
+
+## 9. Dung, restart, reset database
+
+Dung backend va database:
 
 ```powershell
-docker ps -a --filter "name=project1"
+docker compose down
+```
+
+Restart:
+
+```powershell
+docker compose restart
+```
+
+Rebuild backend:
+
+```powershell
+docker compose up --build -d backend
+```
+
+Xoa ca database volume local:
+
+```powershell
+docker compose down -v
+```
+
+Can than: `down -v` xoa du lieu PostgreSQL local.
+
+---
+
+## 10. Test va build
+
+Smoke test weekly planning:
+
+```powershell
+python backend\smoke_weekly_planning.py
+```
+
+Lint frontend:
+
+```powershell
+npm --prefix frontend run lint
+```
+
+Build frontend:
+
+```powershell
+npm run build:frontend
 ```
 
 ---
 
-### Database lỗi hoặc muốn reset dữ liệu local
+## 11. Troubleshooting
 
-Dừng và xóa volume:
+### Docker command khong ton tai
 
-```powershell
-docker compose -f docker-compose1.yml down -v
+Loi:
+
+```text
+docker : The term 'docker' is not recognized
 ```
 
-Chạy lại:
+Fix:
+
+1. Cai Docker Desktop.
+2. Mo Docker Desktop va doi engine ready.
+3. Dong/mo lai PowerShell.
+4. Chay lai:
 
 ```powershell
-docker compose -f docker-compose1.yml up -d
+docker --version
+docker compose version
 ```
 
-Cẩn thận: lệnh này xóa dữ liệu PostgreSQL local.
+### Backend khong healthy
+
+Xem container:
+
+```powershell
+docker compose ps
+docker compose logs --tail 200 backend
+```
+
+Neu loi env, kiem tra `.env` co `DATABASE_URL`, `JWT_SECRET_KEY`, `FRONTEND_URL`.
+
+### Database bi loi hoac muon reset
+
+```powershell
+docker compose down -v
+docker compose up -d
+```
+
+Can than vi se xoa database local.
+
+### Frontend port 3000 dang bi dung
+
+Kiem tra Node process:
+
+```powershell
+Get-Process node
+```
+
+Dung process cu:
+
+```powershell
+Stop-Process -Id <PID> -Force
+```
+
+Neu Next tu chuyen sang port 3001, mo:
+
+```text
+http://localhost:3001
+```
+
+### Loi Next production build
+
+Neu gap:
+
+```text
+Could not find a production build in the '.next' directory
+```
+
+Dung dev server:
+
+```powershell
+npm --prefix frontend run dev
+```
+
+Hoac build truoc khi chay production:
+
+```powershell
+npm --prefix frontend run build
+npm --prefix frontend run start
+```
+
+Luu y: script `frontend:start` hien tai van la `next dev`, nen dev flow uu tien `npm --prefix frontend run dev`.
 
 ---
 
-## 11. Git trước khi push
+## 12. Truoc khi commit
 
-Không commit:
+Kiem tra:
+
+```powershell
+git status --short
+```
+
+Khong commit:
 
 ```text
 .env
@@ -381,30 +422,19 @@ test_video/
 *.mp4
 ```
 
-Kiểm tra trước khi commit:
-
-```powershell
-git status --short
-```
-
-Nếu `.env` xuất hiện trong status, không commit.
-
 ---
 
-## 12. Tóm tắt cực nhanh
+## 13. Tom tat cuc nhanh
 
 ```powershell
-cd D:\gymfixer
-docker compose -f docker-compose1.yml up -d
+cd D:\racs\gymfixer
+docker compose up -d
+npm --prefix frontend run dev
 ```
 
-```powershell
-cd D:\gymfixer\frontend
-npm run dev
-```
-
-Mở:
+Mo:
 
 ```text
 http://localhost:3000
+http://localhost:5000/docs
 ```

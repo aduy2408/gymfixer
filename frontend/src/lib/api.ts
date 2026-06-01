@@ -165,9 +165,11 @@ export type WorkoutPlanRequest = {
   gender: "male" | "female" | "other" | "";
   goal: "fat_loss" | "muscle" | "strength" | "endurance" | "rehab" | "general";
   level: "beginner" | "intermediate" | "advanced";
+  training_location: "home" | "gym";
   days_per_week: number;
   session_minutes: number;
   equipment: string[];
+  current_loads?: string;
   injuries?: string;
   focus_muscles?: string[];
 };
@@ -191,6 +193,7 @@ export type WorkoutPlan = {
       reps: string;
       rest_sec: number;
       notes?: string;
+      load_recommendation?: string;
     }>;
   }>;
   safety_notes: string[];
@@ -202,12 +205,15 @@ export type MealPlanRequest = {
   weight_kg: number;
   gender: "male" | "female" | "other" | "";
   goal: "fat_loss" | "muscle" | "strength" | "endurance" | "general";
+  activity_level: "sedentary" | "light" | "moderate" | "active" | "very_active";
   meals_per_day: number;
   diet_preference: "none" | "vegetarian" | "vegan" | "halal" | "low_carb";
   allergies?: string;
   disliked_foods?: string;
   budget: "low" | "medium" | "high";
   cooking_time: "minimal" | "normal" | "meal_prep";
+  budget_vnd_per_day: number;
+  cooking_time_hours_per_day: number;
   target_calories?: number | null;
   adjust_for_workout_plan: boolean;
 };
@@ -226,6 +232,16 @@ export type MealPlan = {
     carbs_g: number;
     fat_g: number;
   };
+  nutrition_metrics?: {
+    bmr: number;
+    tdee: number;
+    activity_level: MealPlanRequest["activity_level"];
+    activity_factor: number;
+    goal_adjustment_calories: number;
+    target_calories: number;
+    budget_vnd_per_day: number;
+    cooking_time_hours_per_day: number;
+  } | null;
   workout_sync?: {
     enabled: boolean;
     source_workout_plan_id: number | null;
@@ -235,6 +251,7 @@ export type MealPlan = {
   } | null;
   days: Array<{
     day: "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
+    estimated_cost_vnd?: number;
     meals: Array<{
       name: string;
       time?: string;
@@ -248,12 +265,14 @@ export type MealPlan = {
             protein_g: number;
             carbs_g: number;
             fat_g: number;
+            estimated_cost_vnd?: number;
           }
       >;
       calories: number;
       protein_g: number;
       carbs_g: number;
       fat_g: number;
+      estimated_cost_vnd?: number;
     }>;
   }>;
   safety_notes: string[];
