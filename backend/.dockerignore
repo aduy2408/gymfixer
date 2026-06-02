@@ -7,7 +7,8 @@ env/
 venv/
 .venv
 p1_env/
-../.env
+.env
+.env.*
 .env.local
 *.egg-info
 dist
