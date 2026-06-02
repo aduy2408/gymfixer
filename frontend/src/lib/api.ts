@@ -2,8 +2,8 @@
 
 import { getAuthToken } from "@/lib/auth";
 
-export type ExerciseId = "squat" | "bicep_curl";
-export type CameraView = "side" | "front" | "three_quarter";
+export type ExerciseId = "squat" | "lunge" | "bicep_curl";
+export type CameraView = "auto" | "side" | "front" | "three_quarter";
 export type PoseBackend = "mediapipe" | "vitpose";
 export type SubscriptionTier = "free" | "trial" | "paid";
 
@@ -95,6 +95,9 @@ export type VideoAnalysisResult = {
   pose_backend?: string;
   summary: {
     camera_view?: CameraView | string;
+    camera_view_requested?: CameraView | string;
+    camera_view_counts?: Record<string, number>;
+    camera_view_confidence?: number | null;
     pose_backend?: string;
     frames_received: number;
     frames_analyzed: number;
@@ -190,12 +193,14 @@ export type WorkoutSession = {
 
 export type AnalyticsSummary = {
   total_sessions: number;
+  completed_sessions?: number;
   total_reps: number;
   sessions_by_exercise: Record<string, number>;
   reps_by_exercise: Record<string, number>;
   avg_quality_ratio: number | null;
   avg_processing_ms: number | null;
   top_feedback: Record<string, number>;
+  top_failures?: Record<string, number>;
   llm_enabled_count: number;
   recent_sessions: WorkoutSession[];
 };
@@ -325,11 +330,31 @@ export type MealPlan = {
 };
 
 let latestAnalysisMemory: StoredAnalysis | null = null;
+const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
 
 export function apiBase(): string {
   const envBase = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
   if (envBase) return envBase.replace(/\/$/, "");
   return "http://localhost:5000";
+}
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: init.signal || controller.signal });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error(`Request timed out. Check that the backend is reachable at ${apiBase()}.`);
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 async function parseResponse<T>(response: Response, fallback: string): Promise<T> {
@@ -354,11 +379,11 @@ async function authFetch(path: string, init: RequestInit = {}) {
   const token = getAuthToken();
   const headers = new Headers(init.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetch(apiPath(path), { ...init, headers });
+  return fetchWithTimeout(apiPath(path), { ...init, headers });
 }
 
 export async function login(email: string, password: string): Promise<AuthResponse> {
-  const response = await fetch(`${apiBase()}/auth/login`, {
+  const response = await fetchWithTimeout(`${apiBase()}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -367,7 +392,7 @@ export async function login(email: string, password: string): Promise<AuthRespon
 }
 
 export async function register(name: string, email: string, password: string): Promise<AuthUser> {
-  const response = await fetch(`${apiBase()}/auth/register`, {
+  const response = await fetchWithTimeout(`${apiBase()}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, email, password }),
@@ -410,7 +435,7 @@ export async function logout(): Promise<{ message: string }> {
 }
 
 export async function loginWithGoogle(token: string): Promise<AuthResponse> {
-  const response = await fetch(`${apiBase()}/auth/google`, {
+  const response = await fetchWithTimeout(`${apiBase()}/auth/google`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token }),

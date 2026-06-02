@@ -13,6 +13,13 @@ from entitlements import history_limit_for_user
 
 router = APIRouter(tags=["users", "workouts", "analytics"])
 
+ANALYSIS_FAILURE_LABELS = {
+    "decode_errors": "Frame decode errors",
+    "no_pose_frames": "No pose detected",
+    "visibility_failed_frames": "Low landmark visibility",
+    "waiting_for_subject_frames": "Waiting for subject",
+}
+
 
 @router.get("/me")
 def me(current_user: User = Depends(get_current_user)) -> dict[str, Any]:
@@ -80,11 +87,31 @@ def analytics_summary(
         .all()
     )
 
+    recent_sessions = (
+        db.query(WorkoutSession)
+        .options(joinedload(WorkoutSession.analysis_result))
+        .filter(
+            WorkoutSession.user_id == current_user.id,
+            WorkoutSession.status == "completed",
+        )
+        .order_by(WorkoutSession.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    return _build_analytics_summary(completed_rows, recent_sessions)
+
+
+def _build_analytics_summary(
+    completed_rows: list[tuple[WorkoutSession, AnalysisResult]],
+    recent_sessions: list[WorkoutSession],
+) -> dict[str, Any]:
     total_sessions = len(completed_rows)
     total_reps = sum(result.rep_count or 0 for _, result in completed_rows)
     sessions_by_exercise: Counter[str] = Counter()
     reps_by_exercise: Counter[str] = Counter()
     top_feedback: Counter[str] = Counter()
+    top_failures: Counter[str] = Counter()
     quality_values: list[float] = []
     processing_values: list[int] = []
     llm_enabled_count = 0
@@ -94,6 +121,10 @@ def analytics_summary(
         reps_by_exercise.update({session.exercise: result.rep_count or 0})
         if result.top_feedback_json:
             top_feedback.update(result.top_feedback_json)
+        for field, label in ANALYSIS_FAILURE_LABELS.items():
+            count = int(getattr(result, field, 0) or 0)
+            if count > 0:
+                top_failures.update({label: count})
         if result.quality_ratio is not None:
             quality_values.append(float(result.quality_ratio))
         if result.processing_ms is not None:
@@ -101,23 +132,16 @@ def analytics_summary(
         if result.llm_enabled:
             llm_enabled_count += 1
 
-    recent_sessions = (
-        db.query(WorkoutSession)
-        .options(joinedload(WorkoutSession.analysis_result))
-        .filter(WorkoutSession.user_id == current_user.id)
-        .order_by(WorkoutSession.created_at.desc())
-        .limit(5)
-        .all()
-    )
-
     return {
         "total_sessions": total_sessions,
+        "completed_sessions": total_sessions,
         "total_reps": total_reps,
         "sessions_by_exercise": dict(sessions_by_exercise),
         "reps_by_exercise": dict(reps_by_exercise),
         "avg_quality_ratio": _average(quality_values),
         "avg_processing_ms": _average(processing_values),
         "top_feedback": dict(top_feedback.most_common(8)),
+        "top_failures": dict(top_failures.most_common(5)),
         "llm_enabled_count": llm_enabled_count,
         "recent_sessions": [
             _session_to_response(session, include_analysis=False)

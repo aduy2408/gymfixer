@@ -1,6 +1,5 @@
-﻿# Backend - Python FastAPI application with NVIDIA CUDA 13.0 Support
-# Matches host CUDA version and p1_env Python 3.10 version
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+﻿# Backend - Python FastAPI application with NVIDIA CUDA 12.6 support
+FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04
 
 # Avoid prompt during installations
 ENV DEBIAN_FRONTEND=noninteractive
@@ -32,6 +31,10 @@ RUN python3 -m pip install --upgrade pip
 
 # Copy and install Python dependencies
 COPY requirements.txt .
+RUN pip install --no-cache-dir \
+    torch==2.6.0 \
+    torchvision==0.21.0 \
+    --index-url https://download.pytorch.org/whl/cu126
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download the ViTPose model to keep the container ready for offline inference

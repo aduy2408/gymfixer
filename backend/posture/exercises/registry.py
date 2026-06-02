@@ -23,5 +23,6 @@ FEEDBACK_FUNCTIONS = {
 
 PHASE_DETECTORS = {
     "squat": squat.PhaseDetector,
+    "lunge": lunge.PhaseDetector,
     "bicep_curl": bicep_curl.PhaseDetector,
 }

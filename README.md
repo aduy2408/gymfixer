@@ -368,14 +368,16 @@ When Gemini is enabled, backend sends a compact posture log to Gemini. If the Ge
 The active session-analysis flow supports:
 
 - `squat`
+- `lunge`
 - `bicep_curl`
 
-The backend still contains some rules/utilities for other exercises, but the Next dashboard only exposes the two exercises currently supported by the batch video-analysis flow.
+The backend still contains some rules/utilities for other exercises, but the Next dashboard only exposes the exercises currently supported by the batch video-analysis flow.
 
 Implementation notes:
 
 - `backend/posture/mediapipe_utils.py` owns pose backend processing and visibility gates.
 - `backend/posture/exercises/<exercise>.py` owns each exercise's angle extraction, feedback rules, and phase detector when available.
+- `backend/posture/session_analysis.py` owns the FastAPI routes; helper modules for frame processing, preview frames, summaries, Gemini coaching, and persistence live under `backend/posture/sessions_related/`.
 - `backend/posture/feedback.py` and `backend/posture/phase_detector.py` are compatibility facades over the exercise registry.
 - Bicep curl rep counting is tracked per arm, so a visible non-working arm no longer suppresses reps from the working arm.
 

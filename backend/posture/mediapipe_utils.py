@@ -1,11 +1,18 @@
-import mediapipe as mp
 import cv2
 import logging
 import os
 
-mp_pose = mp.solutions.pose
-
 logger = logging.getLogger("posture.mediapipe_utils")
+
+
+class _LazyMediaPipePose:
+    def __getattr__(self, name: str):
+        import mediapipe as mp
+
+        return getattr(mp.solutions.pose, name)
+
+
+mp_pose = _LazyMediaPipePose()
 
 
 # ---------------------------------------------------------------------------
@@ -62,25 +69,36 @@ class LandmarkSmoother:
 # Minimum visibility score for a keypoint to be considered reliable
 _VIS_THRESHOLD = float(os.getenv("MP_VIS_THRESHOLD", "0.5"))
 
-# Critical keypoint indices per exercise (MediaPipe PoseLandmark values)
-_CRITICAL_KP = {
-    'squat': [
-        mp_pose.PoseLandmark.LEFT_HIP.value,
-        mp_pose.PoseLandmark.RIGHT_HIP.value,
-        mp_pose.PoseLandmark.LEFT_KNEE.value,
-        mp_pose.PoseLandmark.RIGHT_KNEE.value,
-        mp_pose.PoseLandmark.LEFT_ANKLE.value,
-        mp_pose.PoseLandmark.RIGHT_ANKLE.value,
-    ],
-    'bicep_curl': [
-        mp_pose.PoseLandmark.LEFT_SHOULDER.value,
-        mp_pose.PoseLandmark.RIGHT_SHOULDER.value,
-        mp_pose.PoseLandmark.LEFT_ELBOW.value,
-        mp_pose.PoseLandmark.RIGHT_ELBOW.value,
-        mp_pose.PoseLandmark.LEFT_WRIST.value,
-        mp_pose.PoseLandmark.RIGHT_WRIST.value,
-    ],
-}
+def _critical_kp(exercise: str) -> list[int]:
+    pose = mp_pose.PoseLandmark
+    return {
+        'squat': [
+            pose.LEFT_HIP.value,
+            pose.RIGHT_HIP.value,
+            pose.LEFT_KNEE.value,
+            pose.RIGHT_KNEE.value,
+            pose.LEFT_ANKLE.value,
+            pose.RIGHT_ANKLE.value,
+        ],
+        'lunge': [
+            pose.LEFT_SHOULDER.value,
+            pose.RIGHT_SHOULDER.value,
+            pose.LEFT_HIP.value,
+            pose.RIGHT_HIP.value,
+            pose.LEFT_KNEE.value,
+            pose.RIGHT_KNEE.value,
+            pose.LEFT_ANKLE.value,
+            pose.RIGHT_ANKLE.value,
+        ],
+        'bicep_curl': [
+            pose.LEFT_SHOULDER.value,
+            pose.RIGHT_SHOULDER.value,
+            pose.LEFT_ELBOW.value,
+            pose.RIGHT_ELBOW.value,
+            pose.LEFT_WRIST.value,
+            pose.RIGHT_WRIST.value,
+        ],
+    }.get(exercise, [])
 
 
 def check_visibility(landmarks, exercise: str) -> tuple[bool, list[str]]:
@@ -125,7 +143,7 @@ def check_visibility(landmarks, exercise: str) -> tuple[bool, list[str]]:
             return True, []
         return False, missing_by_side
 
-    kp_indices = _CRITICAL_KP.get(exercise, [])
+    kp_indices = _critical_kp(exercise)
     if not kp_indices or not landmarks:
         return True, []
 
@@ -252,4 +270,11 @@ def get_angles_for_exercise(exercise, landmarks):
 # Default singleton reused by the WebSocket handler
 # ---------------------------------------------------------------------------
 
-DEFAULT_POSE_PROCESSOR = None if os.getenv("POSE_BACKEND", "mediapipe").strip().lower() == "vitpose" else PoseProcessor()
+DEFAULT_POSE_PROCESSOR = None
+
+
+def get_default_pose_processor() -> PoseProcessor:
+    global DEFAULT_POSE_PROCESSOR
+    if DEFAULT_POSE_PROCESSOR is None:
+        DEFAULT_POSE_PROCESSOR = PoseProcessor()
+    return DEFAULT_POSE_PROCESSOR

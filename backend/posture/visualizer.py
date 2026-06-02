@@ -1,12 +1,13 @@
-import mediapipe as mp
 import cv2
 import logging
-import os
-
-mp_drawing = mp.solutions.drawing_utils
-mp_pose = mp.solutions.pose
 
 logger = logging.getLogger("posture.visualizer")
+
+
+def _mediapipe_drawing():
+    import mediapipe as mp
+
+    return mp.solutions.drawing_utils, mp.solutions.pose
 
 
 def draw_skeleton_bytes(frame, pose_landmarks=None, landmarks_list=None, draw=True):
@@ -31,6 +32,7 @@ def draw_skeleton_bytes(frame, pose_landmarks=None, landmarks_list=None, draw=Tr
             pose_landmarks = None
 
         if pose_landmarks is not None:
+            mp_drawing, mp_pose = _mediapipe_drawing()
             # Safe draw; MediaPipe drawing handles visibility flags.
             mp_drawing.draw_landmarks(
                 annotated,
@@ -55,6 +57,7 @@ def draw_skeleton_bytes(frame, pose_landmarks=None, landmarks_list=None, draw=Tr
                     continue
 
             # draw simple connections
+            _, mp_pose = _mediapipe_drawing()
             for a, b in mp_pose.POSE_CONNECTIONS:
                 try:
                     a_lm = landmarks_list[a]

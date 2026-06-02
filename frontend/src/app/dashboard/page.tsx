@@ -29,14 +29,20 @@ import { mockProfile } from "@/lib/mockData";
 
 const exerciseOptions: Array<{ id: ExerciseId; labelKey: string }> = [
     { id: "squat", labelKey: "dashboard.exercise.squat" },
+    { id: "lunge", labelKey: "dashboard.exercise.lunge" },
     { id: "bicep_curl", labelKey: "dashboard.exercise.bicepCurl" },
 ];
 
-const cameraViewOptions: Array<{ id: CameraView; labelKey?: string; label?: string }> = [
-    { id: "side", labelKey: "dashboard.camera.side" },
-    { id: "front", labelKey: "dashboard.camera.front" },
-    { id: "three_quarter", label: "45°" },
-];
+// Camera view selector is intentionally disabled for now. The backend
+// auto-detects the effective view per frame, including videos where the user
+// rotates between side and front. To re-enable manual selection, restore this
+// options array and the commented UI block in DashboardPage.
+// const cameraViewOptions: Array<{ id: CameraView; labelKey?: string; label?: string }> = [
+//     { id: "auto", labelKey: "dashboard.camera.auto" },
+//     { id: "side", labelKey: "dashboard.camera.side" },
+//     { id: "front", labelKey: "dashboard.camera.front" },
+//     { id: "three_quarter", label: "45°" },
+// ];
 
 const poseBackendOptions: Array<{ id: PoseBackend; label: string }> = [
     { id: "mediapipe", label: "MediaPipe" },
@@ -80,7 +86,7 @@ export default function DashboardPage() {
     const [dragOver, setDragOver] = useState(false);
     const [file, setFile] = useState<File | null>(null);
     const [exercise, setExercise] = useState<ExerciseId>("squat");
-    const [cameraView, setCameraView] = useState<CameraView>("side");
+    const cameraView: CameraView = "auto";
     const [poseBackend, setPoseBackend] = useState<PoseBackend>("mediapipe");
     const [callLlm, setCallLlm] = useState(false);
     const [sampleFps, setSampleFps] = useState(8);
@@ -255,7 +261,7 @@ export default function DashboardPage() {
 
                             <div style={{ marginBottom: "0.9rem" }}>
                                 <label style={labelStyle}>{t("dashboard.exercise")}</label>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
                                     {exerciseOptions.map((option) => (
                                         <button
                                             key={option.id}
@@ -278,9 +284,14 @@ export default function DashboardPage() {
                                 </div>
                             </div>
 
+                            {/*
+                            Manual camera-view selection is disabled while auto
+                            detection is the product default. Re-enable this
+                            block together with cameraViewOptions/useState above
+                            if manual override is needed again.
                             <div style={{ marginBottom: "0.9rem" }}>
                                 <label style={labelStyle}>{t("dashboard.camera")}</label>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
                                     {cameraViewOptions.map((option) => (
                                         <button
                                             key={option.id}
@@ -302,6 +313,7 @@ export default function DashboardPage() {
                                     ))}
                                 </div>
                             </div>
+                            */}
 
                             <div style={{ marginBottom: "0.9rem" }}>
                                 <label style={labelStyle}>{t("dashboard.backend")}</label>

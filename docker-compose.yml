@@ -1,24 +1,4 @@
 ﻿services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: project1-postgres
-    environment:
-      POSTGRES_DB: gymfixer
-      POSTGRES_USER: gymfixer
-      POSTGRES_PASSWORD: gymfixer_password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    networks:
-      - project1-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gymfixer -d gymfixer"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   backend:
     image: aduy2408/gymfixer-backend:latest
     build:
@@ -27,15 +7,13 @@
     container_name: project1-backend
     ports:
       - "5000:5000"
+    gpus: all
     environment:
       - PYTHONUNBUFFERED=1
     env_file:
       - ./.env
     volumes:
       - backend-data:/app/data
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks:
       - project1-network
     restart: unless-stopped
@@ -52,6 +30,4 @@ networks:
 
 volumes:
   backend-data:
-    driver: local
-  postgres-data:
     driver: local

@@ -504,12 +504,29 @@ backend/posture/exercises/
   shoulder_press.py
 ```
 
+Session-analysis support code is split out of the route module:
+
+```text
+backend/posture/session_analysis.py       # FastAPI routes only
+backend/posture/sessions_related/
+  session_models.py        # request models and camera/pose normalizers
+  session_processor.py     # frame-by-frame analysis loop
+  video_sampling.py        # uploaded-video frame sampling and frame decode
+  subject_gate.py          # subject-ready gate
+  preview_frames.py        # representative issue-frame selection
+  session_summary.py       # summary, quality, and local recommendations
+  llm_coach.py             # Gemini prompt construction and API call
+  session_persistence.py   # workout session and analysis DB writes
+  feedback_classifier.py   # shared issue-feedback classifier
+```
+
 Rules for adding or changing an exercise:
 
 - Put angle extraction, feedback generation, and any phase detector in that exercise file.
 - Register the functions/classes in `posture/exercises/registry.py`.
 - Keep `mediapipe_utils.py` focused on pose backends, smoothing, and visibility gates.
 - Keep `feedback.py` and `phase_detector.py` as compatibility facades.
+- Keep `session_analysis.py` route-focused; put session-processing helpers in `posture/sessions_related/`.
 
 Dev commands:
 

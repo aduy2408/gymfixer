@@ -40,7 +40,8 @@ export default function RegisterPage() {
             await register(form.name.trim(), form.email, form.password);
             const data = await login(form.email, form.password);
             setSession(data.access_token, data.user);
-            router.push("/onboarding/intro");
+            router.replace("/onboarding/intro");
+            setLoading(false);
         } catch (err) {
             setLoading(false);
             return setError(err instanceof Error ? err.message : t("auth.registerFailed"));

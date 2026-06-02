@@ -67,9 +67,8 @@ async def posture_ws(websocket: WebSocket):
     await websocket.accept()
     logger.info("WebSocket connection accepted")
 
-    # Reuse the module-level singleton to avoid re-loading the Heavy model per connection
-    pose_processor = getattr(mediapipe_utils, "DEFAULT_POSE_PROCESSOR", None) \
-        or mediapipe_utils.PoseProcessor()
+    # Reuse the lazy singleton to avoid loading MediaPipe during normal API startup.
+    pose_processor = mediapipe_utils.get_default_pose_processor()
 
     # --- Per-session state ---
     exercise: str | None = None

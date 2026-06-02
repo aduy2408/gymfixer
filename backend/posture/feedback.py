@@ -14,6 +14,6 @@ def generate_feedback(
     fn = FEEDBACK_FUNCTIONS.get(exercise)
     if fn is None:
         return ["Exercise not supported yet."]
-    if exercise == "bicep_curl":
+    if exercise in {"bicep_curl", "squat", "lunge"}:
         return fn(angles, phase=phase, camera_view=camera_view)
     return fn(angles, phase=phase)
