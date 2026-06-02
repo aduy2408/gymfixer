@@ -127,12 +127,19 @@ export async function mockDashboardApi(page: Page, subscription = freeSubscripti
     await route.fulfill({
       json: {
         total_sessions: 2,
+        completed_sessions: 2,
         total_reps: 24,
         sessions_by_exercise: { squat: 1, bicep_curl: 1 },
         reps_by_exercise: { squat: 12, bicep_curl: 12 },
         avg_quality_ratio: 0.82,
         avg_processing_ms: 1500,
-        top_feedback: {},
+        top_feedback: { "Keep knees aligned.": 9 },
+        top_rep_issues: { "Keep knees aligned.": 3, "Go deeper.": 2 },
+        rep_issues_by_exercise: {
+          squat: { "Keep knees aligned.": 3, "Go deeper.": 2 },
+          bicep_curl: { "Control the lowering phase.": 1 },
+        },
+        top_failures: { "Keep knees aligned.": 3, "Go deeper.": 2 },
         llm_enabled_count: 0,
         recent_sessions: [],
       },

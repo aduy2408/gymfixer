@@ -53,7 +53,6 @@ function isProblemFeedback(item: string) {
         "shrug",
         "flare",
         "travel forward",
-        "wrist neutral",
         "elbows pinned",
         "elbows tucked",
         "knees",
@@ -66,7 +65,8 @@ function isProblemFeedback(item: string) {
 
 type RepBreakdown = NonNullable<VideoAnalysisResult["summary"]["rep_breakdown"]>;
 type PreviewFrame = NonNullable<VideoAnalysisResult["preview_frames"]>[number];
-type CorrectionRep = RepBreakdown[number] & { representativeFrame?: PreviewFrame };
+type IssueFrame = { issue: string; frame: PreviewFrame };
+type CorrectionRep = RepBreakdown[number] & { issueFrames: IssueFrame[] };
 
 function buildRepBreakdownFromFrameLog(result: VideoAnalysisResult): RepBreakdown {
     const totalReps = result.summary.rep_count || 0;
@@ -198,19 +198,36 @@ function buildCorrectionReps(result: VideoAnalysisResult, repBreakdown: RepBreak
     });
 
     return repBreakdown.map((rep) => {
-        const issues = rep.issues?.filter(isProblemFeedback) || [];
-        const representativeFrame = frames.find((frame) => {
-            const inRepWindow = rep.start_frame !== null && rep.end_frame !== null
-                ? frame.frame_index >= rep.start_frame && frame.frame_index <= rep.end_frame
-                : frame.rep_count === rep.rep_number || frame.rep_count === rep.rep_number - 1;
-            if (!inRepWindow) return false;
-            const frameIssues = frame.problem_feedback?.length
-                ? frame.problem_feedback
-                : (frame.feedback || []).filter(isProblemFeedback);
-            return frameIssues.some((issue) => issues.includes(issue));
-        });
-        return { ...rep, representativeFrame };
-    }).filter((rep) => rep.issues?.filter(isProblemFeedback).length || rep.representativeFrame);
+        const issues = Array.from(new Set(rep.issues?.filter(isProblemFeedback) || []));
+        const issueFrames = issues.map((issue) => {
+            const frame = frames.find((candidate) => {
+                const inRepWindow = rep.start_frame !== null && rep.end_frame !== null
+                    ? candidate.frame_index >= rep.start_frame && candidate.frame_index <= rep.end_frame
+                    : candidate.rep_count === rep.rep_number || candidate.rep_count === rep.rep_number - 1;
+                if (!inRepWindow) return false;
+                const frameIssues = candidate.problem_feedback?.length
+                    ? candidate.problem_feedback
+                    : (candidate.feedback || []).filter(isProblemFeedback);
+                return frameIssues.includes(issue);
+            });
+            return { issue, frame };
+        }).filter((item): item is { issue: string; frame: PreviewFrame } => Boolean(item.frame));
+        return { ...rep, issueFrames };
+    }).filter((rep) => rep.issueFrames.length > 0);
+}
+
+function countRepIssues(reps: CorrectionRep[]) {
+    return reps.reduce((total, rep) => total + rep.issueFrames.length, 0);
+}
+
+function inferVideoDuration(result: VideoAnalysisResult, repBreakdown: RepBreakdown) {
+    const timestamps = [
+        ...repBreakdown.flatMap((rep) => [rep.start_ms, rep.end_ms]),
+        ...(result.frame_log || []).map((frame) => frame.timestamp_ms),
+        ...(result.preview_frames || []).map((frame) => frame.timestamp_ms),
+    ].filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    if (!timestamps.length) return null;
+    return Math.max(...timestamps) / 1000;
 }
 
 export default function AnalysisPage() {
@@ -275,14 +292,12 @@ export default function AnalysisPage() {
         );
     }
 
-    const qualityRatio = result.summary.analysis_quality?.active_window_usable_ratio;
-    const qualityScore = qualityRatio === undefined
-        ? Math.round((result.summary.frames_analyzed / Math.max(1, result.summary.frames_received)) * 100)
-        : Math.round(qualityRatio * 100);
     const repBreakdown = result.summary.rep_breakdown?.length
         ? result.summary.rep_breakdown
         : buildRepBreakdownFromFrameLog(result);
     const correctionReps = buildCorrectionReps(result, repBreakdown);
+    const issueCount = countRepIssues(correctionReps);
+    const durationSeconds = inferVideoDuration(result, repBreakdown);
 
     return (
         <div style={{ display: "flex", minHeight: "100vh", background: "#f7f7f7", fontFamily: "var(--font-ui)" }}>
@@ -322,22 +337,18 @@ export default function AnalysisPage() {
                         initial={{ opacity: 0, y: 16 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
-                        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4"
+                        className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4"
                     >
-                        <Metric label={t("common.quality")} value={`${qualityScore}%`} color={qualityScore >= 80 ? "#10b981" : qualityScore >= 60 ? "#f59e0b" : "var(--red)"} />
                         <Metric label={t("common.reps")} value={result.summary.rep_count} color="var(--red)" />
-                        <Metric label={t("analysis.framesAnalysed")} value={result.summary.frames_analyzed} color="var(--navy)" />
-                        <Metric label={t("common.processing")} value={`${Math.round(result.summary.processing_ms / 1000)}s`} color="#f59e0b" />
-                        <Metric label={t("common.view")} value={t(`dashboard.camera.${result.summary.camera_view || result.camera_view || "side"}`)} color="#555" />
-                        <Metric label={t("common.backend")} value={result.summary.pose_backend || result.pose_backend || "mediapipe"} color="#555" />
+                        <Metric label={t("common.duration")} value={durationSeconds === null ? t("common.none") : `${Math.round(durationSeconds)}s`} color="var(--navy)" />
+                        <Metric label={t("common.issues")} value={issueCount} color="#f59e0b" />
                     </motion.div>
 
-                    <div className="grid md:grid-cols-5 gap-4 mb-4">
+                    <div className="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-4 mb-4 items-start">
                         <motion.section
                             initial={{ opacity: 0, x: -12 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: 0.2 }}
-                            className="md:col-span-2"
                         >
                             <h2 className="font-bold text-base mb-3 flex items-center gap-2">
                                 <FileVideo size={16} style={{ color: "var(--navy)" }} /> {t("analysis.errors")}
@@ -351,39 +362,34 @@ export default function AnalysisPage() {
                                 {correctionReps.length > 0 ? (
                                     <div className="grid gap-3">
                                         {correctionReps.map((rep) => {
-                                            const issues = rep.issues.filter(isProblemFeedback);
                                             return (
-                                                <figure key={`rep-${rep.rep_number}-${rep.start_frame ?? "missing"}`} style={{ border: "1px solid #e8e8e8", borderRadius: 4, overflow: "hidden", background: "#fafafa" }}>
-                                                    {rep.representativeFrame ? (
-                                                        <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", background: "#111" }}>
-                                                            <Image
-                                                                src={rep.representativeFrame.image}
-                                                                alt={`${t("analysis.rep")} ${rep.rep_number} ${t("analysis.noFrame")}`}
-                                                                fill
-                                                                unoptimized
-                                                                sizes="(max-width: 768px) 100vw, 320px"
-                                                                style={{ objectFit: "contain" }}
-                                                            />
-                                                        </div>
-                                                    ) : (
-                                                        <div style={{ width: "100%", aspectRatio: "16 / 9", background: "#f1f1f1", display: "flex", alignItems: "center", justifyContent: "center", color: "#999", fontSize: "0.8rem" }}>
-                                                            {t("analysis.noFrame")}
-                                                        </div>
-                                                    )}
-                                                    <figcaption style={{ padding: "0.75rem", fontSize: "0.78rem", color: "#777" }}>
+                                                <div key={`rep-${rep.rep_number}-${rep.start_frame ?? "missing"}`} style={{ border: "1px solid #e8e8e8", borderRadius: 4, padding: "0.75rem", background: "#fafafa" }}>
+                                                    <div style={{ fontSize: "0.78rem", color: "#777" }}>
                                                         <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.5rem" }}>
                                                             <span style={{ fontWeight: 800, color: "var(--red)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("analysis.rep")} {rep.rep_number}</span>
                                                             <span>{rep.duration_ms ? `${(rep.duration_ms / 1000).toFixed(1)}s` : rep.completed ? t("common.completed") : t("common.incomplete")}</span>
                                                         </div>
-                                                        <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                                                            {issues.map((issue) => (
-                                                                <span key={issue} style={{ color: "#555", lineHeight: 1.35 }}>
-                                                                    <span style={{ color: "var(--red)", fontWeight: 800 }}>{t("common.issue")}:</span> {issue}
-                                                                </span>
+                                                        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                                                            {rep.issueFrames.map(({ issue, frame }) => (
+                                                                <figure key={`${rep.rep_number}-${issue}`} style={{ border: "1px solid #e8e8e8", borderRadius: 4, overflow: "hidden", background: "#fff" }}>
+                                                                    <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", background: "#111" }}>
+                                                                        <Image
+                                                                            src={frame.image}
+                                                                            alt={`${t("analysis.rep")} ${rep.rep_number} ${t("common.issue")}`}
+                                                                            fill
+                                                                            unoptimized
+                                                                            sizes="(max-width: 768px) 100vw, 320px"
+                                                                            style={{ objectFit: "contain" }}
+                                                                        />
+                                                                    </div>
+                                                                    <figcaption style={{ padding: "0.65rem", color: "#555", lineHeight: 1.35 }}>
+                                                                        <span style={{ color: "var(--red)", fontWeight: 800 }}>{t("common.issue")}:</span> {issue}
+                                                                    </figcaption>
+                                                                </figure>
                                                             ))}
                                                         </div>
-                                                    </figcaption>
-                                                </figure>
+                                                    </div>
+                                                </div>
                                             );
                                         })}
                                     </div>
@@ -399,12 +405,12 @@ export default function AnalysisPage() {
                             initial={{ opacity: 0, x: 12 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: 0.3 }}
-                            className="md:col-span-3"
+                            className="lg:sticky lg:top-5"
                         >
                             <h2 className="font-bold text-base mb-2 flex items-center gap-2">
                                 <Activity size={18} style={{ color: "var(--red)" }} /> {t("analysis.coaching")}
                             </h2>
-                            <div style={{ ...metricStyle, padding: "0.9rem" }}>
+                            <div style={{ ...metricStyle, padding: "0.9rem", maxHeight: "calc(100vh - 7rem)", overflowY: "auto" }}>
                                 <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
                                     <Info size={16} style={{ color: "var(--red)", marginTop: 2, flexShrink: 0 }} />
                                     <div>
@@ -434,11 +440,12 @@ export default function AnalysisPage() {
 }
 
 function MarkdownContent({ content, emptyText }: { content?: string; emptyText: string }) {
-    if (!content?.trim()) {
+    const cleanedContent = stripVisibilityNotes(content || "");
+    if (!cleanedContent.trim()) {
         return <p style={{ color: "#888", fontSize: "0.85rem" }}>{emptyText}</p>;
     }
 
-    const lines = content.split(/\r?\n/);
+    const lines = cleanedContent.split(/\r?\n/);
     const blocks: React.ReactNode[] = [];
     let listItems: string[] = [];
     let listType: "ul" | "ol" | null = null;
@@ -510,6 +517,24 @@ function MarkdownContent({ content, emptyText }: { content?: string; emptyText: 
             {blocks}
         </div>
     );
+}
+
+function stripVisibilityNotes(content: string) {
+    const blocked = [
+        "no person detected",
+        "no pose",
+        "move into frame",
+        "move fully into frame",
+        "can't see",
+        "visibility",
+        "waiting frame",
+        "data quality",
+    ];
+    return content
+        .split(/\r?\n/)
+        .filter((line) => !blocked.some((phrase) => line.toLowerCase().includes(phrase)))
+        .join("\n")
+        .trim();
 }
 
 function renderInlineMarkdown(text: string) {

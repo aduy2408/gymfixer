@@ -26,7 +26,7 @@ def build_gemini_posture_prompt(
     frame_log: list[dict[str, Any]],
 ) -> str:
     coaching_log = [entry for entry in frame_log if entry.get("status") == "ok"]
-    log_for_llm = coaching_log or frame_log
+    log_for_llm = coaching_log
     summary_for_llm = _summary_for_llm(summary, coaching_log)
     phase_segments = _build_phase_segments(log_for_llm)
     compact_log = _compact_log_for_llm(
@@ -40,8 +40,8 @@ def build_gemini_posture_prompt(
         "exercise frames. The provided log has already removed setup/walk-in "
         "frames where the subject was not ready. Do not call the session "
         "fragmented because of missing setup frames. Do not discuss camera angle, "
-        "visibility, waiting frames, no-pose frames, or data quality unless "
-        "there are zero analyzed_frames. Do not diagnose injuries.\n\n"
+        "visibility, waiting frames, no-pose frames, no-person/no-pose detection, "
+        "or data quality. Do not diagnose injuries.\n\n"
         "Return detailed Markdown with these sections:\n"
         "1. Overall assessment - explain rep count, phase quality, and main pattern.\n"
         "2. Main form issues - explain why each issue was detected using phases, angles, or repeated feedback counts.\n"
@@ -92,7 +92,9 @@ def call_gemini_posture_coach(prompt: str) -> dict[str, Any]:
     try:
         candidate = result["candidates"][0]
         parts = candidate["content"]["parts"]
-        recommendations = "\n".join(part.get("text", "") for part in parts).strip()
+        recommendations = _strip_visibility_notes(
+            "\n".join(part.get("text", "") for part in parts).strip()
+        )
         return {
             "recommendations": recommendations,
             "finish_reason": candidate.get("finishReason"),
@@ -124,6 +126,25 @@ def _summary_for_llm(
             "excluded from coaching."
         ),
     }
+
+
+def _strip_visibility_notes(text: str) -> str:
+    blocked = (
+        "no person detected",
+        "no pose",
+        "move into frame",
+        "move fully into frame",
+        "can't see",
+        "visibility",
+        "waiting frame",
+        "data quality",
+    )
+    lines = [
+        line
+        for line in text.splitlines()
+        if not any(phrase in line.lower() for phrase in blocked)
+    ]
+    return "\n".join(lines).strip()
 
 
 def _compact_log_for_llm(

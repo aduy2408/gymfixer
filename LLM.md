@@ -11,7 +11,7 @@ The frontend is now focused on after-session video analysis instead of live webc
 ```text
 Browser
   -> register/login and store JWT
-  -> select exercise: squat | bicep_curl
+  -> select exercise: squat | lunge | bicep_curl
   -> upload video
   -> POST /posture/analyze-video multipart/form-data with Bearer token
 
@@ -46,8 +46,8 @@ Authorization: Bearer <access_token>
 Form fields:
 
 ```text
-exercise=squat | bicep_curl
-camera_view=side | front | three_quarter
+exercise=squat | lunge | bicep_curl
+camera_view=auto | side | front | three_quarter
 pose_backend=mediapipe | vitpose
 file=@video.mp4
 call_llm=true | false
@@ -57,9 +57,10 @@ include_preview=true | false
 preview_max_frames=24
 ```
 
-The active frontend hides `max_frames`, `include_preview`, and
-`preview_max_frames`; it sends internal defaults for short clips around 20
-seconds.
+The active frontend hides `sample_fps`, `camera_view`, `pose_backend`,
+`max_frames`, `include_preview`, and `preview_max_frames`; it sends internal
+defaults. The upload UI recommends 15-30 second clips because longer videos
+take more time to process.
 
 Example:
 
@@ -67,7 +68,7 @@ Example:
 curl -X POST http://127.0.0.1:5000/posture/analyze-video \
   -H "Authorization: Bearer $TOKEN" \
   -F "exercise=bicep_curl" \
-  -F "camera_view=side" \
+  -F "camera_view=auto" \
   -F "pose_backend=mediapipe" \
   -F "file=@/path/to/curl.mp4" \
   -F "call_llm=false" \
@@ -143,21 +144,29 @@ GET /analytics/summary
 ```json
 {
   "total_sessions": 4,
+  "completed_sessions": 4,
   "total_reps": 38,
   "sessions_by_exercise": { "squat": 3, "bicep_curl": 1 },
   "reps_by_exercise": { "squat": 30, "bicep_curl": 8 },
   "avg_quality_ratio": 0.86,
   "avg_processing_ms": 7420,
   "top_feedback": {},
+  "top_rep_issues": {},
+  "rep_issues_by_exercise": {},
   "llm_enabled_count": 1,
   "recent_sessions": []
 }
 ```
 
-The Next frontend includes `/dashboard/history`, backed by `GET /workouts`,
-so users can revisit saved session reports. Full preview images are only
-available immediately after analysis from browser session storage; persisted
-history relies on summary/statistics and `rep_breakdown_json`.
+`total_sessions` and `sessions_by_exercise` are completed-only. The frontend
+keeps `avg_quality_ratio` and `avg_processing_ms` API-compatible but does not
+surface them in the statistics page. Statistics group rep-level issues by
+exercise through `rep_issues_by_exercise`.
+
+The Next frontend includes `/dashboard/history`, backed by `GET /workouts`, so
+users can revisit saved session reports. Full preview images are only available
+immediately after analysis from browser session storage; persisted history
+relies on summary/statistics and `rep_breakdown_json`.
 
 ### `POST /posture/analyze-session`
 
@@ -333,7 +342,10 @@ Computed values include:
 
 Elbow drift combines image-space shoulder/elbow offset and any available `z` offset, normalized by visible torso length when possible and upper-arm length as a fallback. Under MediaPipe, `z` is approximate; under ViTPose, `z` is currently `0.0`, so elbow drift is mainly image-space.
 Torso lean is the image-space angle between the shoulder-to-hip segment and vertical. It helps catch cheat curls where the user leans through the back for momentum while the arm keypoints are still visible.
-Supination is intentionally not detected because the current pose backends do not expose reliable forearm rotation/hand orientation for this use case.
+Supination and wrist-neutral cues are intentionally not shown because the
+current pose backends do not expose reliable forearm rotation/hand orientation
+for this use case. MediaPipe hand/index landmarks are too noisy under dumbbell
+curl side-view videos for a trusted wrist-flexion correction.
 
 Config:
 
@@ -342,7 +354,6 @@ POSTURE_CURL_ELBOW_DRIFT_THRESH=0.40
 POSTURE_CURL_TORSO_LEAN_THRESH=14.0
 POSTURE_CURL_TOP_ROM_THRESH=80.0
 POSTURE_CURL_BOTTOM_ROM_THRESH=150.0
-POSTURE_CURL_WRIST_FLEXION_THRESH=150.0
 POSTURE_CURL_ELBOW_FLARE_THRESH=32.0
 POSTURE_CURL_SHOULDER_ELEVATION_THRESH=0.38
 ```
@@ -388,12 +399,16 @@ This avoids sticking in `LOWERING` or `ASCENDING` solely because of the previous
 
 `/posture/analyze-video` groups form issues by rep in `summary.rep_breakdown`.
 The analysis page uses this data to show `Errors Detected`: each listed rep has
-the distinct issues found in that rep and, when available, one representative
-skeleton frame. The UI intentionally hides setup/no-person frames and repeated
-frame counts because they are not actionable for the user.
+distinct issues found in that rep. Each issue must have its own representative
+skeleton frame to be shown. If no representative frame exists for an issue, the
+UI hides that issue rather than showing text-only feedback. The UI intentionally
+hides setup/no-person/visibility frames and repeated frame counts because they
+are not actionable for the user.
 
 Preview frame selection still exists as a support mechanism. It returns a small
-set of skeleton overlays for problem frames, not every bad frame.
+set of skeleton overlays for distinct problem frames, not every bad frame. A
+new issue inside the same rep can bypass the normal preview stride so the report
+has evidence for each displayed issue.
 
 Frontend options:
 
@@ -439,6 +454,8 @@ Important behavior:
 
 - The LLM receives only `status == "ok"` analyzed frames.
 - Setup/walk-in/no-pose/waiting frames are excluded from the coaching prompt.
+- Visibility/no-person/data-quality lines are stripped from LLM output before
+  display.
 - This prevents the model from calling a session fragmented just because the user walked into frame.
 - UI/debug still shows `waiting_for_subject_frames` separately.
 - If Gemini quota is exceeded or the API request fails, the backend now fails clearly when `call_llm=true`; it does not silently fallback.
@@ -471,17 +488,21 @@ Kept:
 
 - exercise selector
 - upload video panel
-- sample FPS / max frames controls
 - Gemini toggle
 - automatic mistake-frame selection
-- result metrics: reps, analyzed frames, quality, processing time
+- upload hint recommending 15-30 second clips
+- result metrics: reps, video duration, issue count
 - Errors Detected grouped by rep
-- representative correction frame per rep when preview data is available
+- representative correction frame per issue
 - rule-based or Gemini coaching
 - History page for previous saved sessions
 
 Removed from Dashboard:
 
+- manual camera-view selector
+- pose-backend selector
+- sample FPS / max frames controls
+- quality, analyzed-frame, processing, view, and backend report metrics
 - live camera feed
 - live WebSocket connection status
 - Start/Stop realtime session buttons

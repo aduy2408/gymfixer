@@ -118,6 +118,35 @@ def test_preview_keeps_repeated_issue_for_new_rep():
     assert (1, issue) in preview_rep_issues
 
 
+def test_preview_keeps_new_issue_in_same_rep_even_when_stride_is_large():
+    frame = np.zeros((24, 32, 3), dtype=np.uint8)
+    preview_frames = []
+    preview_rep_issues: set[tuple[int, str]] = set()
+
+    maybe_add_preview_frame(
+        preview_frames,
+        frame=frame,
+        pose_landmarks=None,
+        entry=_entry(frame_index=1, rep_count=1, issue="Keep your elbows pinned to your sides."),
+        include_preview=True,
+        preview_max_frames=3,
+        preview_stride=10,
+        preview_rep_issues=preview_rep_issues,
+    )
+    maybe_add_preview_frame(
+        preview_frames,
+        frame=frame,
+        pose_landmarks=None,
+        entry=_entry(frame_index=2, rep_count=1, issue="Lower to full elbow extension before starting the next rep."),
+        include_preview=True,
+        preview_max_frames=3,
+        preview_stride=10,
+        preview_rep_issues=preview_rep_issues,
+    )
+
+    assert len(preview_frames) == 2
+
+
 def _entry(*, frame_index: int, rep_count: int, issue: str) -> dict:
     return {
         "frame_index": frame_index,

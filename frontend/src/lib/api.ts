@@ -200,6 +200,8 @@ export type AnalyticsSummary = {
   avg_quality_ratio: number | null;
   avg_processing_ms: number | null;
   top_feedback: Record<string, number>;
+  top_rep_issues?: Record<string, number>;
+  rep_issues_by_exercise?: Record<string, Record<string, number>>;
   top_failures?: Record<string, number>;
   llm_enabled_count: number;
   recent_sessions: WorkoutSession[];

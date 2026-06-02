@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { AlertTriangle, Dumbbell, History, RotateCcw } from "lucide-react";
@@ -36,6 +36,9 @@ export default function StatisticsPage() {
     const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(true);
+    const rightRailRef = useRef<HTMLElement | null>(null);
+    const [rightRailHeight, setRightRailHeight] = useState<number | null>(null);
+    const [isDesktopGrid, setIsDesktopGrid] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -54,14 +57,60 @@ export default function StatisticsPage() {
         };
     }, [t]);
 
-    const formIssues = useMemo(() => {
-        return Object.entries(analytics?.top_feedback || {})
+    useEffect(() => {
+        const node = rightRailRef.current;
+        if (!node || typeof ResizeObserver === "undefined") {
+            return;
+        }
+        const observer = new ResizeObserver(([entry]) => {
+            setRightRailHeight(Math.round(entry.contentRect.height));
+        });
+        observer.observe(node);
+        return () => observer.disconnect();
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === "undefined") {
+            return;
+        }
+        const media = window.matchMedia("(min-width: 1024px)");
+        const update = () => setIsDesktopGrid(media.matches);
+        update();
+        media.addEventListener("change", update);
+        return () => media.removeEventListener("change", update);
+    }, []);
+
+    const issueGroups = useMemo(() => {
+        const grouped = analytics?.rep_issues_by_exercise || {};
+        const rows = Object.entries(grouped)
+            .map(([exercise, issues]) => {
+                const entries = Object.entries(issues)
+                    .filter(([item]) => isProblemFeedback(item))
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 3);
+                const total = entries.reduce((sum, [, count]) => sum + count, 0);
+                return { exercise, entries, total };
+            })
+            .filter((group) => group.entries.length > 0)
+            .sort((a, b) => b.total - a.total);
+        if (rows.length > 0) {
+            return rows;
+        }
+        const fallbackEntries = Object.entries(analytics?.top_rep_issues || analytics?.top_failures || {})
             .filter(([item]) => isProblemFeedback(item))
             .slice(0, 8);
+        return fallbackEntries.length
+            ? [{ exercise: "all", entries: fallbackEntries, total: fallbackEntries.reduce((sum, [, count]) => sum + count, 0) }]
+            : [];
     }, [analytics]);
 
-    const maxIssueCount = Math.max(1, ...formIssues.map(([, count]) => count));
-    const exerciseRows = Object.keys(analytics?.sessions_by_exercise || {});
+    const maxIssueCount = Math.max(1, ...issueGroups.flatMap((group) => group.entries.map(([, count]) => count)));
+    const exerciseRows = Object.keys(analytics?.sessions_by_exercise || {}).sort(
+        (a, b) => (analytics?.sessions_by_exercise[b] ?? 0) - (analytics?.sessions_by_exercise[a] ?? 0)
+    );
+    const recentSessions = (analytics?.recent_sessions || []).filter((session) => session.status === "completed");
+    const completedSessions = analytics?.completed_sessions ?? analytics?.total_sessions ?? 0;
+    const issueCardMaxHeight = isDesktopGrid && rightRailHeight ? Math.max(420, rightRailHeight) : undefined;
 
     return (
         <div style={{ display: "flex", minHeight: "100vh", background: "#f7f7f7", fontFamily: "'Barlow', sans-serif" }}>
@@ -87,37 +136,60 @@ export default function StatisticsPage() {
                     )}
 
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        <Metric label={t("common.sessions")} value={loading ? "..." : analytics?.total_sessions ?? 0} />
+                        <Metric label={t("stats.completedSessions")} value={loading ? "..." : completedSessions} />
                         <Metric label={t("common.reps")} value={loading ? "..." : analytics?.total_reps ?? 0} />
-                        <Metric label={t("stats.avgQuality")} value={analytics?.avg_quality_ratio == null ? t("common.none") : `${Math.round(analytics.avg_quality_ratio * 100)}%`} />
-                        <Metric label={t("stats.avgProcessing")} value={analytics?.avg_processing_ms == null ? t("common.none") : `${Math.round(analytics.avg_processing_ms / 1000)}s`} />
+                        <Metric label={t("stats.exerciseTypes")} value={loading ? "..." : exerciseRows.length} />
+                        <Metric label={t("stats.aiCoached")} value={loading ? "..." : analytics?.llm_enabled_count ?? 0} />
                     </div>
 
                     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-                        <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} style={{ ...cardStyle, padding: "1.25rem" }}>
-                            <h2 className="font-bold text-base mb-4 flex items-center gap-2">
-                                <AlertTriangle size={17} style={{ color: "#f59e0b" }} /> {t("stats.commonIssues")}
-                            </h2>
-                            {formIssues.length > 0 ? (
-                                <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
-                                    {formIssues.map(([issue, count]) => (
-                                        <div key={issue}>
-                                            <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", marginBottom: "0.35rem" }}>
-                                                <p style={{ fontSize: "0.88rem", color: "#444", lineHeight: 1.35 }}>{issue}</p>
-                                                <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "var(--red)", whiteSpace: "nowrap" }}>{count} {t("stats.frames")}</span>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                            <motion.section
+                                initial={{ opacity: 0, y: 14 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                style={{
+                                    ...cardStyle,
+                                    padding: "1.25rem",
+                                    maxHeight: issueCardMaxHeight,
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    overflow: "hidden",
+                                }}
+                            >
+                                <h2 className="font-bold text-base mb-4 flex items-center gap-2">
+                                    <AlertTriangle size={17} style={{ color: "#f59e0b" }} /> {t("stats.commonIssues")}
+                                </h2>
+                                {issueGroups.length > 0 ? (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: "1rem", overflowY: "auto", minHeight: 0, paddingRight: "0.25rem" }}>
+                                        {issueGroups.map((group) => (
+                                            <div key={group.exercise} style={{ border: "1px solid #eee", borderRadius: 4, padding: "0.85rem", background: "#fafafa" }}>
+                                                <p style={{ fontSize: "0.78rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "#555", marginBottom: "0.65rem" }}>
+                                                    {group.exercise === "all" ? t("stats.commonIssues") : formatExerciseName(group.exercise, t)}
+                                                </p>
+                                                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                                                    {group.entries.map(([issue, count]) => (
+                                                        <div key={`${group.exercise}-${issue}`}>
+                                                            <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", marginBottom: "0.35rem" }}>
+                                                                <p style={{ fontSize: "0.86rem", color: "#444", lineHeight: 1.35 }}>{issue}</p>
+                                                                <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "var(--red)", whiteSpace: "nowrap" }}>{count} {t("stats.repOccurrences")}</span>
+                                                            </div>
+                                                            <div style={{ height: 7, background: "#f0f0f0", borderRadius: 999, overflow: "hidden" }}>
+                                                                <div style={{ height: "100%", width: `${Math.max(8, (count / maxIssueCount) * 100)}%`, background: "var(--red)" }} />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
-                                            <div style={{ height: 7, background: "#f0f0f0", borderRadius: 999, overflow: "hidden" }}>
-                                                <div style={{ height: "100%", width: `${Math.max(8, (count / maxIssueCount) * 100)}%`, background: "var(--red)" }} />
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <EmptyState text={t("stats.noIssues")} />
-                            )}
-                        </motion.section>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <EmptyState text={t("stats.noIssues")} />
+                                )}
+                            </motion.section>
 
-                        <aside style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                        </div>
+
+                        <aside ref={rightRailRef} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                             <section style={{ ...cardStyle, padding: "1rem" }}>
                                 <h2 className="font-bold text-sm mb-3 flex items-center gap-2">
                                     <Dumbbell size={16} style={{ color: "var(--navy)" }} /> {t("stats.exercises")}
@@ -145,9 +217,9 @@ export default function StatisticsPage() {
                                 <h2 className="font-bold text-sm mb-3 flex items-center gap-2">
                                     <History size={16} style={{ color: "var(--red)" }} /> {t("stats.recent")}
                                 </h2>
-                                {analytics?.recent_sessions?.length ? (
+                                {recentSessions.length ? (
                                     <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-                                        {analytics.recent_sessions.map((session) => (
+                                        {recentSessions.map((session) => (
                                             <Link key={session.id} href={`/dashboard/analysis/${session.id}`}>
                                                 <div style={{ border: "1px solid #eee", borderRadius: 4, padding: "0.7rem", background: "#fafafa", cursor: "pointer" }}>
                                                     <p style={{ fontSize: "0.78rem", fontWeight: 800, color: "#444", textTransform: "uppercase", letterSpacing: "0.05em" }}>

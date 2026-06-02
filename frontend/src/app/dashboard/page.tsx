@@ -44,13 +44,9 @@ const exerciseOptions: Array<{ id: ExerciseId; labelKey: string }> = [
 //     { id: "three_quarter", label: "45°" },
 // ];
 
-const poseBackendOptions: Array<{ id: PoseBackend; label: string }> = [
-    { id: "mediapipe", label: "MediaPipe" },
-    { id: "vitpose", label: "ViTPose" },
-];
-
 const DEFAULT_MAX_FRAMES = 240;
 const DEFAULT_MISTAKE_FRAMES = 12;
+const DEFAULT_SAMPLE_FPS = 8;
 
 const cardStyle: React.CSSProperties = {
     background: "#fff",
@@ -68,17 +64,6 @@ const labelStyle: React.CSSProperties = {
     color: "#555",
 };
 
-const inputStyle: React.CSSProperties = {
-    width: "100%",
-    background: "#f2f2f2",
-    border: "none",
-    borderRadius: 4,
-    padding: "9px 12px",
-    fontSize: "0.8rem",
-    color: "#0a0a0a",
-    outline: "none",
-};
-
 export default function DashboardPage() {
     const router = useRouter();
     const { t } = useI18n();
@@ -89,10 +74,10 @@ export default function DashboardPage() {
     const cameraView: CameraView = "auto";
     const [poseBackend, setPoseBackend] = useState<PoseBackend>("mediapipe");
     const [callLlm, setCallLlm] = useState(false);
-    const [sampleFps, setSampleFps] = useState(8);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
     const [lastResult, setLastResult] = useState<VideoAnalysisResult | null>(null);
+    const [videoDurationSeconds, setVideoDurationSeconds] = useState<number | null>(null);
     const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
     const [analyticsError, setAnalyticsError] = useState("");
     const [subscription, setSubscription] = useState<SubscriptionSummary | null>(null);
@@ -136,6 +121,30 @@ export default function DashboardPage() {
         setFile(event.target.files?.[0] || null);
     };
 
+    useEffect(() => {
+        if (!file) {
+            setVideoDurationSeconds(null);
+            return;
+        }
+        const objectUrl = URL.createObjectURL(file);
+        const video = document.createElement("video");
+        video.preload = "metadata";
+        video.src = objectUrl;
+        video.onloadedmetadata = () => {
+            setVideoDurationSeconds(Number.isFinite(video.duration) ? video.duration : null);
+            URL.revokeObjectURL(objectUrl);
+        };
+        video.onerror = () => {
+            setVideoDurationSeconds(null);
+            URL.revokeObjectURL(objectUrl);
+        };
+        return () => {
+            video.onloadedmetadata = null;
+            video.onerror = null;
+            URL.revokeObjectURL(objectUrl);
+        };
+    }, [file]);
+
     const handleAnalyze = async () => {
         if (!file || isLoading) return;
 
@@ -150,7 +159,7 @@ export default function DashboardPage() {
                 cameraView,
                 poseBackend,
                 callLlm,
-                sampleFps,
+                sampleFps: DEFAULT_SAMPLE_FPS,
                 maxFrames: DEFAULT_MAX_FRAMES,
                 includePreview: true,
                 previewMaxFrames: DEFAULT_MISTAKE_FRAMES,
@@ -175,8 +184,8 @@ export default function DashboardPage() {
         }
     };
 
-    const quality = lastResult?.summary.analysis_quality?.active_window_usable_ratio;
     const fileSize = file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : "";
+    const issueCount = lastResult ? countRepIssues(lastResult.summary.rep_breakdown) : 0;
 
     return (
         <div style={{ display: "flex", minHeight: "100vh", background: "#f7f7f7", fontFamily: "var(--font-ui)" }}>
@@ -210,7 +219,6 @@ export default function DashboardPage() {
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                             <Metric label={t("common.sessions")} value={analytics?.total_sessions ?? "0"} />
                             <Metric label={t("common.reps")} value={analytics?.total_reps ?? "0"} />
-                            <Metric label={t("stats.avgQuality")} value={analytics?.avg_quality_ratio === null || analytics?.avg_quality_ratio === undefined ? t("common.none") : `${Math.round(analytics.avg_quality_ratio * 100)}%`} />
                             <Metric label={t("subscription.videoQuota")} value={formatRemaining(subscription?.remaining.video_analyses, subscription?.limits.video_analyses, t)} />
                         </div>
                         {analyticsError && (
@@ -282,6 +290,9 @@ export default function DashboardPage() {
                                         </button>
                                     ))}
                                 </div>
+                                <p style={{ fontSize: "0.78rem", color: "#888", lineHeight: 1.55, marginTop: "0.55rem" }}>
+                                    {t("dashboard.clipHint")}
+                                </p>
                             </div>
 
                             {/*
@@ -314,49 +325,6 @@ export default function DashboardPage() {
                                 </div>
                             </div>
                             */}
-
-                            <div style={{ marginBottom: "0.9rem" }}>
-                                <label style={labelStyle}>{t("dashboard.backend")}</label>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
-                                    {poseBackendOptions.map((option) => (
-                                        (() => {
-                                            const disabled = option.id === "vitpose" && subscription ? !subscription.features.vitpose : false;
-                                            return (
-                                        <button
-                                            key={option.id}
-                                            type="button"
-                                            disabled={disabled}
-                                            title={disabled ? t("dashboard.vitposeLocked") : option.label}
-                                            onClick={() => !disabled && setPoseBackend(option.id)}
-                                            style={{
-                                                background: poseBackend === option.id ? "var(--navy)" : "#fff",
-                                                color: poseBackend === option.id ? "#fff" : "#444",
-                                                border: "none",
-                                                padding: "0.5rem 0.7rem",
-                                                fontSize: "0.8rem",
-                                                fontWeight: poseBackend === option.id ? 700 : 500,
-                                                cursor: disabled ? "not-allowed" : "pointer",
-                                                opacity: disabled ? 0.45 : 1,
-                                                textAlign: "left",
-                                            }}
-                                        >
-                                            {option.label}
-                                        </button>
-                                            );
-                                        })()
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="grid gap-3 md:grid-cols-2" style={{ marginBottom: "0.9rem" }}>
-                                <div>
-                                    <label style={labelStyle}>{t("dashboard.sampleFps")}</label>
-                                    <input type="number" min={1} max={30} value={sampleFps} onChange={(event) => setSampleFps(Number(event.target.value))} style={inputStyle} />
-                                </div>
-                                <p style={{ fontSize: "0.78rem", color: "#888", lineHeight: 1.55, alignSelf: "end", marginBottom: "0.15rem" }}>
-                                    {t("dashboard.clipHint")}
-                                </p>
-                            </div>
 
                             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
                                 <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
@@ -398,9 +366,8 @@ export default function DashboardPage() {
                                 {lastResult ? (
                                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
                                         <Metric label={t("common.reps")} value={lastResult.summary.rep_count} />
-                                        <Metric label={t("common.frames")} value={lastResult.summary.frames_analyzed} />
-                                        <Metric label={t("common.processing")} value={`${Math.round(lastResult.summary.processing_ms / 1000)}s`} />
-                                        <Metric label={t("common.quality")} value={quality === undefined ? t("common.none") : `${Math.round(quality * 100)}%`} />
+                                        <Metric label={t("common.duration")} value={formatDuration(videoDurationSeconds, lastResult)} />
+                                        <Metric label={t("common.issues")} value={issueCount} />
                                     </div>
                                 ) : (
                                     <p style={{ fontSize: "0.82rem", color: "#888", lineHeight: 1.6 }}>
@@ -429,4 +396,27 @@ function formatRemaining(remaining: number | null | undefined, limit: number | n
     if (limit === undefined) return t("common.none");
     if (limit === null) return "∞";
     return `${remaining ?? 0}/${limit}`;
+}
+
+function countRepIssues(repBreakdown: VideoAnalysisResult["summary"]["rep_breakdown"] | undefined) {
+    if (!repBreakdown?.length) return 0;
+    return repBreakdown.reduce((total, rep) => {
+        const issues = rep.issues?.length ? rep.issues : Object.keys(rep.issue_counts || {});
+        return total + issues.length;
+    }, 0);
+}
+
+function formatDuration(seconds: number | null, result: VideoAnalysisResult) {
+    const durationSeconds = seconds ?? inferDurationFromReps(result);
+    if (durationSeconds === null) return "n/a";
+    return `${Math.round(durationSeconds)}s`;
+}
+
+function inferDurationFromReps(result: VideoAnalysisResult) {
+    const repBreakdown = result.summary.rep_breakdown || [];
+    const endTimes = repBreakdown
+        .map((rep) => rep.end_ms)
+        .filter((value): value is number => typeof value === "number");
+    if (!endTimes.length) return null;
+    return Math.max(...endTimes) / 1000;
 }

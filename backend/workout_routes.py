@@ -13,13 +13,6 @@ from entitlements import history_limit_for_user
 
 router = APIRouter(tags=["users", "workouts", "analytics"])
 
-ANALYSIS_FAILURE_LABELS = {
-    "decode_errors": "Frame decode errors",
-    "no_pose_frames": "No pose detected",
-    "visibility_failed_frames": "Low landmark visibility",
-    "waiting_for_subject_frames": "Waiting for subject",
-}
-
 
 @router.get("/me")
 def me(current_user: User = Depends(get_current_user)) -> dict[str, Any]:
@@ -77,9 +70,9 @@ def analytics_summary(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    completed_rows = (
-        db.query(WorkoutSession, AnalysisResult)
-        .join(AnalysisResult, AnalysisResult.session_id == WorkoutSession.id)
+    completed_sessions = (
+        db.query(WorkoutSession)
+        .options(joinedload(WorkoutSession.analysis_result))
         .filter(
             WorkoutSession.user_id == current_user.id,
             WorkoutSession.status == "completed",
@@ -99,32 +92,38 @@ def analytics_summary(
         .all()
     )
 
+    completed_rows = [
+        (session, session.analysis_result)
+        for session in completed_sessions
+    ]
     return _build_analytics_summary(completed_rows, recent_sessions)
 
 
 def _build_analytics_summary(
-    completed_rows: list[tuple[WorkoutSession, AnalysisResult]],
+    completed_rows: list[tuple[WorkoutSession, AnalysisResult | None]],
     recent_sessions: list[WorkoutSession],
 ) -> dict[str, Any]:
     total_sessions = len(completed_rows)
-    total_reps = sum(result.rep_count or 0 for _, result in completed_rows)
+    total_reps = sum(result.rep_count or 0 for _, result in completed_rows if result)
     sessions_by_exercise: Counter[str] = Counter()
     reps_by_exercise: Counter[str] = Counter()
     top_feedback: Counter[str] = Counter()
-    top_failures: Counter[str] = Counter()
+    top_rep_issues: Counter[str] = Counter()
+    rep_issues_by_exercise: dict[str, Counter[str]] = {}
     quality_values: list[float] = []
     processing_values: list[int] = []
     llm_enabled_count = 0
 
     for session, result in completed_rows:
         sessions_by_exercise.update([session.exercise])
+        if not result:
+            continue
         reps_by_exercise.update({session.exercise: result.rep_count or 0})
         if result.top_feedback_json:
             top_feedback.update(result.top_feedback_json)
-        for field, label in ANALYSIS_FAILURE_LABELS.items():
-            count = int(getattr(result, field, 0) or 0)
-            if count > 0:
-                top_failures.update({label: count})
+        rep_issues = _rep_issue_occurrences(result.rep_breakdown_json or [])
+        top_rep_issues.update(rep_issues)
+        rep_issues_by_exercise.setdefault(session.exercise, Counter()).update(rep_issues)
         if result.quality_ratio is not None:
             quality_values.append(float(result.quality_ratio))
         if result.processing_ms is not None:
@@ -141,7 +140,12 @@ def _build_analytics_summary(
         "avg_quality_ratio": _average(quality_values),
         "avg_processing_ms": _average(processing_values),
         "top_feedback": dict(top_feedback.most_common(8)),
-        "top_failures": dict(top_failures.most_common(5)),
+        "top_rep_issues": dict(top_rep_issues.most_common(8)),
+        "rep_issues_by_exercise": {
+            exercise: dict(issue_counts.most_common(5))
+            for exercise, issue_counts in rep_issues_by_exercise.items()
+        },
+        "top_failures": dict(top_rep_issues.most_common(5)),
         "llm_enabled_count": llm_enabled_count,
         "recent_sessions": [
             _session_to_response(session, include_analysis=False)
@@ -154,6 +158,19 @@ def _average(values: list[float] | list[int]) -> float | None:
     if not values:
         return None
     return round(sum(values) / len(values), 3)
+
+
+def _rep_issue_occurrences(rep_breakdown: list[dict[str, Any]]) -> Counter[str]:
+    occurrences: Counter[str] = Counter()
+    for rep in rep_breakdown:
+        if not isinstance(rep, dict):
+            continue
+        issues = rep.get("issues")
+        if not issues:
+            issue_counts = rep.get("issue_counts") or {}
+            issues = issue_counts.keys() if isinstance(issue_counts, dict) else []
+        occurrences.update({str(issue) for issue in issues if issue})
+    return occurrences
 
 
 def _session_to_response(

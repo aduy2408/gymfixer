@@ -72,8 +72,6 @@ function subscriptionFeatures(subscription: SubscriptionSummary | null, t: (key:
     return [
         `${formatLimit(subscription.remaining.video_analyses, t)}/${formatLimit(subscription.limits.video_analyses, t)} ${t("subscription.videoQuota")}`,
         `${formatLimit(subscription.remaining.ai_coaching, t)}/${formatLimit(subscription.limits.ai_coaching, t)} ${t("subscription.aiQuota")}`,
-        subscription.features.vitpose ? "MediaPipe + ViTPose" : t("profile.mediaPipeOnly"),
-        subscription.features.full_history ? t("profile.fullHistory") : t("profile.latestHistory"),
     ];
 }
 

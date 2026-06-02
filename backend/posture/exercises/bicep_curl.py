@@ -144,7 +144,6 @@ def generate_feedback(
         angles.get("left_elbow_drift", 0.0),
     )
     torso_lean = angles.get("torso_lean")
-    wrist_angle = angles.get("wrist_angle")
     elbow_flare = angles.get("elbow_flare_angle")
     shoulder_elevation = angles.get("shoulder_elevation_ratio")
 
@@ -152,13 +151,8 @@ def generate_feedback(
     torso_lean_thresh = float(os.getenv("POSTURE_CURL_TORSO_LEAN_THRESH", "14.0"))
     top_rom_thresh = float(os.getenv("POSTURE_CURL_TOP_ROM_THRESH", "80.0"))
     bottom_rom_thresh = float(os.getenv("POSTURE_CURL_BOTTOM_ROM_THRESH", "150.0"))
-    wrist_flexion_thresh = float(os.getenv("POSTURE_CURL_WRIST_FLEXION_THRESH", "150.0"))
     elbow_flare_thresh = float(os.getenv("POSTURE_CURL_ELBOW_FLARE_THRESH", "32.0"))
     shoulder_elevation_thresh = float(os.getenv("POSTURE_CURL_SHOULDER_ELEVATION_THRESH", "0.38"))
-
-    def add_wrist_cue() -> None:
-        if wrist_angle is not None and wrist_angle < wrist_flexion_thresh:
-            feedback.append("Keep your wrist neutral — don't curl the weight with your forearm.")
 
     def add_side_momentum_cues() -> None:
         if torso_lean is not None and torso_lean > torso_lean_thresh:
@@ -177,7 +171,6 @@ def generate_feedback(
             add_side_momentum_cues()
         if front_like:
             add_front_stability_cues()
-        add_wrist_cue()
         if not feedback:
             feedback.append("Curl up — squeeze at the top!")
     elif phase == "CONTRACTED":
@@ -187,7 +180,6 @@ def generate_feedback(
             add_side_momentum_cues()
         if front_like:
             add_front_stability_cues()
-        add_wrist_cue()
         if not feedback:
             feedback.append("Great contraction! Now lower slowly.")
     elif phase == "LOWERING":
@@ -195,13 +187,11 @@ def generate_feedback(
             add_side_momentum_cues()
         if front_like:
             add_front_stability_cues()
-        add_wrist_cue()
         if not feedback:
             feedback.append("Good control on the way down.")
     elif phase == "EXTENDED":
         if min_elbow is not None and min_elbow < bottom_rom_thresh:
             feedback.append("Lower to full elbow extension before starting the next rep.")
-        add_wrist_cue()
         if not feedback:
             feedback.append("Arms extended — ready for the next curl.")
     else:
@@ -213,7 +203,6 @@ def generate_feedback(
             add_side_momentum_cues()
         if front_like:
             add_front_stability_cues()
-        add_wrist_cue()
         if not feedback:
             feedback.append("Nice curls — controlled tempo and full range.")
 

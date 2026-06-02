@@ -23,7 +23,10 @@ export default function DashboardNav() {
   const router = useRouter();
   const { t } = useI18n();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("ptt_sidebar_collapsed") === "true";
+  });
   const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
@@ -31,11 +34,6 @@ export default function DashboardNav() {
     syncUser();
     window.addEventListener("gymfixer-auth-change", syncUser);
     return () => window.removeEventListener("gymfixer-auth-change", syncUser);
-  }, []);
-
-  useEffect(() => {
-    const stored = localStorage.getItem("ptt_sidebar_collapsed");
-    setCollapsed(stored === "true");
   }, []);
 
   const toggleCollapsed = () => {

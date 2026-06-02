@@ -78,14 +78,6 @@ export default function LoginPage() {
                         {t("auth.sideCopy")}
                     </p>
 
-                    <div style={{ marginTop: "2.5rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                        {["auth.loginBullet1", "auth.loginBullet2", "auth.loginBullet3"].map((item) => (
-                            <div key={item} style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--red)", flexShrink: 0 }} />
-                                <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.875rem" }}>{t(item)}</span>
-                            </div>
-                        ))}
-                    </div>
                 </div>
 
                 <p style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.3)" }}>© 2026 PTT</p>

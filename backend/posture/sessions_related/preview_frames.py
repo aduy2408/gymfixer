@@ -81,21 +81,23 @@ def _should_add_preview_frame(
     force: bool,
 ) -> bool:
     frame_index = int(entry.get("frame_index", 0))
+    entry_issues = problem_feedback(entry.get("feedback") or [])
+    rep_count = int(entry.get("rep_count") or 0)
+    has_new_rep_issue = bool(
+        preview_rep_issues is not None
+        and any((rep_count, issue) not in preview_rep_issues for issue in entry_issues)
+    )
+    if has_new_rep_issue:
+        return True
+
     min_gap = max(1, preview_stride)
     last_frame = preview_frames[-1]["frame_index"] if preview_frames else None
     is_spaced = last_frame is None or frame_index - int(last_frame) >= min_gap
     if not is_spaced:
         return False
 
-    entry_issues = problem_feedback(entry.get("feedback") or [])
     if not entry_issues:
         return False
-    rep_count = int(entry.get("rep_count") or 0)
-    if preview_rep_issues is not None and any(
-        (rep_count, issue) not in preview_rep_issues
-        for issue in entry_issues
-    ):
-        return True
     existing_issues = {
         issue
         for preview in preview_frames

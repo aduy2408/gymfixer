@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 from fastapi import HTTPException
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 
 from authentication.models import UsageEvent, User, WeeklyMealPlan, WeeklyWorkoutPlan, WorkoutSession
@@ -227,6 +228,6 @@ def _raise_entitlement_error(code: str, message: str, summary: dict[str, Any]) -
         detail={
             "code": code,
             "message": message,
-            "subscription": summary,
+            "subscription": jsonable_encoder(summary),
         },
     )

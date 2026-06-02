@@ -208,7 +208,11 @@ cd /mnt/data/gymfixer/backend
 POSE_BACKEND=vitpose VITPOSE_DEVICE=auto ../p1_env/bin/uvicorn main:app --host 0.0.0.0 --port 5000 --reload
 ```
 
-Use the frontend normally after the backend starts. The Dashboard includes a temporary `Pose Backend` selector for MediaPipe or ViTPose. The analysis response includes `pose_backend` at the top level and inside `summary`, so you can confirm which backend processed the video.
+Use the frontend normally after the backend starts. The Dashboard no longer
+shows a pose-backend selector; it sends the configured/default backend
+internally. The analysis response still includes `pose_backend` at the top level
+and inside `summary`, so you can confirm which backend processed the video
+while debugging.
 
 Current ViTPose notes:
 
@@ -249,14 +253,15 @@ npm run install:all
 1. Register or log in.
 2. Open the dashboard.
 3. Upload a workout video. Video analysis requires the JWT from login/register.
-4. Choose `squat` or `bicep_curl`.
-5. Tune sample FPS if needed. Keep clips around 20 seconds; max frame and mistake-frame limits are handled internally.
+4. Choose `squat`, `lunge`, or `bicep_curl`.
+5. Use videos around 15-30 seconds. Longer videos require more processing time. Sample FPS, camera view, pose backend, max frame, and mistake-frame limits are handled internally.
 6. Leave `Gemini coaching` off for normal dev usage. Turn it on only when you intentionally want to spend Gemini API quota.
 7. Review the analysis page:
    - rep count
-   - analyzed frame count
+   - video duration
+   - issue count
    - errors detected by rep
-   - representative correction frame for each rep with form issues
+   - representative correction frame for each displayed issue
    - rule-based or Gemini coaching
 8. Open `History` from the dashboard sidebar to revisit previous sessions.
 
@@ -280,8 +285,8 @@ Content-Type: multipart/form-data
 Form fields:
 
 ```text
-exercise=squat | bicep_curl
-camera_view=side | front | three_quarter
+exercise=squat | lunge | bicep_curl
+camera_view=auto | side | front | three_quarter
 pose_backend=mediapipe | vitpose
 file=@video.mp4
 call_llm=false
@@ -291,8 +296,9 @@ include_preview=true
 preview_max_frames=24
 ```
 
-The current frontend sends `max_frames`, `include_preview`, and `preview_max_frames`
-internally. Users do not configure these controls in the dashboard.
+The current frontend sends `camera_view=auto`, `pose_backend`, `sample_fps`,
+`max_frames`, `include_preview`, and `preview_max_frames` internally. Users do
+not configure these controls in the dashboard.
 
 Example:
 
@@ -300,7 +306,7 @@ Example:
 curl -X POST http://127.0.0.1:5000/posture/analyze-video \
   -H "Authorization: Bearer $TOKEN" \
   -F "exercise=squat" \
-  -F "camera_view=side" \
+  -F "camera_view=auto" \
   -F "pose_backend=mediapipe" \
   -F "file=@/path/to/squat.mp4" \
   -F "call_llm=false" \
@@ -317,9 +323,13 @@ To compare pose backends, run the same upload twice with the same form fields, c
 -F "pose_backend=vitpose"    # optional quality experiment
 ```
 
-Compare `frames_analyzed`, `rep_count`, `phase_counts`, `top_feedback`, `angle_stats`, `rep_breakdown`, and the errors detected by rep.
+Compare `rep_count`, `phase_counts`, `top_feedback`, `angle_stats`, `rep_breakdown`, and the errors detected by rep.
 
-Successful video analysis returns the normal analysis payload plus `session_id` and `analysis_id`. The backend persists summary/statistics and `rep_breakdown_json` in PostgreSQL; uploaded videos, preview images, and full frame logs are not stored in the database.
+Successful video analysis returns the normal analysis payload plus `session_id`
+and `analysis_id`. The backend persists summary/statistics and
+`rep_breakdown_json` in PostgreSQL; uploaded videos, preview images, and full
+frame logs are not stored in the database. The report UI only shows a form
+issue when it has a representative skeleton frame; text-only issues are hidden.
 
 ### User History and Analytics
 
@@ -331,7 +341,11 @@ GET /analytics/summary
 Authorization: Bearer <access_token>
 ```
 
-`/analytics/summary` returns user-level statistics such as total sessions, total reps, reps by exercise, average quality ratio, top feedback, LLM run count, and recent sessions.
+`/analytics/summary` returns completed-session statistics such as total sessions,
+total reps, sessions/reps by exercise, rep-level issues grouped by exercise, LLM
+run count, and recent completed sessions. The frontend intentionally hides
+quality and average processing metrics because they are not reliable product
+scores yet.
 
 The Next frontend also includes `/dashboard/history`, which calls `GET /workouts`
 and links each saved session back to `/dashboard/analysis/{session_id}`.

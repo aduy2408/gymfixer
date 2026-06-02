@@ -43,7 +43,6 @@ def is_problem_feedback(item: str) -> bool:
         "shrug",
         "flare",
         "travel forward",
-        "wrist neutral",
         "elbows pinned",
         "elbows tucked",
         "knees out",

@@ -99,11 +99,10 @@ export default function RegisterPage() {
                         {t("auth.sideCopy")}
                     </p>
 
-                    <div style={{ marginTop: "1.6rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                    <div style={{ marginTop: "1.6rem", display: "grid", gridTemplateColumns: "1fr", gap: "0.75rem" }}>
                         {[
                             { value: t("common.freeMetric"), label: t("auth.metricFreeLabel") },
                             { value: "2 min", label: t("auth.metricFirstAnalysis") },
-                            { value: "18+", label: t("auth.metricJoints") },
                             { value: "∞", label: t("auth.metricVideos") },
                         ].map((s) => (
                             <div key={s.label} style={{ padding: "0.75rem", borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)" }}>

@@ -62,7 +62,7 @@ test.describe("authenticated entitlement flows", () => {
     await page.goto("/dashboard");
 
     await expect(page.getByRole("heading", { name: /Analyse Workout Video/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: "ViTPose" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "ViTPose" })).toHaveCount(0);
     await expect(page.getByRole("checkbox", { name: /AI Coaching/i })).toBeDisabled();
     await expect(page.getByText("3/5").first()).toBeVisible();
   });
@@ -128,6 +128,26 @@ test.describe("authenticated entitlement flows", () => {
 
     await page.getByRole("button", { name: "Meal Plan" }).click();
     await expect(page.getByRole("heading", { name: "Meal Inputs" })).toBeVisible();
+  });
+
+  test("statistics page focuses on completed sessions and occurrence counts", async ({ page }) => {
+    await mockDashboardApi(page, freeSubscription);
+    await page.goto("/dashboard/statistics");
+
+    await expect(page.getByRole("heading", { name: "Statistics" })).toBeVisible();
+    await expect(page.getByText("Completed Sessions")).toBeVisible();
+    await expect(page.getByText("Exercise Types")).toBeVisible();
+    await expect(page.getByText("AI Coached")).toBeVisible();
+    await expect(page.getByText("Keep knees aligned.")).toBeVisible();
+    await expect(page.getByText("Go deeper.")).toBeVisible();
+    await expect(page.getByText("Control the lowering phase.")).toBeVisible();
+    await expect(page.getByText("3 reps")).toBeVisible();
+    await expect(page.getByText("2 reps")).toBeVisible();
+    await expect(page.getByText("1 reps")).toBeVisible();
+    await expect(page.getByText("Most Common Analysis Errors")).toHaveCount(0);
+    await expect(page.getByText("Avg Quality")).toHaveCount(0);
+    await expect(page.getByText("Avg Processing")).toHaveCount(0);
+    await expect(page.getByText("frames")).toHaveCount(0);
   });
 
   test("meal plan names switch between English and Vietnamese", async ({ page }) => {
