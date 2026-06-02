@@ -4,16 +4,17 @@ import { motion } from "framer-motion";
 import { Save, CheckCircle } from "lucide-react";
 import DashboardNav from "@/components/DashboardNav";
 import Link from "next/link";
-import { fetchUserProfile, updateUserProfile, UserProfile } from "@/lib/api";
+import { fetchSubscription, fetchUserProfile, startTrial, SubscriptionSummary, updateUserProfile, UserProfile } from "@/lib/api";
 import { setStoredUser } from "@/lib/auth";
+import { localeFor, tierLabel, useI18n } from "@/lib/i18n";
 
 const goals = [
-    { id: "fat_loss", label: "🔥 Fat Loss" },
-    { id: "muscle", label: "💪 Muscle Gain" },
-    { id: "strength", label: "🏋️ Strength" },
-    { id: "endurance", label: "🏃 Endurance" },
-    { id: "rehab", label: "🩺 Rehabilitation" },
-    { id: "general", label: "⚡ General Fitness" },
+    { id: "fat_loss", emoji: "🔥", labelKey: "goals.fatLoss" },
+    { id: "muscle", emoji: "💪", labelKey: "goals.muscle" },
+    { id: "strength", emoji: "🏋️", labelKey: "goals.strength" },
+    { id: "endurance", emoji: "🏃", labelKey: "goals.endurance" },
+    { id: "rehab", emoji: "🩺", labelKey: "goals.rehab" },
+    { id: "general", emoji: "⚡", labelKey: "goals.general" },
 ];
 
 const inputStyle: React.CSSProperties = {
@@ -45,7 +46,45 @@ const sectionTitle = (text: string) => (
 
 const Divider = () => <hr style={{ border: "none", borderTop: "1px solid #e8e8e8", margin: "1.1rem 0" }} />;
 
+function subscriptionCopy(subscription: SubscriptionSummary, t: (key: string) => string) {
+    const tier = tierLabel(subscription.tier, t);
+    const analysisLimit = formatLimit(subscription.limits.video_analyses, t);
+    const analysisRemaining = formatLimit(subscription.remaining.video_analyses, t);
+    if (subscription.tier === "trial") {
+        const daysLeft = subscription.trial_ends_at
+            ? Math.max(0, Math.ceil((new Date(subscription.trial_ends_at).getTime() - Date.now()) / 86400000))
+            : 0;
+        return t("profile.trialCopy")
+            .replace("{tier}", tier)
+            .replace("{remaining}", analysisRemaining)
+            .replace("{limit}", analysisLimit)
+            .replace("{days}", String(daysLeft));
+    }
+    return t("profile.subCopy")
+        .replace("{tier}", tier)
+        .replace("{remaining}", analysisRemaining)
+        .replace("{limit}", analysisLimit)
+        .replace("{window}", t(`subscription.window.${subscription.window}`));
+}
+
+function subscriptionFeatures(subscription: SubscriptionSummary | null, t: (key: string) => string) {
+    if (!subscription) return [t("common.loading")];
+    return [
+        `${formatLimit(subscription.remaining.video_analyses, t)}/${formatLimit(subscription.limits.video_analyses, t)} ${t("subscription.videoQuota")}`,
+        `${formatLimit(subscription.remaining.ai_coaching, t)}/${formatLimit(subscription.limits.ai_coaching, t)} ${t("subscription.aiQuota")}`,
+        subscription.features.vitpose ? "MediaPipe + ViTPose" : t("profile.mediaPipeOnly"),
+        subscription.features.full_history ? t("profile.fullHistory") : t("profile.latestHistory"),
+    ];
+}
+
+function formatLimit(value: number | null | undefined, t: (key: string) => string) {
+    if (value === null) return t("common.unlimited");
+    if (value === undefined) return t("common.none");
+    return String(value);
+}
+
 export default function ProfilePage() {
+    const { t } = useI18n();
     const [form, setForm] = useState({
         name: "",
         email: "",
@@ -59,6 +98,9 @@ export default function ProfilePage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [saved, setSaved] = useState(false);
+    const [subscription, setSubscription] = useState<SubscriptionSummary | null>(null);
+    const [trialError, setTrialError] = useState("");
+    const [startingTrial, setStartingTrial] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -79,13 +121,18 @@ export default function ProfilePage() {
             })
             .catch((err) => {
                 if (cancelled) return;
-                setError(err instanceof Error ? err.message : "Could not load profile.");
+                setError(err instanceof Error ? err.message : t("profile.loadError"));
                 setLoading(false);
             });
+        fetchSubscription()
+            .then((data) => {
+                if (!cancelled) setSubscription(data);
+            })
+            .catch(() => {});
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [t]);
 
     const update = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
         setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -104,11 +151,39 @@ export default function ProfilePage() {
                 goal: form.goal as "" | "fat_loss" | "muscle" | "strength" | "endurance" | "rehab" | "general",
             });
             setProfile(updated);
-            setStoredUser({ id: updated.id, name: updated.name, email: updated.email });
+            setStoredUser({
+                id: updated.id,
+                name: updated.name,
+                email: updated.email,
+                subscription_tier: updated.subscription_tier,
+                trial_started_at: updated.trial_started_at,
+                trial_ends_at: updated.trial_ends_at,
+            });
             setSaved(true);
             setTimeout(() => setSaved(false), 2500);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Could not save profile.");
+                setError(err instanceof Error ? err.message : t("profile.saveErrorShort"));
+        }
+    };
+
+    const handleStartTrial = async () => {
+        setTrialError("");
+        setStartingTrial(true);
+        try {
+            const next = await startTrial();
+            setSubscription(next);
+            setStoredUser({
+                id: profile?.id || "",
+                name: form.name,
+                email: form.email,
+                subscription_tier: next.tier,
+                trial_started_at: next.trial_started_at,
+                trial_ends_at: next.trial_ends_at,
+            });
+        } catch (err) {
+            setTrialError(err instanceof Error ? err.message : t("profile.startTrialError"));
+        } finally {
+            setStartingTrial(false);
         }
     };
 
@@ -119,27 +194,27 @@ export default function ProfilePage() {
                 <div style={{ maxWidth: 1040, margin: "0 auto" }}>
                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
 
-                        <p style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--red)", marginBottom: "0.4rem" }}>Your Account</p>
+                        <p style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--red)", marginBottom: "0.4rem" }}>{t("profile.eyebrow")}</p>
                         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.6rem", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.25rem" }}>
-                            PROFILE SETTINGS
+                            {t("profile.title")}
                         </h1>
                         <p style={{ fontSize: "0.8rem", color: "#999", fontWeight: 300, marginBottom: "1rem" }}>
-                            Manage your account and body metrics
+                            {t("profile.copy")}
                         </p>
 
                         {loading && (
                             <div style={{ background: "#fff", padding: "1rem", borderRadius: 6, border: "1px solid #e8e8e8", color: "#777", fontSize: "0.85rem" }}>
-                                Loading profile...
+                                {t("profile.loading")}
                             </div>
                         )}
 
                         {!loading && (
-                        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 300px", gap: "1rem", marginTop: "1rem" }}>
+                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]" style={{ marginTop: "1rem" }}>
                             {/* Left Side: Profile Form */}
                             <form onSubmit={handleSave} style={{ background: "#fff", padding: "1rem", borderRadius: 6, border: "1px solid #e8e8e8" }}>
 
                                 {/* ── Account ── */}
-                                {sectionTitle("Account")}
+                                {sectionTitle(t("profile.section.account"))}
                                 <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.9rem" }}>
                                     <div style={{ width: 40, height: 40, borderRadius: 4, background: "var(--navy)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem", fontWeight: 900, color: "#fff", flexShrink: 0 }}>
                                         {form.name.charAt(0)}
@@ -148,18 +223,18 @@ export default function ProfilePage() {
                                         <p style={{ fontWeight: 700, fontSize: "0.9rem" }}>{form.name}</p>
                                         <p style={{ fontSize: "0.78rem", color: "#aaa", fontWeight: 300 }}>{form.email}</p>
                                         <p style={{ fontSize: "0.72rem", color: "#ccc", marginTop: "0.15rem" }}>
-                                            Member since {profile?.created_at ? new Date(profile.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "n/a"}
+                                            {t("profile.memberSince")} {profile?.created_at ? new Date(profile.created_at).toLocaleDateString(localeFor(t), { month: "long", year: "numeric" }) : t("common.none")}
                                         </p>
                                     </div>
                                 </div>
                                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
                                     <div>
-                                        <label style={labelStyle}>Full Name</label>
+                                        <label style={labelStyle}>{t("profile.fullName")}</label>
                                         <input type="text" value={form.name} onChange={update("name")} style={inputStyle}
                                             onFocus={(e) => (e.target.style.background = "#e8e8e8")} onBlur={(e) => (e.target.style.background = "#f2f2f2")} />
                                     </div>
                                     <div>
-                                        <label style={labelStyle}>Email</label>
+                                        <label style={labelStyle}>{t("profile.email")}</label>
                                         <input type="email" value={form.email} onChange={update("email")} style={inputStyle}
                                             onFocus={(e) => (e.target.style.background = "#e8e8e8")} onBlur={(e) => (e.target.style.background = "#f2f2f2")} />
                                     </div>
@@ -168,12 +243,12 @@ export default function ProfilePage() {
                                 <Divider />
 
                                 {/* ── Body Metrics ── */}
-                                {sectionTitle("Body Metrics")}
+                                {sectionTitle(t("profile.section.metrics"))}
                                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
                                     {[
-                                        { key: "height", label: "Height (cm)" },
-                                        { key: "weight", label: "Weight (kg)" },
-                                        { key: "age", label: "Age" },
+                                        { key: "height", label: t("profile.height") },
+                                        { key: "weight", label: t("profile.weight") },
+                                        { key: "age", label: t("profile.age") },
                                     ].map(({ key, label }) => (
                                         <div key={key}>
                                             <label style={labelStyle}>{label}</label>
@@ -183,20 +258,20 @@ export default function ProfilePage() {
                                     ))}
                                 </div>
                                 <div>
-                                    <label style={labelStyle}>Gender (optional)</label>
+                                    <label style={labelStyle}>{t("profile.gender")}</label>
                                     <select value={form.gender} onChange={update("gender") as React.ChangeEventHandler<HTMLSelectElement>}
                                         style={{ ...inputStyle, cursor: "pointer", appearance: "none" }}>
-                                        <option value="">Prefer not to say</option>
-                                        <option value="male">Male</option>
-                                        <option value="female">Female</option>
-                                        <option value="other">Other</option>
+                                        <option value="">{t("profile.preferNot")}</option>
+                                        <option value="male">{t("profile.gender.male")}</option>
+                                        <option value="female">{t("profile.gender.female")}</option>
+                                        <option value="other">{t("profile.gender.other")}</option>
                                     </select>
                                 </div>
 
                                 <Divider />
 
                                 {/* ── Fitness Goal ── */}
-                                {sectionTitle("Fitness Goal")}
+                                {sectionTitle(t("profile.section.goal"))}
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
                                     {goals.map((g) => (
                                         <button
@@ -215,7 +290,7 @@ export default function ProfilePage() {
                                                 transition: "background 0.12s",
                                             }}
                                         >
-                                            {g.label}
+                                            {g.emoji} {t(g.labelKey)}
                                         </button>
                                     ))}
                                 </div>
@@ -237,15 +312,15 @@ export default function ProfilePage() {
                                     className="btn-red"
                                     style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "100%", gap: "0.5rem", padding: "0.65rem", fontSize: "0.78rem", borderRadius: 4 }}
                                 >
-                                    {saved ? <><CheckCircle size={15} /> SAVED!</> : <><Save size={15} /> SAVE CHANGES</>}
+                                    {saved ? <><CheckCircle size={15} /> {t("profile.saved").toUpperCase()}</> : <><Save size={15} /> {t("profile.save").toUpperCase()}</>}
                                 </button>
 
                                 <Divider />
 
                                 {/* ── Danger zone ── */}
-                                {sectionTitle("Danger Zone")}
+                                {sectionTitle(t("profile.danger"))}
                                 <p style={{ fontSize: "0.78rem", color: "#aaa", fontWeight: 300, marginBottom: "0.75rem" }}>
-                                    Deleting your account permanently removes all data including videos and analyses.
+                                    {t("profile.deleteCopy")}
                                 </p>
                                 <button
                                     type="button"
@@ -253,7 +328,7 @@ export default function ProfilePage() {
                                     onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--red)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--red)"; }}
                                     onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#eee"; (e.currentTarget as HTMLButtonElement).style.color = "#ccc"; }}
                                 >
-                                    Delete Account
+                                    {t("profile.delete")}
                                 </button>
                             </form>
 
@@ -262,24 +337,24 @@ export default function ProfilePage() {
                                 <div style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 6, padding: "1rem", position: "sticky", top: "1.25rem" }}>
                                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem", marginBottom: "0.9rem" }}>
                                         <div>
-                                            {sectionTitle("Current Subscription")}
+                                            {sectionTitle(t("subscription.current"))}
                                             <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.8rem", lineHeight: 1, color: "var(--black)", marginTop: "-0.25rem" }}>
-                                                FREE <span style={{ fontSize: "1rem", color: "#888", fontWeight: 500, fontFamily: "var(--font-ui)", textTransform: "none" }}>Plan</span>
+                                                {tierLabel(subscription?.tier || profile?.subscription_tier || "free", t).toUpperCase()} <span style={{ fontSize: "1rem", color: "#888", fontWeight: 500, fontFamily: "var(--font-ui)", textTransform: "none" }}>{t("common.plan")}</span>
                                             </p>
                                         </div>
                                         <div style={{ background: "rgba(16, 185, 129, 0.1)", color: "#10b981", padding: "0.3rem 0.6rem", borderRadius: 4, fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                            Active
+                                            {subscription?.trial_expired ? t("common.expired") : t("common.active")}
                                         </div>
                                     </div>
 
                                     <p style={{ fontSize: "0.8rem", color: "#555", marginBottom: "1rem", lineHeight: 1.45 }}>
-                                        You are currently on the Free plan. This gives you access to basic form analysis for up to 5 videos per month.
+                                        {subscription ? subscriptionCopy(subscription, t) : t("profile.loadingSub")}
                                     </p>
 
                                     <div style={{ padding: "0.9rem", background: "#f9f9f9", borderRadius: 6, border: "1px solid #f0f0f0", marginBottom: "1rem" }}>
-                                        <p style={{ fontSize: "0.72rem", fontWeight: 700, marginBottom: "0.7rem", color: "#333", textTransform: "uppercase", letterSpacing: "0.05em" }}>Current Features Included</p>
+                                        <p style={{ fontSize: "0.72rem", fontWeight: 700, marginBottom: "0.7rem", color: "#333", textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("profile.featuresIncluded")}</p>
                                         <ul style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
-                                            {["5 Video Uploads per month", "Basic Pose Analysis", "Standard Processing Time"].map((feature, i) => (
+                                            {subscriptionFeatures(subscription, t).map((feature, i) => (
                                                 <li key={i} style={{ display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.78rem", color: "#555" }}>
                                                     <CheckCircle size={15} color="var(--red)" /> {feature}
                                                 </li>
@@ -287,14 +362,21 @@ export default function ProfilePage() {
                                         </ul>
                                     </div>
 
+                                    {trialError && <div style={{ marginBottom: "0.75rem" }}><p style={{ color: "var(--red)", fontSize: "0.78rem" }}>{trialError}</p></div>}
+
                                     <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                                        {subscription?.tier === "free" && !subscription.trial_started_at && (
+                                            <button type="button" onClick={handleStartTrial} className="btn-outline-red" disabled={startingTrial} style={{ width: "100%", padding: "0.65rem", fontSize: "0.78rem", borderRadius: 4 }}>
+                                                {startingTrial ? t("common.loading") : t("subscription.startTrial")}
+                                            </button>
+                                        )}
                                         <Link href="/pricing" style={{ width: "100%" }}>
                                             <button className="btn-red" style={{ width: "100%", padding: "0.65rem", fontSize: "0.78rem", borderRadius: 4 }}>
-                                                Upgrade Plan
+                                                {t("profile.upgradePlan")}
                                             </button>
                                         </Link>
                                         <button className="btn-outline-red" style={{ width: "100%", padding: "0.65rem", fontSize: "0.78rem", borderRadius: 4 }}>
-                                            Manage Billing
+                                            {t("subscription.manageBilling")}
                                         </button>
                                     </div>
                                 </div>

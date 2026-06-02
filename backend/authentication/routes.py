@@ -38,6 +38,7 @@ from .utils import (
     send_verification_email,
     verify_password,
 )
+from entitlements import start_trial_for_user, subscription_summary
 from usage_events import log_usage_event
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -65,6 +66,9 @@ def _profile_response(user: User) -> dict:
         "id": user.id,
         "name": user.name,
         "email": user.email,
+        "subscription_tier": user.subscription_tier,
+        "trial_started_at": user.trial_started_at,
+        "trial_ends_at": user.trial_ends_at,
         "height_cm": profile.height_cm if profile else None,
         "weight_kg": profile.weight_kg if profile else None,
         "age": profile.age if profile else None,
@@ -133,6 +137,25 @@ def me(current_user: User = Depends(get_current_user)):
 @router.get("/profile", response_model=UserProfileOut)
 def get_profile(current_user: User = Depends(get_current_user)):
     return _profile_response(current_user)
+
+
+@router.get("/subscription")
+def get_subscription(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    return subscription_summary(db, current_user)
+
+
+@router.post("/trial/start")
+def start_trial(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    summary = start_trial_for_user(db, current_user)
+    log_usage_event(db, event_name="trial_started", user_id=current_user.id)
+    db.commit()
+    return summary
 
 
 @router.put("/profile", response_model=UserProfileOut)

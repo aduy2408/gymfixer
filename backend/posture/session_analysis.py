@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session as DBSession
 from authentication.database import get_db
 from authentication.models import AnalysisResult, User, WorkoutSession
 from authentication.utils import get_current_user
+from entitlements import require_video_analysis_access
 from posture import feedback as feedback_module
 from posture import mediapipe_utils
 from posture import visualizer
@@ -365,6 +366,17 @@ async def analyze_video(
     if preview_max_frames <= 0:
         raise HTTPException(status_code=400, detail="preview_max_frames must be greater than 0.")
 
+    try:
+        normalised_pose_backend = _normalise_pose_backend(pose_backend)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    require_video_analysis_access(
+        db,
+        current_user,
+        pose_backend=normalised_pose_backend,
+        call_llm=call_llm,
+    )
+
     suffix = os.path.splitext(file.filename or "")[1] or ".mp4"
     temp_path = None
     try:
@@ -373,7 +385,7 @@ async def analyze_video(
             current_user=current_user,
             exercise=exercise,
             camera_view=camera_view,
-            pose_backend=pose_backend,
+            pose_backend=normalised_pose_backend,
             file=file,
             call_llm=call_llm,
             sample_fps=sample_fps,
@@ -407,7 +419,7 @@ async def analyze_video(
             include_preview=include_preview,
             preview_max_frames=preview_max_frames,
             camera_view=camera_view,
-            pose_backend=pose_backend,
+            pose_backend=normalised_pose_backend,
         )
         analysis = _persist_analysis_result(db, workout_session, result)
         result["session_id"] = workout_session.id

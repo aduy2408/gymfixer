@@ -9,12 +9,15 @@ import {
     createWorkoutPlan,
     fetchLatestMealPlan,
     fetchLatestWorkoutPlan,
+    fetchSubscription,
     fetchUserProfile,
     MealPlan,
     MealPlanRequest,
+    SubscriptionSummary,
     WorkoutPlan,
     WorkoutPlanRequest,
 } from "@/lib/api";
+import { localeFor, tierLabel, useI18n } from "@/lib/i18n";
 
 const cardStyle: React.CSSProperties = {
     background: "#fff",
@@ -46,15 +49,16 @@ const inputStyle: React.CSSProperties = {
 type Tab = "workout" | "meal";
 
 const goalOptions = [
-    { id: "fat_loss", label: "Fat Loss" },
-    { id: "muscle", label: "Muscle Gain" },
-    { id: "strength", label: "Strength" },
-    { id: "endurance", label: "Endurance" },
-    { id: "rehab", label: "Rehab" },
-    { id: "general", label: "General Fitness" },
+    { id: "fat_loss", labelKey: "goals.fatLoss" },
+    { id: "muscle", labelKey: "goals.muscle" },
+    { id: "strength", labelKey: "goals.strength" },
+    { id: "endurance", labelKey: "goals.endurance" },
+    { id: "rehab", labelKey: "goals.rehab" },
+    { id: "general", labelKey: "goals.general" },
 ] as const;
 
 export default function PlansPage() {
+    const { t } = useI18n();
     const [activeTab, setActiveTab] = useState<Tab>("workout");
     const [workoutPlan, setWorkoutPlan] = useState<WorkoutPlan | null>(null);
     const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
@@ -67,6 +71,7 @@ export default function PlansPage() {
     const [mealError, setMealError] = useState("");
     const [latestError, setLatestError] = useState("");
     const [useCustomEquipment, setUseCustomEquipment] = useState(false);
+    const [subscription, setSubscription] = useState<SubscriptionSummary | null>(null);
 
     const [workoutForm, setWorkoutForm] = useState({
         age: "28",
@@ -107,10 +112,11 @@ export default function PlansPage() {
     useEffect(() => {
         let cancelled = false;
         async function loadInitialData() {
-            const [profileResult, workoutResult, mealResult] = await Promise.allSettled([
+            const [profileResult, workoutResult, mealResult, subscriptionResult] = await Promise.allSettled([
                 fetchUserProfile(),
                 fetchLatestWorkoutPlan(),
                 fetchLatestMealPlan(),
+                fetchSubscription(),
             ]);
 
             if (cancelled) return;
@@ -135,13 +141,17 @@ export default function PlansPage() {
             if (workoutResult.status === "fulfilled") {
                 setWorkoutPlan(workoutResult.value);
             } else if (!isMissingPlanError(workoutResult.reason)) {
-                setLatestError((prev) => prev || "Could not load your latest workout plan.");
+                setLatestError((prev) => prev || t("plans.loadWorkoutError"));
             }
 
             if (mealResult.status === "fulfilled") {
                 setMealPlan(mealResult.value);
             } else if (!isMissingPlanError(mealResult.reason)) {
-                setLatestError((prev) => prev || "Could not load your latest meal plan.");
+                setLatestError((prev) => prev || t("plans.loadMealError"));
+            }
+
+            if (subscriptionResult.status === "fulfilled") {
+                setSubscription(subscriptionResult.value);
             }
 
             setLatestLoading(false);
@@ -151,7 +161,7 @@ export default function PlansPage() {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [t]);
 
     const updateWorkout = (key: string) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const value = event.target.value;
@@ -167,12 +177,12 @@ export default function PlansPage() {
     const handleWorkoutSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
         const validationError = validateNumberFields([
-            { label: "Age", value: workoutForm.age, min: 10, max: 100 },
-            { label: "Height", value: workoutForm.height_cm, min: 100, max: 250 },
-            { label: "Weight", value: workoutForm.weight_kg, min: 30, max: 300 },
-            { label: "Days / Week", value: workoutForm.days_per_week, min: 1, max: 7 },
-            { label: "Minutes", value: workoutForm.session_minutes, min: 15, max: 180 },
-        ]);
+            { label: t("profile.age"), value: workoutForm.age, min: 10, max: 100 },
+            { label: t("profile.height"), value: workoutForm.height_cm, min: 100, max: 250 },
+            { label: t("profile.weight"), value: workoutForm.weight_kg, min: 30, max: 300 },
+            { label: t("plans.daysWeek"), value: workoutForm.days_per_week, min: 1, max: 7 },
+            { label: t("plans.minutes"), value: workoutForm.session_minutes, min: 15, max: 180 },
+        ], t);
         if (validationError) {
             setWorkoutError(validationError);
             return;
@@ -196,9 +206,12 @@ export default function PlansPage() {
                 focus_muscles: splitCsv(workoutForm.focus_muscles),
             };
             setWorkoutPlan(await createWorkoutPlan(payload));
+            fetchSubscription().then(setSubscription).catch(() => {});
             setShowWorkoutForm(false);
         } catch (err) {
-            setWorkoutError(err instanceof Error ? err.message : "Could not create workout plan.");
+            const maybeSub = (err as Error & { subscription?: SubscriptionSummary }).subscription;
+            if (maybeSub) setSubscription(maybeSub);
+            setWorkoutError(err instanceof Error ? err.message : t("plans.createWorkoutError"));
         } finally {
             setWorkoutLoading(false);
         }
@@ -207,12 +220,12 @@ export default function PlansPage() {
     const handleMealSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
         const validationError = validateNumberFields([
-            { label: "Age", value: mealForm.age, min: 10, max: 100 },
-            { label: "Height", value: mealForm.height_cm, min: 100, max: 250 },
-            { label: "Weight", value: mealForm.weight_kg, min: 30, max: 300 },
-            { label: "Meals / Day", value: mealForm.meals_per_day, min: 1, max: 6 },
-            { label: "Budget (VND/day)", value: mealForm.budget_vnd_per_day, min: 30000, max: 1000000 },
-        ]) || validateDecimalField("Cooking Time (hours/day)", mealForm.cooking_time_hours_per_day, 0.25, 8);
+            { label: t("profile.age"), value: mealForm.age, min: 10, max: 100 },
+            { label: t("profile.height"), value: mealForm.height_cm, min: 100, max: 250 },
+            { label: t("profile.weight"), value: mealForm.weight_kg, min: 30, max: 300 },
+            { label: t("plans.mealsDay"), value: mealForm.meals_per_day, min: 1, max: 6 },
+            { label: t("plans.budgetDay"), value: mealForm.budget_vnd_per_day, min: 30000, max: 1000000 },
+        ], t) || validateDecimalField(t("plans.cookingTimeDay"), mealForm.cooking_time_hours_per_day, 0.25, 8, t);
         if (validationError) {
             setMealError(validationError);
             return;
@@ -239,9 +252,12 @@ export default function PlansPage() {
                 adjust_for_workout_plan: mealForm.adjust_for_workout_plan,
             };
             setMealPlan(await createMealPlan(payload));
+            fetchSubscription().then(setSubscription).catch(() => {});
             setShowMealForm(false);
         } catch (err) {
-            setMealError(err instanceof Error ? err.message : "Could not create meal plan.");
+            const maybeSub = (err as Error & { subscription?: SubscriptionSummary }).subscription;
+            if (maybeSub) setSubscription(maybeSub);
+            setMealError(err instanceof Error ? err.message : t("plans.createMealError"));
         } finally {
             setMealLoading(false);
         }
@@ -254,17 +270,22 @@ export default function PlansPage() {
                 <div style={{ maxWidth: 1180, margin: "0 auto" }}>
                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: "1.5rem" }}>
                         <p style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--red)", marginBottom: "0.35rem" }}>
-                            Weekly planning
+                            {t("plans.eyebrow")}
                         </p>
                         <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "2.25rem", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.35rem" }}>
-                            Plans
+                            {t("plans.title")}
                         </h1>
                         <p style={{ fontSize: "0.84rem", color: "#888" }}>
-                            Generate a 7-day training plan and meal plan from your goals, metrics, constraints, and preferences.
+                            {t("plans.copy")}
                         </p>
+                        {subscription && (
+                            <p style={{ fontSize: "0.76rem", color: "#666", marginTop: "0.55rem", fontWeight: 700 }}>
+                                {tierLabel(subscription.tier, t)} · {subscription.remaining.workout_plans ?? t("common.unlimited")} {t("subscription.workoutQuota")} · {subscription.remaining.meal_plans ?? t("common.unlimited")} {t("subscription.mealQuota")}
+                            </p>
+                        )}
                         {latestLoading && (
                             <p style={{ fontSize: "0.76rem", color: "#aaa", marginTop: "0.55rem" }}>
-                                Loading your saved plans...
+                                {t("plans.loadingSaved")}
                             </p>
                         )}
                         {latestError && (
@@ -275,8 +296,8 @@ export default function PlansPage() {
                     </motion.div>
 
                     <div style={{ ...cardStyle, padding: "0.35rem", display: "inline-flex", gap: "0.35rem", marginBottom: "1.25rem" }}>
-                        <TabButton active={activeTab === "workout"} onClick={() => setActiveTab("workout")} icon={<Dumbbell size={15} />} label="Workout Plan" />
-                        <TabButton active={activeTab === "meal"} onClick={() => setActiveTab("meal")} icon={<ChefHat size={15} />} label="Meal Plan" />
+                        <TabButton active={activeTab === "workout"} onClick={() => setActiveTab("workout")} icon={<Dumbbell size={15} />} label={t("plans.workoutPlan")} />
+                        <TabButton active={activeTab === "meal"} onClick={() => setActiveTab("meal")} icon={<ChefHat size={15} />} label={t("plans.mealPlan")} />
                     </div>
 
                     {activeTab === "workout" ? (
@@ -284,39 +305,39 @@ export default function PlansPage() {
                             hasPlan={Boolean(workoutPlan)}
                             showForm={showWorkoutForm || !workoutPlan}
                             loading={workoutLoading}
-                            updateActionLabel="Update Workout Plan"
+                            updateActionLabel={t("plans.updateWorkout")}
                             onShowForm={() => setShowWorkoutForm(true)}
                             form={(
-                                <PlanForm title={workoutPlan ? "Update Workout Plan" : "Workout Inputs"} subtitle="Build a conservative week of training." onSubmit={handleWorkoutSubmit} loading={workoutLoading} buttonLabel={workoutPlan ? "Regenerate Workout Plan" : "Generate Workout Plan"} onCancel={workoutPlan ? () => { setWorkoutError(""); setShowWorkoutForm(false); } : undefined}>
+                                <PlanForm title={workoutPlan ? t("plans.updateWorkout") : t("plans.workoutInputs")} subtitle={t("plans.workoutSubtitle")} onSubmit={handleWorkoutSubmit} loading={workoutLoading} buttonLabel={workoutPlan ? t("plans.regenWorkout") : t("plans.generateWorkout")} loadingLabel={t("plans.generating")} cancelLabel={t("common.cancel")} onCancel={workoutPlan ? () => { setWorkoutError(""); setShowWorkoutForm(false); } : undefined}>
                                     <MetricsFields form={workoutForm} update={updateWorkout} />
-                                    <SelectField label="Goal" value={workoutForm.goal} onChange={updateWorkout("goal")} options={goalOptions} />
-                                    <SelectField label="Level" value={workoutForm.level} onChange={updateWorkout("level")} options={[
-                                        { id: "beginner", label: "Beginner" },
-                                        { id: "intermediate", label: "Intermediate" },
-                                        { id: "advanced", label: "Advanced" },
+                                    <SelectField label={t("dashboard.goal")} value={workoutForm.goal} onChange={updateWorkout("goal")} options={goalOptions.map((goal) => ({ id: goal.id, label: t(goal.labelKey) }))} />
+                                    <SelectField label={t("plans.level")} value={workoutForm.level} onChange={updateWorkout("level")} options={[
+                                        { id: "beginner", label: t("plans.beginner") },
+                                        { id: "intermediate", label: t("plans.intermediate") },
+                                        { id: "advanced", label: t("plans.advanced") },
                                     ]} />
-                                    <SelectField label="Training Location" value={workoutForm.training_location} onChange={updateWorkout("training_location")} options={[
-                                        { id: "gym", label: "Gym" },
-                                        { id: "home", label: "Home" },
+                                    <SelectField label={t("plans.trainingLocation")} value={workoutForm.training_location} onChange={updateWorkout("training_location")} options={[
+                                        { id: "gym", label: t("plans.gym") },
+                                        { id: "home", label: t("plans.home") },
                                     ]} />
                                     <div className="grid grid-cols-2 gap-3">
-                                        <TextField label="Days / Week" type="number" min={1} max={7} value={workoutForm.days_per_week} onChange={updateWorkout("days_per_week")} />
-                                        <TextField label="Minutes" type="number" min={15} max={180} value={workoutForm.session_minutes} onChange={updateWorkout("session_minutes")} />
+                                        <TextField label={t("plans.daysWeek")} type="number" min={1} max={7} value={workoutForm.days_per_week} onChange={updateWorkout("days_per_week")} />
+                                        <TextField label={t("plans.minutes")} type="number" min={15} max={180} value={workoutForm.session_minutes} onChange={updateWorkout("session_minutes")} />
                                     </div>
                                     {isHomeTraining && (
                                         <>
                                             <ToggleField
                                                 checked={useCustomEquipment}
                                                 onChange={setUseCustomEquipment}
-                                                title="Custom equipment"
-                                                description="Use your own equipment list instead of the default home setup."
+                                                title={t("plans.customEquipment")}
+                                                description={t("plans.customEquipmentDesc")}
                                             />
-                                            {useCustomEquipment && <TextField label="Equipment" value={workoutForm.equipment} onChange={updateWorkout("equipment")} />}
+                                            {useCustomEquipment && <TextField label={t("plans.equipment")} value={workoutForm.equipment} onChange={updateWorkout("equipment")} />}
                                         </>
                                     )}
-                                    <TextAreaField label="Current Loads" value={workoutForm.current_loads} onChange={updateWorkout("current_loads")} />
-                                    <TextField label="Focus Muscles" value={workoutForm.focus_muscles} onChange={updateWorkout("focus_muscles")} />
-                                    <TextAreaField label="Injuries / Limits" value={workoutForm.injuries} onChange={updateWorkout("injuries")} />
+                                    <TextAreaField label={t("plans.currentLoads")} value={workoutForm.current_loads} onChange={updateWorkout("current_loads")} />
+                                    <TextField label={t("plans.focusMuscles")} value={workoutForm.focus_muscles} onChange={updateWorkout("focus_muscles")} />
+                                    <TextAreaField label={t("plans.injuries")} value={workoutForm.injuries} onChange={updateWorkout("injuries")} />
                                     {workoutError && <ErrorBox text={workoutError} />}
                                 </PlanForm>
                             )}
@@ -327,30 +348,30 @@ export default function PlansPage() {
                             hasPlan={Boolean(mealPlan)}
                             showForm={showMealForm || !mealPlan}
                             loading={mealLoading}
-                            updateActionLabel="Update Meal Plan"
+                            updateActionLabel={t("plans.updateMeal")}
                             onShowForm={() => setShowMealForm(true)}
                             form={(
-                                <PlanForm title={mealPlan ? "Update Meal Plan" : "Meal Inputs"} subtitle="Create daily meals for the next week." onSubmit={handleMealSubmit} loading={mealLoading} buttonLabel={mealPlan ? "Regenerate Meal Plan" : "Generate Meal Plan"} onCancel={mealPlan ? () => { setMealError(""); setShowMealForm(false); } : undefined}>
+                                <PlanForm title={mealPlan ? t("plans.updateMeal") : t("plans.mealInputs")} subtitle={t("plans.mealSubtitle")} onSubmit={handleMealSubmit} loading={mealLoading} buttonLabel={mealPlan ? t("plans.regenMeal") : t("plans.generateMeal")} loadingLabel={t("plans.generating")} cancelLabel={t("common.cancel")} onCancel={mealPlan ? () => { setMealError(""); setShowMealForm(false); } : undefined}>
                                     <MetricsFields form={mealForm} update={updateMeal} />
-                                    <SelectField label="Goal" value={mealForm.goal} onChange={updateMeal("goal")} options={goalOptions.filter((goal) => goal.id !== "rehab")} />
-                                    <SelectField label="Activity Level" value={mealForm.activity_level} onChange={updateMeal("activity_level")} options={[
-                                        { id: "sedentary", label: "Sedentary" },
-                                        { id: "light", label: "Light" },
-                                        { id: "moderate", label: "Moderate" },
-                                        { id: "active", label: "Active" },
-                                        { id: "very_active", label: "Very Active" },
+                                    <SelectField label={t("dashboard.goal")} value={mealForm.goal} onChange={updateMeal("goal")} options={goalOptions.filter((goal) => goal.id !== "rehab").map((goal) => ({ id: goal.id, label: t(goal.labelKey) }))} />
+                                    <SelectField label={t("plans.activityLevel")} value={mealForm.activity_level} onChange={updateMeal("activity_level")} options={[
+                                        { id: "sedentary", label: t("plans.sedentary") },
+                                        { id: "light", label: t("plans.light") },
+                                        { id: "moderate", label: t("plans.moderate") },
+                                        { id: "active", label: t("plans.active") },
+                                        { id: "very_active", label: t("plans.veryActive") },
                                     ]} />
                                     <div className="grid grid-cols-2 gap-3">
-                                        <TextField label="Meals / Day" type="number" min={1} max={6} value={mealForm.meals_per_day} onChange={updateMeal("meals_per_day")} />
-                                        <TextField label="Budget (VND/day)" type="number" min={30000} max={1000000} value={mealForm.budget_vnd_per_day} onChange={updateMeal("budget_vnd_per_day")} />
+                                        <TextField label={t("plans.mealsDay")} type="number" min={1} max={6} value={mealForm.meals_per_day} onChange={updateMeal("meals_per_day")} />
+                                        <TextField label={t("plans.budgetDay")} type="number" min={30000} max={1000000} value={mealForm.budget_vnd_per_day} onChange={updateMeal("budget_vnd_per_day")} />
                                     </div>
-                                    <TextField label="Cooking Time (hours/day)" type="number" min={0.25} max={8} step="0.25" value={mealForm.cooking_time_hours_per_day} onChange={updateMeal("cooking_time_hours_per_day")} />
-                                    <SelectField label="Diet Preference" value={mealForm.diet_preference} onChange={updateMeal("diet_preference")} options={[
-                                        { id: "none", label: "No Preference" },
-                                        { id: "vegetarian", label: "Vegetarian" },
-                                        { id: "vegan", label: "Vegan" },
-                                        { id: "halal", label: "Halal" },
-                                        { id: "low_carb", label: "Low Carb" },
+                                    <TextField label={t("plans.cookingTimeDay")} type="number" min={0.25} max={8} step="0.25" value={mealForm.cooking_time_hours_per_day} onChange={updateMeal("cooking_time_hours_per_day")} />
+                                    <SelectField label={t("plans.dietPreference")} value={mealForm.diet_preference} onChange={updateMeal("diet_preference")} options={[
+                                        { id: "none", label: t("plans.noPreference") },
+                                        { id: "vegetarian", label: t("plans.vegetarian") },
+                                        { id: "vegan", label: t("plans.vegan") },
+                                        { id: "halal", label: t("plans.halal") },
+                                        { id: "low_carb", label: t("plans.lowCarb") },
                                     ]} />
                                     <label style={{ display: "flex", gap: "0.65rem", alignItems: "flex-start", border: "1px solid #eee", background: mealForm.adjust_for_workout_plan ? "rgba(214,0,28,0.05)" : "#fafafa", borderRadius: 6, padding: "0.8rem", cursor: "pointer" }}>
                                         <input
@@ -361,15 +382,15 @@ export default function PlansPage() {
                                         />
                                         <span>
                                             <span style={{ display: "block", fontSize: "0.78rem", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#333" }}>
-                                                Adjust meals based on workout schedule
+                                                {t("plans.adjustMealsTitle")}
                                             </span>
                                             <span style={{ display: "block", fontSize: "0.74rem", color: "#888", lineHeight: 1.45, marginTop: "0.25rem" }}>
-                                                Uses your latest saved workout plan to raise carbs on training days and reduce them on rest days.
+                                                {t("plans.adjustMealsDesc")}
                                             </span>
                                         </span>
                                     </label>
-                                    <TextAreaField label="Allergies" value={mealForm.allergies} onChange={updateMeal("allergies")} />
-                                    <TextAreaField label="Disliked Foods" value={mealForm.disliked_foods} onChange={updateMeal("disliked_foods")} />
+                                    <TextAreaField label={t("plans.allergies")} value={mealForm.allergies} onChange={updateMeal("allergies")} />
+                                    <TextAreaField label={t("plans.dislikedFoods")} value={mealForm.disliked_foods} onChange={updateMeal("disliked_foods")} />
                                     {mealError && <ErrorBox text={mealError} />}
                                 </PlanForm>
                             )}
@@ -389,6 +410,8 @@ function PlanForm({
     onSubmit,
     loading,
     buttonLabel,
+    loadingLabel,
+    cancelLabel,
     onCancel,
 }: {
     title: string;
@@ -397,6 +420,8 @@ function PlanForm({
     onSubmit: (event: React.FormEvent) => void;
     loading: boolean;
     buttonLabel: string;
+    loadingLabel: string;
+    cancelLabel: string;
     onCancel?: () => void;
 }) {
     return (
@@ -409,12 +434,12 @@ function PlanForm({
             <div style={{ display: "flex", gap: "0.65rem", marginTop: "1rem" }}>
                 {onCancel && (
                     <button type="button" onClick={onCancel} className="btn-outline-red" disabled={loading} style={{ flex: 1, justifyContent: "center", borderRadius: 4 }}>
-                        Cancel
+                        {cancelLabel}
                     </button>
                 )}
                 <button type="submit" className="btn-red" disabled={loading} style={{ flex: 1, justifyContent: "center", borderRadius: 4, opacity: loading ? 0.7 : 1 }}>
                     {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-                    {loading ? "Generating..." : buttonLabel}
+                    {loading ? loadingLabel : buttonLabel}
                 </button>
             </div>
         </form>
@@ -438,6 +463,7 @@ function PlanWorkspace({
     form: React.ReactNode;
     plan: React.ReactNode;
 }) {
+    const { t } = useI18n();
     if (!hasPlan) {
         return (
             <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
@@ -452,10 +478,10 @@ function PlanWorkspace({
             <div style={{ ...cardStyle, padding: "0.85rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
                 <div>
                     <p style={{ fontSize: "0.68rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--red)" }}>
-                        Saved plan
+                        {t("plans.savedPlan")}
                     </p>
                     <p style={{ fontSize: "0.82rem", color: "#777", marginTop: "0.25rem" }}>
-                        This is your latest saved plan. Generate a new one only when your goals or schedule change.
+                        {t("plans.savedPlanCopy")}
                     </p>
                 </div>
                 {!showForm && (
@@ -485,18 +511,19 @@ function MetricsFields({
     form: { age: string; height_cm: string; weight_kg: string; gender: string };
     update: (key: string) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
 }) {
+    const { t } = useI18n();
     return (
         <>
             <div className="grid grid-cols-3 gap-3">
-                <TextField label="Age" type="number" min={10} max={100} value={form.age} onChange={update("age")} />
-                <TextField label="Height" type="number" min={100} max={250} value={form.height_cm} onChange={update("height_cm")} />
-                <TextField label="Weight" type="number" min={30} max={300} value={form.weight_kg} onChange={update("weight_kg")} />
+                <TextField label={t("profile.age")} type="number" min={10} max={100} value={form.age} onChange={update("age")} />
+                <TextField label={t("profile.height")} type="number" min={100} max={250} value={form.height_cm} onChange={update("height_cm")} />
+                <TextField label={t("profile.weight")} type="number" min={30} max={300} value={form.weight_kg} onChange={update("weight_kg")} />
             </div>
-            <SelectField label="Gender" value={form.gender} onChange={update("gender")} options={[
-                { id: "", label: "Prefer not to say" },
-                { id: "male", label: "Male" },
-                { id: "female", label: "Female" },
-                { id: "other", label: "Other" },
+            <SelectField label={t("profile.gender")} value={form.gender} onChange={update("gender")} options={[
+                { id: "", label: t("profile.preferNot") },
+                { id: "male", label: t("profile.gender.male") },
+                { id: "female", label: t("profile.gender.female") },
+                { id: "other", label: t("profile.gender.other") },
             ]} />
         </>
     );
@@ -615,10 +642,11 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
 }
 
 function WorkoutPlanView({ plan, loading }: { plan: WorkoutPlan | null; loading: boolean }) {
+    const { language, t } = useI18n();
     const [selection, setSelection] = useState<{ planId: number | null; day: string }>({ planId: null, day: "Mon" });
 
-    if (loading && !plan) return <PlanPlaceholder text="Generating your workout week..." />;
-    if (!plan) return <PlanPlaceholder text="No workout plan yet. Fill the form and generate your first week." />;
+    if (loading && !plan) return <PlanPlaceholder text={t("plans.generatingWorkout")} />;
+    if (!plan) return <PlanPlaceholder text={t("plans.noWorkout")} />;
     const selectedDay = selection.planId === plan.id && plan.days.some((day) => day.day === selection.day)
         ? selection.day
         : getDefaultWorkoutDay(plan);
@@ -626,32 +654,32 @@ function WorkoutPlanView({ plan, loading }: { plan: WorkoutPlan | null; loading:
 
     return (
         <section style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <PlanHeader title="Workout Week" />
+            <PlanHeader title={t("plans.workoutWeek")} />
             <SafetyNotes notes={plan.safety_notes} />
             <WeekDaySelector
                 days={plan.days}
                 selectedDay={selected.day}
                 onSelectDay={(day) => setSelection({ planId: plan.id, day })}
-                getTitle={(day) => day.day}
-                getMeta={(day) => day.type === "training" ? `${day.exercises.length} exercises` : day.type}
+                getTitle={(day) => formatDay(day.day, t)}
+                getMeta={(day) => day.type === "training" ? `${day.exercises.length} ${t("plans.exercises")}` : formatWorkoutType(day.type, t)}
             />
             <div style={{ ...cardStyle, padding: "1rem", boxShadow: "0 12px 30px rgba(0, 0, 0, 0.045)" }}>
-                <DayHeader day={selected.day} title={selected.title} meta={`${selected.type} · ${selected.estimated_minutes} min`} />
+                <DayHeader day={formatDay(selected.day, t)} title={selected.title} meta={`${formatWorkoutType(selected.type, t)} · ${selected.estimated_minutes} ${t("common.minutesShort")}`} />
                 {selected.exercises.length ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", marginTop: "0.85rem" }}>
                         {selected.exercises.map((exercise) => (
                             <div key={`${selected.day}-${exercise.name}`} style={{ background: "#f8f8f8", borderRadius: 4, padding: "0.75rem" }}>
                                 <p style={{ fontWeight: 800, fontSize: "0.86rem", color: "#333" }}>{exercise.name}</p>
                                 <p style={{ fontSize: "0.74rem", color: "#888", marginTop: "0.25rem" }}>
-                                    {exercise.sets} sets · {exercise.reps} reps · {exercise.rest_sec}s rest
+                                    {exercise.sets} {t("plans.sets")} · {exercise.reps} {t("plans.reps")} · {exercise.rest_sec}{t("plans.restSeconds")}
                                 </p>
-                                {exercise.load_recommendation && <p style={{ fontSize: "0.74rem", color: "#444", marginTop: "0.35rem", lineHeight: 1.45, fontWeight: 700 }}>Load: {exercise.load_recommendation}</p>}
-                                {exercise.notes && <p style={{ fontSize: "0.74rem", color: "#666", marginTop: "0.35rem", lineHeight: 1.45 }}>{exercise.notes}</p>}
+                                {exercise.load_recommendation && <p style={{ fontSize: "0.74rem", color: "#444", marginTop: "0.35rem", lineHeight: 1.45, fontWeight: 700 }}>{t("plans.load")}: {localizedWorkoutText(exercise.load_recommendation, language)}</p>}
+                                {exercise.notes && <p style={{ fontSize: "0.74rem", color: "#666", marginTop: "0.35rem", lineHeight: 1.45 }}>{localizedWorkoutText(exercise.notes, language)}</p>}
                             </div>
                         ))}
                     </div>
                 ) : (
-                    <p style={{ fontSize: "0.82rem", color: "#888", marginTop: "0.85rem" }}>No training scheduled. Recover and prepare for the next session.</p>
+                    <p style={{ fontSize: "0.82rem", color: "#888", marginTop: "0.85rem" }}>{t("plans.noTraining")}</p>
                 )}
             </div>
         </section>
@@ -659,10 +687,11 @@ function WorkoutPlanView({ plan, loading }: { plan: WorkoutPlan | null; loading:
 }
 
 function MealPlanView({ plan, loading }: { plan: MealPlan | null; loading: boolean }) {
+    const { t } = useI18n();
     const [selection, setSelection] = useState<{ planId: number | null; day: string }>({ planId: null, day: "Mon" });
 
-    if (loading && !plan) return <PlanPlaceholder text="Generating your meal week..." />;
-    if (!plan) return <PlanPlaceholder text="No meal plan yet. Fill the form and generate your first week." />;
+    if (loading && !plan) return <PlanPlaceholder text={t("plans.generatingMeal")} />;
+    if (!plan) return <PlanPlaceholder text={t("plans.noMeal")} />;
     const weekCalories = plan.days.reduce((total, day) => total + day.meals.reduce((sum, meal) => sum + meal.calories, 0), 0);
     const workoutSync = plan.workout_sync;
     const selectedDay = selection.planId === plan.id && plan.days.some((day) => day.day === selection.day)
@@ -673,7 +702,7 @@ function MealPlanView({ plan, loading }: { plan: MealPlan | null; loading: boole
 
     return (
         <section style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <PlanHeader title="Meal Week" />
+            <PlanHeader title={t("plans.mealWeek")} />
             <div
                 style={{
                     ...cardStyle,
@@ -686,39 +715,39 @@ function MealPlanView({ plan, loading }: { plan: MealPlan | null; loading: boole
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "flex-start", flexWrap: "wrap" }}>
                     <div>
                         <p style={{ fontSize: "0.68rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(255,255,255,0.62)", marginBottom: "0.35rem" }}>
-                            Nutrition target
+                            {t("plans.nutritionTarget")}
                         </p>
                         <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "2rem", textTransform: "uppercase", lineHeight: 1 }}>
-                            {plan.daily_targets.calories} kcal / day
+                            {plan.daily_targets.calories} {t("plans.kcalDay")}
                         </h2>
                         <p style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.76)", marginTop: "0.35rem" }}>
-                            {Math.round(weekCalories / 7)} kcal average from planned portions.
+                            {t("plans.weekAverage").replace("{calories}", String(Math.round(weekCalories / 7)))}
                         </p>
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "0.55rem", justifyContent: "flex-end" }}>
                         <div style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.08)", borderRadius: 999, padding: "0.55rem 0.85rem", fontSize: "0.76rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                            <Scale size={15} /> gram-based portions
+                            <Scale size={15} /> {t("plans.gramPortions")}
                         </div>
                         {workoutSync?.applied && (
                             <div style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", border: "1px solid rgba(255,255,255,0.22)", background: "rgba(255,255,255,0.12)", borderRadius: 999, padding: "0.55rem 0.85rem", fontSize: "0.76rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                                <Dumbbell size={15} /> synced to workouts
+                                <Dumbbell size={15} /> {t("plans.synced")}
                             </div>
                         )}
                     </div>
                 </div>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <MacroTargetCard label="Calories" value={plan.daily_targets.calories} max={Math.max(plan.daily_targets.calories, 1)} tone="red" />
-                <MacroTargetCard label="Protein" value={plan.daily_targets.protein_g} suffix="g" max={Math.max(plan.daily_targets.protein_g, 1)} tone="navy" />
-                <MacroTargetCard label="Carbs" value={plan.daily_targets.carbs_g} suffix="g" max={Math.max(plan.daily_targets.carbs_g, 1)} tone="gold" />
-                <MacroTargetCard label="Fat" value={plan.daily_targets.fat_g} suffix="g" max={Math.max(plan.daily_targets.fat_g, 1)} tone="green" />
+                <MacroTargetCard label={t("plans.calories")} value={plan.daily_targets.calories} max={Math.max(plan.daily_targets.calories, 1)} tone="red" />
+                <MacroTargetCard label={t("plans.protein")} value={plan.daily_targets.protein_g} suffix="g" max={Math.max(plan.daily_targets.protein_g, 1)} tone="navy" />
+                <MacroTargetCard label={t("plans.carbs")} value={plan.daily_targets.carbs_g} suffix="g" max={Math.max(plan.daily_targets.carbs_g, 1)} tone="gold" />
+                <MacroTargetCard label={t("plans.fat")} value={plan.daily_targets.fat_g} suffix="g" max={Math.max(plan.daily_targets.fat_g, 1)} tone="green" />
             </div>
             {plan.nutrition_metrics && (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <InfoCard label="TDEE" value={`${plan.nutrition_metrics.tdee} kcal`} />
-                    <InfoCard label="Activity" value={`${formatActivityLevel(plan.nutrition_metrics.activity_level)} (${plan.nutrition_metrics.activity_factor})`} />
-                    <InfoCard label="Budget" value={formatVnd(plan.nutrition_metrics.budget_vnd_per_day)} />
-                    <InfoCard label="Cooking" value={`${plan.nutrition_metrics.cooking_time_hours_per_day}h / day`} />
+                    <InfoCard label={t("plans.tdee")} value={`${plan.nutrition_metrics.tdee} kcal`} />
+                    <InfoCard label={t("plans.activity")} value={`${formatActivityLevel(plan.nutrition_metrics.activity_level, t)} (${plan.nutrition_metrics.activity_factor})`} />
+                    <InfoCard label={t("plans.budget")} value={formatVnd(plan.nutrition_metrics.budget_vnd_per_day, t)} />
+                    <InfoCard label={t("plans.cooking")} value={`${plan.nutrition_metrics.cooking_time_hours_per_day}h ${t("plans.perDay")}`} />
                 </div>
             )}
             <SafetyNotes notes={plan.safety_notes} />
@@ -726,11 +755,11 @@ function MealPlanView({ plan, loading }: { plan: MealPlan | null; loading: boole
                 days={plan.days}
                 selectedDay={selected.day}
                 onSelectDay={(day) => setSelection({ planId: plan.id, day })}
-                getTitle={(day) => day.day}
+                getTitle={(day) => formatDay(day.day, t)}
                 getMeta={(day) => {
                     const workoutType = workoutSync?.schedule?.[day.day];
                     const calories = `${sumMealDay(day).calories} kcal`;
-                    return workoutType ? `${formatWorkoutType(workoutType)} · ${calories}` : calories;
+                    return workoutType ? `${formatWorkoutType(workoutType, t)} · ${calories}` : calories;
                 }}
             />
             <div
@@ -742,7 +771,7 @@ function MealPlanView({ plan, loading }: { plan: MealPlan | null; loading: boole
                 }}
             >
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: "0.85rem" }}>
-                    <DayHeader day={selected.day} title={`${selectedTotals.calories} kcal`} meta={`${selected.meals.length} meals · P ${selectedTotals.protein_g}g · C ${selectedTotals.carbs_g}g · F ${selectedTotals.fat_g}g · ${formatVnd(selected.estimated_cost_vnd || 0)}`} />
+                    <DayHeader day={formatDay(selected.day, t)} title={`${selectedTotals.calories} kcal`} meta={`${selected.meals.length} ${t("plans.meals")} · P ${selectedTotals.protein_g}g · C ${selectedTotals.carbs_g}g · F ${selectedTotals.fat_g}g · ${formatVnd(selected.estimated_cost_vnd || 0, t)}`} />
                     <div style={{ width: 34, height: 34, borderRadius: 999, background: "rgba(214,0,28,0.08)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--red)", flexShrink: 0 }}>
                         <Flame size={16} />
                     </div>
@@ -827,14 +856,13 @@ function sumMealDay(day: MealDay) {
     );
 }
 
-function formatWorkoutType(value: string) {
-    if (value === "training") return "Training";
-    if (value === "mobility") return "Mobility";
-    if (value === "rest") return "Rest";
+function formatWorkoutType(value: string, t: (key: string) => string) {
+    if (value === "training" || value === "mobility" || value === "rest") return t(`plans.workoutType.${value}`);
     return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function MealCard({ meal }: { meal: Meal }) {
+    const { language, t } = useI18n();
     return (
         <div style={{ background: "#fff", border: "1px solid #ededed", borderRadius: 8, padding: "0.85rem", boxShadow: "0 8px 22px rgba(0,0,0,0.035)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "flex-start" }}>
@@ -843,8 +871,8 @@ function MealCard({ meal }: { meal: Meal }) {
                         <Utensils size={14} />
                     </div>
                     <div>
-                        <p style={{ fontWeight: 900, fontSize: "0.9rem", color: "#222", textTransform: "uppercase", letterSpacing: "0.03em" }}>{meal.name}</p>
-                        <p style={{ fontSize: "0.72rem", color: "#999", marginTop: "0.15rem" }}>{meal.time || "Flexible time"}</p>
+                        <p style={{ fontWeight: 900, fontSize: "0.9rem", color: "#222", textTransform: "uppercase", letterSpacing: "0.03em" }}>{localizedName(meal, language)}</p>
+                        <p style={{ fontSize: "0.72rem", color: "#999", marginTop: "0.15rem" }}>{meal.time || t("plans.flexTime")}</p>
                     </div>
                 </div>
                 <span style={{ borderRadius: 999, background: "rgba(214,0,28,0.08)", color: "var(--red)", padding: "0.38rem 0.55rem", fontSize: "0.72rem", fontWeight: 900, whiteSpace: "nowrap" }}>
@@ -852,12 +880,12 @@ function MealCard({ meal }: { meal: Meal }) {
                 </span>
             </div>
             <p style={{ fontSize: "0.72rem", color: "#777", marginTop: "0.55rem", fontWeight: 800 }}>
-                Estimated cost: {formatVnd(meal.estimated_cost_vnd || 0)}
+                {t("plans.estimatedCost")}: {formatVnd(meal.estimated_cost_vnd || 0, t)}
             </p>
             <div className="grid grid-cols-3 gap-2" style={{ marginTop: "0.75rem" }}>
-                <MacroMini label="Protein" value={`${meal.protein_g}g`} color="var(--red)" />
-                <MacroMini label="Carbs" value={`${meal.carbs_g}g`} color="#f59e0b" />
-                <MacroMini label="Fat" value={`${meal.fat_g}g`} color="#10b981" />
+                <MacroMini label={t("plans.protein")} value={`${meal.protein_g}g`} color="var(--red)" />
+                <MacroMini label={t("plans.carbs")} value={`${meal.carbs_g}g`} color="#f59e0b" />
+                <MacroMini label={t("plans.fat")} value={`${meal.fat_g}g`} color="#10b981" />
             </div>
             <IngredientList items={meal.items} />
         </div>
@@ -865,6 +893,7 @@ function MealCard({ meal }: { meal: Meal }) {
 }
 
 function IngredientList({ items }: { items: Meal["items"] }) {
+    const { language, t } = useI18n();
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", marginTop: "0.75rem" }}>
             {items.map((item, index) => {
@@ -878,9 +907,9 @@ function IngredientList({ items }: { items: Meal["items"] }) {
                 return (
                     <div key={`${item.name}-${index}`} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr)_auto", gap: "0.75rem", alignItems: "center", border: "1px solid #f0f0f0", background: "#fafafa", borderRadius: 6, padding: "0.65rem 0.7rem" }}>
                         <div>
-                            <p style={{ fontSize: "0.82rem", fontWeight: 800, color: "#333" }}>{item.name}</p>
+                            <p style={{ fontSize: "0.82rem", fontWeight: 800, color: "#333" }}>{localizedName(item, language)}</p>
                             <p style={{ fontSize: "0.7rem", color: "#999", marginTop: "0.18rem" }}>
-                                {item.calories} kcal · P {item.protein_g}g · C {item.carbs_g}g · F {item.fat_g}g · {formatVnd(item.estimated_cost_vnd || 0)}
+                                {item.calories} kcal · P {item.protein_g}g · C {item.carbs_g}g · F {item.fat_g}g · {formatVnd(item.estimated_cost_vnd || 0, t)}
                             </p>
                         </div>
                         <span style={{ border: "1px solid rgba(33,21,81,0.12)", background: "#fff", color: "var(--navy)", borderRadius: 999, padding: "0.34rem 0.55rem", fontSize: "0.72rem", fontWeight: 900, whiteSpace: "nowrap" }}>
@@ -940,11 +969,24 @@ function formatQuantity(item: MealIngredient) {
     return `${quantity} ${item.unit}`;
 }
 
-function formatVnd(value: number) {
-    return `${Math.round(value).toLocaleString("vi-VN")} VND`;
+function formatVnd(value: number, t: (key: string) => string) {
+    return `${Math.round(value).toLocaleString(localeFor(t))} VND`;
 }
 
-function formatActivityLevel(value: string) {
+function formatDay(day: string, t: (key: string) => string) {
+    const key = `day.${day}`;
+    const translated = t(key);
+    return translated === key ? day : translated;
+}
+
+function localizedName(value: { name: string; name_en?: string; name_vi?: string }, language: "en" | "vi") {
+    return language === "vi" ? value.name_vi || value.name : value.name_en || value.name;
+}
+
+function formatActivityLevel(value: string, t: (key: string) => string) {
+    const key = `plans.activity.${value}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
     return value
         .split("_")
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -952,11 +994,12 @@ function formatActivityLevel(value: string) {
 }
 
 function PlanHeader({ title }: { title: string }) {
+    const { t } = useI18n();
     return (
         <div style={{ ...cardStyle, padding: "1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
             <div>
                 <p style={{ fontSize: "0.68rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--red)", marginBottom: "0.25rem" }}>
-                    Active plan
+                    {t("plans.activePlan")}
                 </p>
                 <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "1.45rem", textTransform: "uppercase", lineHeight: 1 }}>
                     {title}
@@ -981,17 +1024,55 @@ function DayHeader({ day, title, meta }: { day: string; title: string; meta: str
 }
 
 function SafetyNotes({ notes }: { notes: string[] }) {
+    const { language } = useI18n();
     if (!notes.length) return null;
     return (
         <div style={{ ...cardStyle, padding: "0.9rem 1rem", display: "flex", gap: "0.65rem", alignItems: "flex-start", color: "#666" }}>
             <AlertTriangle size={17} style={{ color: "#f59e0b", flexShrink: 0, marginTop: 2 }} />
             <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
                 {notes.map((note) => (
-                    <p key={note} style={{ fontSize: "0.8rem", lineHeight: 1.45 }}>{note}</p>
+                    <p key={note} style={{ fontSize: "0.8rem", lineHeight: 1.45 }}>{localizedWorkoutText(note, language)}</p>
                 ))}
             </div>
         </div>
     );
+}
+
+const workoutTextVi: Record<string, string> = {
+    "Choose a conservative working weight you can control for all sets at RPE 6-8.": "Chọn mức tạ làm việc vừa sức, kiểm soát tốt trong tất cả các hiệp, ở RPE 6-8.",
+    "Keep neutral spine and soft knees.": "Giữ cột sống trung lập và đầu gối hơi chùng.",
+    "Bodyweight; add a backpack only if you can keep 2 reps in reserve.": "Dùng trọng lượng cơ thể; chỉ thêm ba lô nếu bạn vẫn giữ được 2 rep dự trữ.",
+    "Start around 85-90% of your logged load for this movement pattern; keep RPE 6-8 and clean reps.": "Bắt đầu khoảng 85-90% mức tạ bạn đã ghi cho nhóm động tác này; giữ RPE 6-8 và từng rep gọn, sạch.",
+    "Use a light to moderate load that leaves 1-3 reps in reserve.": "Dùng mức tạ nhẹ đến vừa, còn khoảng 1-3 rep dự trữ.",
+    "Control depth and tempo.": "Kiểm soát độ sâu và nhịp độ.",
+    "Elevate hands if needed.": "Kê tay cao hơn nếu cần.",
+    "Keep knee tracking over toes.": "Giữ đầu gối đi theo hướng mũi chân.",
+    "Brace ribs down.": "Siết thân người và giữ xương sườn hạ xuống.",
+    "Pause at the top.": "Dừng nhẹ ở điểm trên cùng.",
+    "Keep a straight line.": "Giữ thân người thành một đường thẳng.",
+    "Use a stable step.": "Dùng bục/kê chân chắc chắn.",
+    "Move slowly.": "Di chuyển chậm và có kiểm soát.",
+    "Use a load you can control with clean depth.": "Dùng mức tạ bạn kiểm soát được với độ sâu chuẩn.",
+    "Drive through the front heel.": "Đẩy lực qua gót chân trước.",
+    "Use full range of motion.": "Dùng hết biên độ chuyển động an toàn.",
+    "Keep shoulders packed.": "Giữ vai ổn định và không nhún vai.",
+    "Pull elbows toward ribs.": "Kéo khuỷu tay về phía xương sườn.",
+    "Brace before each rep.": "Siết thân người trước mỗi rep.",
+    "Avoid shrugging.": "Tránh nhún vai.",
+    "Stop if back position breaks.": "Dừng lại nếu lưng mất vị trí trung lập.",
+    "Smooth controlled reps.": "Thực hiện rep mượt và có kiểm soát.",
+    "Use full comfortable range.": "Dùng biên độ đầy đủ trong mức thoải mái.",
+    "Stand tall and breathe.": "Đứng thẳng và thở đều.",
+    "Easy breathing.": "Thở nhẹ và đều.",
+    "Stay pain-free.": "Giữ chuyển động không gây đau.",
+    "Stop any movement that causes sharp pain and use easier variations when needed.": "Dừng bất kỳ động tác nào gây đau nhói và đổi sang biến thể dễ hơn khi cần.",
+    "Warm up for 5-10 minutes and keep 1-2 reps in reserve on most working sets.": "Khởi động 5-10 phút và giữ 1-2 rep dự trữ ở hầu hết các hiệp chính.",
+    "Because you reported injuries or limitations, confirm exercise choices with a qualified professional.": "Vì bạn có báo chấn thương hoặc giới hạn vận động, hãy xác nhận lựa chọn bài tập với chuyên gia phù hợp.",
+};
+
+function localizedWorkoutText(text: string, language: string) {
+    if (language !== "vi") return text;
+    return workoutTextVi[text] || text;
 }
 
 function PlanPlaceholder({ text }: { text: string }) {
@@ -1013,27 +1094,27 @@ function ErrorBox({ text }: { text: string }) {
     );
 }
 
-function validateNumberFields(fields: Array<{ label: string; value: string; min: number; max: number }>) {
+function validateNumberFields(fields: Array<{ label: string; value: string; min: number; max: number }>, t: (key: string) => string) {
     for (const field of fields) {
-        const error = validateNumberField(field.label, field.value, field.min, field.max);
+        const error = validateNumberField(field.label, field.value, field.min, field.max, t);
         if (error) return error;
     }
     return "";
 }
 
-function validateDecimalField(label: string, value: string, min: number, max: number) {
-    if (!value.trim()) return `${label} is required.`;
+function validateDecimalField(label: string, value: string, min: number, max: number, t: (key: string) => string) {
+    if (!value.trim()) return t("plans.validationRequired").replace("{field}", label);
     const parsed = Number(value);
-    if (!Number.isFinite(parsed)) return `${label} must be a valid number.`;
-    if (parsed < min || parsed > max) return `${label} must be between ${min} and ${max}.`;
+    if (!Number.isFinite(parsed)) return t("plans.validationNumber").replace("{field}", label);
+    if (parsed < min || parsed > max) return t("plans.validationRange").replace("{field}", label).replace("{min}", String(min)).replace("{max}", String(max));
     return "";
 }
 
-function validateNumberField(label: string, value: string, min: number, max: number) {
-    if (!value.trim()) return `${label} is required.`;
+function validateNumberField(label: string, value: string, min: number, max: number, t: (key: string) => string) {
+    if (!value.trim()) return t("plans.validationRequired").replace("{field}", label);
     const parsed = Number(value);
-    if (!Number.isFinite(parsed)) return `${label} must be a valid number.`;
-    if (parsed < min || parsed > max) return `${label} must be between ${min} and ${max}.`;
+    if (!Number.isFinite(parsed)) return t("plans.validationNumber").replace("{field}", label);
+    if (parsed < min || parsed > max) return t("plans.validationRange").replace("{field}", label).replace("{min}", String(min)).replace("{max}", String(max));
     return "";
 }
 

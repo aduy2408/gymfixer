@@ -17,6 +17,9 @@ class User(Base):
     auth_provider = Column(String, default="local", nullable=False)
     google_sub = Column(String, unique=True, nullable=True, index=True)
     last_login_at = Column(DateTime(timezone=True), nullable=True)
+    subscription_tier = Column(String, default="free", nullable=False, index=True)
+    trial_started_at = Column(DateTime(timezone=True), nullable=True)
+    trial_ends_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     auth_tokens = relationship("AuthToken", back_populates="user", cascade="all, delete-orphan")

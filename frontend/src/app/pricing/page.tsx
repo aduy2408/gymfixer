@@ -2,54 +2,56 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Activity, CheckCircle, ArrowRight } from "lucide-react";
+import LanguageToggle from "@/components/LanguageToggle";
+import { useI18n } from "@/lib/i18n";
 
 const plans = [
     {
         name: "FREE",
         price: "$0",
-        period: "/ forever",
-        description: "Perfect for testing our AI capabilities.",
+        periodKey: "pricing.free.period",
+        descriptionKey: "pricing.free.desc",
         features: [
-            "5 Video Uploads per month",
-            "Basic Pose Analysis",
-            "Standard Processing Time",
-            "Community Support",
+            "pricing.free.f1",
+            "pricing.free.f2",
+            "pricing.free.f3",
+            "pricing.free.f4",
         ],
-        buttonText: "Get Started Free",
+        buttonKey: "pricing.free.cta",
         buttonClass: "btn-outline-red",
         isPopular: false,
         color: "var(--black)",
     },
     {
-        name: "PLUS",
-        price: "$15",
-        period: "/ month",
-        description: "For dedicated athletes wanting regular feedback.",
+        name: "TRIAL",
+        price: "$0",
+        periodKey: "pricing.trial.period",
+        descriptionKey: "pricing.trial.desc",
         features: [
-            "50 Video Uploads per month",
-            "Advanced Joint Angle Tracking",
-            "Fast Processing (< 2min)",
-            "Progress History Dashboard",
-            "Priority Email Support",
+            "pricing.trial.f1",
+            "pricing.trial.f2",
+            "pricing.trial.f3",
+            "pricing.trial.f4",
+            "pricing.trial.f5",
         ],
-        buttonText: "Start 7-Day Trial",
+        buttonKey: "pricing.trial.cta",
         buttonClass: "btn-red",
         isPopular: true,
         color: "var(--red)",
     },
     {
-        name: "PRO",
+        name: "PAID",
         price: "$39",
-        period: "/ month",
-        description: "Elite tier for coaches and professional athletes.",
+        periodKey: "pricing.paid.period",
+        descriptionKey: "pricing.paid.desc",
         features: [
-            "Unlimited Video Uploads",
-            "Personalized AI Coaching Insights",
-            "Instant Processing (GPU Priority)",
-            "3D Pose Export (FBX integration)",
-            "1-on-1 Expert Feedback Sessions",
+            "pricing.paid.f1",
+            "pricing.paid.f2",
+            "pricing.paid.f3",
+            "pricing.paid.f4",
+            "pricing.trial.f5",
         ],
-        buttonText: "Upgrade to Pro",
+        buttonKey: "pricing.paid.cta",
         buttonClass: "btn-outline-white",
         isPopular: false,
         color: "var(--navy)",
@@ -65,17 +67,37 @@ const fadeUp = {
     }),
 };
 
+const navButtonBase: React.CSSProperties = {
+    minHeight: 44,
+    borderRadius: 999,
+    padding: "0.62rem 1.05rem",
+    fontSize: "0.76rem",
+    fontWeight: 900,
+    lineHeight: 1.15,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
+    whiteSpace: "normal",
+    maxWidth: 128,
+};
+
 export default function PricingPage() {
+    const { t } = useI18n();
     return (
         <div style={{ background: "var(--white)", color: "var(--black)", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
 
             {/* ─── Navbar ─── */}
             <nav
-                className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-16 py-4"
+                className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-5 md:px-10 lg:px-14"
                 style={{
                     background: "rgba(255,255,255,0.96)",
                     backdropFilter: "blur(12px)",
                     borderBottom: "1px solid var(--gray-mid)",
+                    minHeight: 76,
+                    gap: "1rem",
                 }}
             >
                 {/* Left Side: Logo */}
@@ -97,21 +119,21 @@ export default function PricingPage() {
                 </div>
 
                 {/* Center: Links */}
-                <div className="hidden md:flex flex-1 justify-center items-center gap-8 lg:gap-10 whitespace-nowrap">
+                <div className="hidden md:flex flex-[1.4] justify-center items-center gap-5 lg:gap-8 whitespace-nowrap">
                     {[
-                        { label: "Home", href: "/#home" },
-                        { label: "Features", href: "/#features" },
-                        { label: "How It Works", href: "/#how-it-works" },
-                        { label: "FAQ", href: "/#faq" },
-                        { label: "Pricing", href: "/pricing" },
+                        { label: t("nav.home"), href: "/#home", active: false },
+                        { label: t("nav.features"), href: "/#features", active: false },
+                        { label: t("nav.how"), href: "/#how-it-works", active: false },
+                        { label: t("nav.faq"), href: "/#faq", active: false },
+                        { label: t("nav.pricing"), href: "/pricing", active: true },
                     ].map((item) => (
                         <Link
                             key={item.label}
                             href={item.href}
-                            className="text-sm font-bold uppercase tracking-wider transition-colors"
-                            style={{ color: item.label === "Pricing" ? "var(--red)" : "var(--black)", letterSpacing: "0.08em" }}
+                            className="text-sm font-bold uppercase transition-colors"
+                            style={{ color: item.active ? "var(--red)" : "var(--black)", letterSpacing: "0.06em" }}
                             onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--red)")}
-                            onMouseLeave={(e) => ((e.target as HTMLElement).style.color = item.label === "Pricing" ? "var(--red)" : "var(--black)")}
+                            onMouseLeave={(e) => ((e.target as HTMLElement).style.color = item.active ? "var(--red)" : "var(--black)")}
                         >
                             {item.label}
                         </Link>
@@ -119,34 +141,56 @@ export default function PricingPage() {
                 </div>
 
                 {/* Right Side: Auth Buttons */}
-                <div className="flex-1 flex justify-end items-center gap-3">
+                <div className="flex-1 flex justify-end items-center gap-2.5">
                     <Link href="/auth/login">
-                        <button className="btn-outline-red text-sm px-4 py-2">Log In</button>
+                        <button
+                            type="button"
+                            style={{
+                                ...navButtonBase,
+                                border: "2px solid var(--red)",
+                                background: "transparent",
+                                color: "var(--red)",
+                            }}
+                        >
+                            {t("auth.login")}
+                        </button>
                     </Link>
-                    <Link href="/auth/register">
-                        <button className="btn-red text-sm px-4 py-2">Start Free Trial</button>
+                    <Link href="/auth/register" className="hidden sm:block">
+                        <button
+                            type="button"
+                            style={{
+                                ...navButtonBase,
+                                border: "2px solid var(--red)",
+                                background: "var(--red)",
+                                color: "var(--white)",
+                                maxWidth: 144,
+                            }}
+                        >
+                            {t("auth.startFreeTrial")}
+                        </button>
                     </Link>
+                    <LanguageToggle compact />
                 </div>
             </nav>
 
             {/* ─── Hero Section ─── */}
-            <section className="px-6 md:px-16 text-center" style={{ minHeight: "calc(100vh - 68px)", display: "flex", flexDirection: "column", justifyContent: "center", paddingTop: "5.5rem", paddingBottom: "2rem", background: "var(--gray-light)", flex: 1 }}>
+            <section className="px-5 md:px-10 lg:px-14 text-center" style={{ minHeight: "calc(100vh - 76px)", display: "flex", flexDirection: "column", justifyContent: "center", paddingTop: "7rem", paddingBottom: "2.5rem", background: "var(--gray-light)", flex: 1 }}>
                 <motion.div
                     initial="hidden"
                     animate="visible"
                     variants={fadeUp}
                 >
-                    <p className="label-small mb-2" style={{ color: "var(--red)" }}>Transparent Pricing</p>
-                    <h1 className="heading-condensed mb-3" style={{ fontSize: "clamp(2rem, 4vw, 3.2rem)" }}>
-                        CHOOSE YOUR <span style={{ color: "var(--red)" }}>PLAN</span>
+                    <p className="label-small mb-2" style={{ color: "var(--red)" }}>{t("pricing.eyebrow")}</p>
+                    <h1 className="heading-condensed mb-3" style={{ fontSize: "clamp(2.2rem, 4vw, 3.4rem)" }}>
+                        {t("pricing.title")}
                     </h1>
-                    <p className="text-sm max-w-2xl mx-auto mb-6" style={{ color: "var(--gray-dark)", fontWeight: 400 }}>
-                        Whether you&apos;re just starting out or you&apos;re a professional athlete, we have a plan designed to perfect your form and maximize your potential.
+                    <p className="text-sm max-w-2xl mx-auto mb-8" style={{ color: "var(--gray-dark)", fontWeight: 400, lineHeight: 1.65 }}>
+                        {t("pricing.copy")}
                     </p>
                 </motion.div>
 
                 {/* ─── Pricing Cards ─── */}
-                <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-5 items-stretch">
+                <div className="w-full max-w-6xl mx-auto grid md:grid-cols-3 gap-5 lg:gap-6 items-stretch">
                     {plans.map((plan, i) => (
                         <motion.div
                             key={plan.name}
@@ -154,47 +198,48 @@ export default function PricingPage() {
                             initial="hidden"
                             animate="visible"
                             variants={fadeUp}
-                            className={`relative flex flex-col rounded-xl overflow-hidden transition-transform duration-300 hover:-translate-y-1`}
+                            className="relative flex flex-col overflow-hidden transition-transform duration-300 hover:-translate-y-1"
                             style={{
-                                background: plan.name === "PRO" ? "var(--navy)" : "var(--white)",
-                                color: plan.name === "PRO" ? "var(--white)" : "var(--black)",
-                                border: plan.name === "PRO" ? "none" : plan.name === "PLUS" ? "2px solid var(--red)" : "1px solid var(--gray-mid)",
-                                boxShadow: plan.isPopular ? "0 20px 40px rgba(214, 0, 28, 0.15)" : "0 10px 30px rgba(0,0,0,0.05)",
+                                background: plan.name === "PAID" ? "var(--navy)" : "var(--white)",
+                                color: plan.name === "PAID" ? "var(--white)" : "var(--black)",
+                                border: plan.name === "PAID" ? "none" : plan.name === "TRIAL" ? "2px solid var(--red)" : "1px solid var(--gray-mid)",
+                                borderRadius: 24,
+                                boxShadow: plan.isPopular ? "0 24px 50px rgba(214, 0, 28, 0.14)" : "0 14px 35px rgba(0,0,0,0.06)",
                                 zIndex: plan.isPopular ? 10 : 1,
                             }}
                         >
                             {plan.isPopular && (
-                                <div style={{ background: "var(--red)", color: "white", padding: "0.3rem", textAlign: "center", fontSize: "0.68rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                                    Most Popular
+                                <div style={{ background: "var(--red)", color: "white", padding: "0.5rem", textAlign: "center", fontSize: "0.7rem", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                                    {t("pricing.popular")}
                                 </div>
                             )}
-                            <div className="p-5 flex-1 flex flex-col">
-                                <h3 className="heading-condensed text-xl mb-1" style={{ color: plan.name === "PRO" ? "var(--white)" : "var(--black)" }}>{plan.name}</h3>
-                                <div className="flex items-baseline gap-1 mb-3">
-                                    <span className="heading-condensed" style={{ fontSize: "2.5rem", lineHeight: 1, color: plan.name === "PRO" ? "var(--white)" : "var(--black)" }}>{plan.price}</span>
-                                    <span style={{ color: plan.name === "PRO" ? "rgba(255,255,255,0.6)" : "var(--gray-dark)", fontWeight: 500 }}>{plan.period}</span>
+                            <div className="flex-1 flex flex-col" style={{ padding: "2rem 1.8rem 1.85rem", textAlign: "left" }}>
+                                <h3 className="heading-condensed" style={{ color: plan.name === "PAID" ? "var(--white)" : "var(--black)", fontSize: "1.35rem", textAlign: "center", marginBottom: "1.25rem" }}>{plan.name}</h3>
+                                <div className="flex items-end gap-2 mb-4" style={{ minHeight: 58 }}>
+                                    <span style={{ fontFamily: "var(--font-ui)", fontSize: "clamp(2.45rem, 4vw, 3.15rem)", lineHeight: 0.9, fontWeight: 900, letterSpacing: "0", color: plan.name === "PAID" ? "var(--white)" : "var(--black)" }}>{plan.price}</span>
+                                    <span style={{ color: plan.name === "PAID" ? "rgba(255,255,255,0.68)" : "var(--gray-dark)", fontWeight: 700, fontSize: "1rem", paddingBottom: "0.15rem" }}>{t(plan.periodKey)}</span>
                                 </div>
-                                <p className="text-sm mb-4" style={{ color: plan.name === "PRO" ? "rgba(255,255,255,0.8)" : "var(--gray-dark)" }}>{plan.description}</p>
+                                <p className="text-sm mb-5" style={{ color: plan.name === "PAID" ? "rgba(255,255,255,0.82)" : "var(--gray-dark)", lineHeight: 1.55, minHeight: 48 }}>{t(plan.descriptionKey)}</p>
 
-                                <div className="divider-red mb-4" style={{ background: plan.name === "PRO" ? "rgba(255,255,255,0.2)" : "var(--gray-mid)" }} />
+                                <div className="divider-red mb-5" style={{ background: plan.name === "PAID" ? "rgba(255,255,255,0.22)" : "var(--gray-mid)", width: 70, height: 5 }} />
 
-                                <ul className="space-y-2.5 mb-5 flex-1">
-                                    {plan.features.map((feature, idx) => (
-                                        <li key={idx} className="flex items-start gap-2">
-                                            <div className="mt-0.5 shrink-0" style={{ color: plan.name === "PRO" ? "var(--red)" : "var(--red)" }}>
-                                                <CheckCircle size={15} />
+                                <ul className="space-y-3 mb-6 flex-1">
+                                    {plan.features.map((featureKey, idx) => (
+                                        <li key={idx} className="flex items-start gap-2.5">
+                                            <div className="mt-0.5 shrink-0" style={{ color: "var(--red)" }}>
+                                                <CheckCircle size={17} />
                                             </div>
-                                            <span className="text-xs font-medium" style={{ color: plan.name === "PRO" ? "rgba(255,255,255,0.9)" : "var(--black)" }}>{feature}</span>
+                                            <span className="text-sm" style={{ color: plan.name === "PAID" ? "rgba(255,255,255,0.92)" : "var(--black)", fontWeight: 700, lineHeight: 1.35 }}>{t(featureKey)}</span>
                                         </li>
                                     ))}
                                 </ul>
 
-                                <Link href={plan.name === "FREE" ? "/auth/register" : "/dashboard/plans"} style={{ width: "100%" }}>
+                                <Link href={plan.name === "FREE" ? "/auth/register" : "/dashboard/profile"} style={{ width: "100%" }}>
                                     <button
                                         className={plan.buttonClass}
-                                        style={{ width: "100%", padding: "0.65rem", fontSize: "0.8rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem" }}
+                                        style={{ width: "100%", minHeight: 58, padding: "0.7rem 1rem", fontSize: "0.82rem", borderRadius: 999, display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem", lineHeight: 1.15 }}
                                     >
-                                        {plan.buttonText} {plan.name !== "FREE" && <ArrowRight size={18} />}
+                                        {t(plan.buttonKey)} {plan.name !== "FREE" && <ArrowRight size={18} />}
                                     </button>
                                 </Link>
                             </div>
@@ -211,7 +256,7 @@ export default function PricingPage() {
                     className="mt-5"
                 >
                     <p className="text-xs" style={{ color: "var(--gray-dark)" }}>
-                        Have questions about our plans? <Link href="/#faq" style={{ color: "var(--red)", fontWeight: 600, textDecoration: "underline" }}>Check out our FAQ</Link>.
+                        {t("pricing.faq")} <Link href="/#faq" style={{ color: "var(--red)", fontWeight: 600, textDecoration: "underline" }}>{t("pricing.faq.link")}</Link>.
                     </p>
                 </motion.div>
             </section>
@@ -222,7 +267,7 @@ export default function PricingPage() {
                 style={{ background: "var(--black)", color: "rgba(255,255,255,0.5)" }}
             >
                 <div className="max-w-6xl mx-auto text-center">
-                    <p className="text-xs">© 2026 PTT. All rights reserved. · Privacy Policy · Terms of Service</p>
+                    <p className="text-xs">© 2026 PTT. {t("footer.rights")} · {t("footer.privacy")} · {t("footer.terms")}</p>
                 </div>
             </footer>
         </div>

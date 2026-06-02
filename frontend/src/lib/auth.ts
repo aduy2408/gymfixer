@@ -6,6 +6,9 @@ export type AuthUser = {
   email: string;
   is_verified?: boolean;
   auth_provider?: string;
+  subscription_tier?: "free" | "trial" | "paid";
+  trial_started_at?: string | null;
+  trial_ends_at?: string | null;
 };
 
 const TOKEN_KEY = "gf_token";

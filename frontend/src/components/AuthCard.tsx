@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Activity } from "lucide-react";
+import LanguageToggle from "@/components/LanguageToggle";
 
 export default function AuthCard({
   eyebrow,
@@ -23,6 +24,9 @@ export default function AuthCard({
           <span className="brand-mark"><Activity size={16} /></span>
           <span>GymFixer</span>
         </Link>
+        <div style={{ display: "flex", justifyContent: "flex-end", margin: "-0.25rem 0 0.9rem" }}>
+          <LanguageToggle />
+        </div>
         <p className="eyebrow">{eyebrow}</p>
         <h1 className="auth-title">{title}</h1>
         <p className="auth-copy">{copy}</p>

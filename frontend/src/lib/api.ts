@@ -5,6 +5,7 @@ import { getAuthToken } from "@/lib/auth";
 export type ExerciseId = "squat" | "bicep_curl";
 export type CameraView = "side" | "front" | "three_quarter";
 export type PoseBackend = "mediapipe" | "vitpose";
+export type SubscriptionTier = "free" | "trial" | "paid";
 
 export type AuthUser = {
   id: number | string;
@@ -12,6 +13,9 @@ export type AuthUser = {
   email: string;
   is_verified?: boolean;
   auth_provider?: string;
+  subscription_tier?: SubscriptionTier;
+  trial_started_at?: string | null;
+  trial_ends_at?: string | null;
   created_at?: string;
   last_login_at?: string | null;
 };
@@ -26,6 +30,9 @@ export type UserProfile = {
   id: number | string;
   name: string;
   email: string;
+  subscription_tier?: SubscriptionTier;
+  trial_started_at?: string | null;
+  trial_ends_at?: string | null;
   height_cm: number | null;
   weight_kg: number | null;
   age: number | null;
@@ -44,6 +51,41 @@ export type UserProfileUpdate = Partial<{
   gender: UserProfile["gender"];
   goal: UserProfile["goal"];
 }>;
+
+export type SubscriptionSummary = {
+  tier: SubscriptionTier;
+  stored_tier: SubscriptionTier;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+  trial_expired: boolean;
+  window: "month" | "trial";
+  window_started_at: string;
+  resets_at: string | null;
+  limits: {
+    video_analyses: number | null;
+    ai_coaching: number | null;
+    workout_plans: number | null;
+    meal_plans: number | null;
+    history_items: number | null;
+  };
+  usage: {
+    video_analyses: number;
+    ai_coaching: number;
+    workout_plans: number;
+    meal_plans: number;
+  };
+  remaining: {
+    video_analyses: number | null;
+    ai_coaching: number | null;
+    workout_plans: number | null;
+    meal_plans: number | null;
+  };
+  features: {
+    vitpose: boolean;
+    ai_coaching: boolean;
+    full_history: boolean;
+  };
+};
 
 export type VideoAnalysisResult = {
   session_id?: number;
@@ -254,11 +296,15 @@ export type MealPlan = {
     estimated_cost_vnd?: number;
     meals: Array<{
       name: string;
+      name_en?: string;
+      name_vi?: string;
       time?: string;
       items: Array<
         | string
         | {
             name: string;
+            name_en?: string;
+            name_vi?: string;
             quantity: number;
             unit: "g" | "ml" | "large" | "piece" | "slice" | "scoop" | "tbsp" | "cup";
             calories: number;
@@ -289,7 +335,13 @@ export function apiBase(): string {
 async function parseResponse<T>(response: Response, fallback: string): Promise<T> {
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(data?.detail || data?.message || fallback);
+    const detail = data?.detail;
+    const message = typeof detail === "string" ? detail : detail?.message || data?.message || fallback;
+    const error = new Error(message);
+    if (detail && typeof detail === "object") {
+      Object.assign(error, { code: detail.code, subscription: detail.subscription });
+    }
+    throw error;
   }
   return data as T;
 }
@@ -331,6 +383,16 @@ export async function getMe(): Promise<AuthUser> {
 export async function fetchUserProfile(): Promise<UserProfile> {
   const response = await authFetch("/auth/profile");
   return parseResponse<UserProfile>(response, "Could not load profile.");
+}
+
+export async function fetchSubscription(): Promise<SubscriptionSummary> {
+  const response = await authFetch("/auth/subscription");
+  return parseResponse<SubscriptionSummary>(response, "Could not load subscription.");
+}
+
+export async function startTrial(): Promise<SubscriptionSummary> {
+  const response = await authFetch("/auth/trial/start", { method: "POST" });
+  return parseResponse<SubscriptionSummary>(response, "Could not start trial.");
 }
 
 export async function updateUserProfile(params: UserProfileUpdate): Promise<UserProfile> {

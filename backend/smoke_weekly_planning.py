@@ -10,6 +10,8 @@ def _install_import_stubs() -> None:
 
     models_mod = types.ModuleType("authentication.models")
     models_mod.User = type("User", (), {})
+    models_mod.UsageEvent = type("UsageEvent", (), {})
+    models_mod.WorkoutSession = type("WorkoutSession", (), {})
     models_mod.WeeklyMealPlan = type("WeeklyMealPlan", (), {})
     models_mod.WeeklyWorkoutPlan = type("WeeklyWorkoutPlan", (), {})
 
@@ -90,6 +92,8 @@ def _assert_vietnamese_meal_plan(payload: p.MealPlanPayload) -> None:
     assert all(name in p.FOOD_DATABASE for name in food_names)
     assert any(any(ord(char) > 127 for char in name) for name in food_names)
     assert not any(name in {"Chicken breast", "Greek yogurt", "Cooked quinoa", "Whole-grain toast"} for name in food_names)
+    assert all(item.name_en and item.name_vi for day in payload.days for meal in day.meals for item in meal.items)
+    assert all(meal.name_en and meal.name_vi for day in payload.days for meal in day.meals)
 
 
 def _assert_meal_totals(payload: p.MealPlanPayload, meals_per_day: int) -> None:
@@ -348,6 +352,10 @@ def _assert_legacy_plan_compatibility() -> None:
     assert parsed.nutrition_metrics is None
     assert parsed.days[0].estimated_cost_vnd == 0
     assert parsed.days[0].meals[0].items[0].estimated_cost_vnd == 0
+    assert parsed.days[0].meals[0].name_en == "Breakfast"
+    assert parsed.days[0].meals[0].name_vi == "Bữa sáng"
+    assert parsed.days[0].meals[0].items[0].name_en == "White rice"
+    assert parsed.days[0].meals[0].items[0].name_vi == "Cơm trắng"
 
 
 def main() -> None:

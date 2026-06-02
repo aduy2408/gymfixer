@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { clearSession, getAuthToken, setStoredUser } from "@/lib/auth";
 import { getMe } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { t } = useI18n();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   if (!ready) {
     return (
       <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", fontFamily: "'Barlow', sans-serif" }}>
-        <div style={{ color: "#777", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>Checking session...</div>
+        <div style={{ color: "#777", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>{t("auth.checkingSession")}</div>
       </div>
     );
   }

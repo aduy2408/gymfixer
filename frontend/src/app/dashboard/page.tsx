@@ -18,20 +18,23 @@ import {
     CameraView,
     ExerciseId,
     fetchAnalyticsSummary,
+    fetchSubscription,
     PoseBackend,
     saveLatestAnalysis,
+    SubscriptionSummary,
     VideoAnalysisResult,
 } from "@/lib/api";
+import { tierLabel, translateKey, useI18n } from "@/lib/i18n";
 import { mockProfile } from "@/lib/mockData";
 
-const exerciseOptions: Array<{ id: ExerciseId; label: string }> = [
-    { id: "squat", label: "Squat" },
-    { id: "bicep_curl", label: "Bicep Curl" },
+const exerciseOptions: Array<{ id: ExerciseId; labelKey: string }> = [
+    { id: "squat", labelKey: "dashboard.exercise.squat" },
+    { id: "bicep_curl", labelKey: "dashboard.exercise.bicepCurl" },
 ];
 
-const cameraViewOptions: Array<{ id: CameraView; label: string }> = [
-    { id: "side", label: "Side" },
-    { id: "front", label: "Front" },
+const cameraViewOptions: Array<{ id: CameraView; labelKey?: string; label?: string }> = [
+    { id: "side", labelKey: "dashboard.camera.side" },
+    { id: "front", labelKey: "dashboard.camera.front" },
     { id: "three_quarter", label: "45°" },
 ];
 
@@ -72,6 +75,7 @@ const inputStyle: React.CSSProperties = {
 
 export default function DashboardPage() {
     const router = useRouter();
+    const { t } = useI18n();
     const fileRef = useRef<HTMLInputElement>(null);
     const [dragOver, setDragOver] = useState(false);
     const [file, setFile] = useState<File | null>(null);
@@ -85,6 +89,7 @@ export default function DashboardPage() {
     const [lastResult, setLastResult] = useState<VideoAnalysisResult | null>(null);
     const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
     const [analyticsError, setAnalyticsError] = useState("");
+    const [subscription, setSubscription] = useState<SubscriptionSummary | null>(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -93,12 +98,26 @@ export default function DashboardPage() {
                 if (!cancelled) setAnalytics(data);
             })
             .catch((err) => {
-                if (!cancelled) setAnalyticsError(err instanceof Error ? err.message : "Could not load analytics.");
+                if (!cancelled) setAnalyticsError(err instanceof Error ? err.message : t("dashboard.analyticsError"));
             });
+        fetchSubscription()
+            .then((data) => {
+                if (!cancelled) setSubscription(data);
+            })
+            .catch(() => {});
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [t]);
+
+    useEffect(() => {
+        if (subscription && !subscription.features.ai_coaching && callLlm) {
+            setCallLlm(false);
+        }
+        if (subscription && !subscription.features.vitpose && poseBackend === "vitpose") {
+            setPoseBackend("mediapipe");
+        }
+    }, [subscription, callLlm, poseBackend]);
 
     const onDrop = useCallback((event: React.DragEvent) => {
         event.preventDefault();
@@ -139,9 +158,12 @@ export default function DashboardPage() {
             });
             setLastResult(result);
             fetchAnalyticsSummary().then(setAnalytics).catch(() => {});
+            fetchSubscription().then(setSubscription).catch(() => {});
             router.push(`/dashboard/analysis/${id}`);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Video analysis failed.");
+            const maybeSub = (err as Error & { subscription?: SubscriptionSummary }).subscription;
+            if (maybeSub) setSubscription(maybeSub);
+            setError(err instanceof Error ? err.message : t("dashboard.analysisFailed"));
         } finally {
             setIsLoading(false);
         }
@@ -163,13 +185,13 @@ export default function DashboardPage() {
                     >
                         <div>
                             <p style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--red)", marginBottom: "0.3rem" }}>
-                                Posture analysis
+                                {t("dashboard.eyebrow")}
                             </p>
                             <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.6rem", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.25rem" }}>
-                                Analyse Workout Video
+                                {t("dashboard.title")}
                             </h1>
                             <p style={{ fontSize: "0.82rem", color: "#888", fontWeight: 300 }}>
-                                FastAPI video analysis · Goal: {mockProfile.fitnessGoal}
+                                {t("dashboard.subtitle")} · {t("dashboard.goal")}: {translateKey(`dashboard.goal.${mockProfile.fitnessGoal}`, t, mockProfile.fitnessGoal)}
                             </p>
                         </div>
                     </motion.div>
@@ -180,9 +202,10 @@ export default function DashboardPage() {
                         style={{ ...cardStyle, padding: "0.9rem", marginBottom: "1rem" }}
                     >
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            <Metric label="Sessions" value={analytics?.total_sessions ?? "0"} />
-                            <Metric label="Total Reps" value={analytics?.total_reps ?? "0"} />
-                            <Metric label="Avg Quality" value={analytics?.avg_quality_ratio === null || analytics?.avg_quality_ratio === undefined ? "n/a" : `${Math.round(analytics.avg_quality_ratio * 100)}%`} />
+                            <Metric label={t("common.sessions")} value={analytics?.total_sessions ?? "0"} />
+                            <Metric label={t("common.reps")} value={analytics?.total_reps ?? "0"} />
+                            <Metric label={t("stats.avgQuality")} value={analytics?.avg_quality_ratio === null || analytics?.avg_quality_ratio === undefined ? t("common.none") : `${Math.round(analytics.avg_quality_ratio * 100)}%`} />
+                            <Metric label={t("subscription.videoQuota")} value={formatRemaining(subscription?.remaining.video_analyses, subscription?.limits.video_analyses, t)} />
                         </div>
                         {analyticsError && (
                             <p style={{ marginTop: "0.75rem", fontSize: "0.78rem", color: "var(--red)" }}>{analyticsError}</p>
@@ -218,20 +241,20 @@ export default function DashboardPage() {
                                             onClick={(event) => { event.stopPropagation(); setFile(null); }}
                                             style={{ marginTop: "0.75rem", display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.75rem", padding: "0.3rem 0.75rem", border: "1px solid #ddd", borderRadius: 3, background: "#fff", cursor: "pointer", color: "#888" }}
                                         >
-                                            <X size={11} /> Remove
+                                            <X size={11} /> {t("common.remove")}
                                         </button>
                                     </div>
                                 ) : (
                                     <div style={{ textAlign: "center", padding: "1.5rem" }}>
                                         <Upload size={36} color="#ccc" style={{ margin: "0 auto 0.75rem" }} />
-                                        <p style={{ fontWeight: 600, fontSize: "0.9rem", marginBottom: "0.25rem", color: "#444" }}>Drop a video here</p>
-                                        <p style={{ fontSize: "0.78rem", color: "#aaa" }}>MP4, MOV, or AVI · click to browse</p>
+                                        <p style={{ fontWeight: 600, fontSize: "0.9rem", marginBottom: "0.25rem", color: "#444" }}>{t("dashboard.drop")}</p>
+                                        <p style={{ fontSize: "0.78rem", color: "#aaa" }}>{t("dashboard.browse")}</p>
                                     </div>
                                 )}
                             </div>
 
                             <div style={{ marginBottom: "0.9rem" }}>
-                                <label style={labelStyle}>Exercise Type</label>
+                                <label style={labelStyle}>{t("dashboard.exercise")}</label>
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
                                     {exerciseOptions.map((option) => (
                                         <button
@@ -249,14 +272,14 @@ export default function DashboardPage() {
                                                 textAlign: "left",
                                             }}
                                         >
-                                            {option.label}
+                                                {t(option.labelKey)}
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
                             <div style={{ marginBottom: "0.9rem" }}>
-                                <label style={labelStyle}>Camera View</label>
+                                <label style={labelStyle}>{t("dashboard.camera")}</label>
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
                                     {cameraViewOptions.map((option) => (
                                         <button
@@ -274,20 +297,25 @@ export default function DashboardPage() {
                                                 textAlign: "left",
                                             }}
                                         >
-                                            {option.label}
+                                                {option.labelKey ? t(option.labelKey) : option.label}
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
                             <div style={{ marginBottom: "0.9rem" }}>
-                                <label style={labelStyle}>Pose Backend</label>
+                                <label style={labelStyle}>{t("dashboard.backend")}</label>
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
                                     {poseBackendOptions.map((option) => (
+                                        (() => {
+                                            const disabled = option.id === "vitpose" && subscription ? !subscription.features.vitpose : false;
+                                            return (
                                         <button
                                             key={option.id}
                                             type="button"
-                                            onClick={() => setPoseBackend(option.id)}
+                                            disabled={disabled}
+                                            title={disabled ? t("dashboard.vitposeLocked") : option.label}
+                                            onClick={() => !disabled && setPoseBackend(option.id)}
                                             style={{
                                                 background: poseBackend === option.id ? "var(--navy)" : "#fff",
                                                 color: poseBackend === option.id ? "#fff" : "#444",
@@ -295,31 +323,39 @@ export default function DashboardPage() {
                                                 padding: "0.5rem 0.7rem",
                                                 fontSize: "0.8rem",
                                                 fontWeight: poseBackend === option.id ? 700 : 500,
-                                                cursor: "pointer",
+                                                cursor: disabled ? "not-allowed" : "pointer",
+                                                opacity: disabled ? 0.45 : 1,
                                                 textAlign: "left",
                                             }}
                                         >
                                             {option.label}
                                         </button>
+                                            );
+                                        })()
                                     ))}
                                 </div>
                             </div>
 
                             <div className="grid gap-3 md:grid-cols-2" style={{ marginBottom: "0.9rem" }}>
                                 <div>
-                                    <label style={labelStyle}>Sample FPS</label>
+                                    <label style={labelStyle}>{t("dashboard.sampleFps")}</label>
                                     <input type="number" min={1} max={30} value={sampleFps} onChange={(event) => setSampleFps(Number(event.target.value))} style={inputStyle} />
                                 </div>
                                 <p style={{ fontSize: "0.78rem", color: "#888", lineHeight: 1.55, alignSelf: "end", marginBottom: "0.15rem" }}>
-                                    Use clips around 20 seconds. The report highlights distinct mistake frames automatically.
+                                    {t("dashboard.clipHint")}
                                 </p>
                             </div>
 
                             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
                                 <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
                                     <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.82rem", color: "#555" }}>
-                                        <input type="checkbox" checked={callLlm} onChange={(event) => setCallLlm(event.target.checked)} />
-                                        AI Coaching
+                                        <input
+                                            type="checkbox"
+                                            checked={callLlm}
+                                            disabled={subscription ? !subscription.features.ai_coaching : false}
+                                            onChange={(event) => setCallLlm(event.target.checked)}
+                                        />
+                                        {t("dashboard.ai")} {subscription && !subscription.features.ai_coaching ? `(${tierLabel(subscription.tier, t)} ${t("common.upgrade")})` : ""}
                                     </label>
                                 </div>
                                 <button
@@ -330,7 +366,7 @@ export default function DashboardPage() {
                                     style={{ borderRadius: 4, padding: "0.65rem 1.1rem", opacity: file && !isLoading ? 1 : 0.45, cursor: file && !isLoading ? "pointer" : "not-allowed" }}
                                 >
                                     {isLoading ? <Loader2 size={16} className="animate-spin" /> : <FileVideo size={16} />}
-                                    {isLoading ? "Analysing..." : "Analyse Video"}
+                                    {isLoading ? t("dashboard.submitting") : t("dashboard.submit")}
                                 </button>
                             </div>
 
@@ -345,18 +381,18 @@ export default function DashboardPage() {
                             <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} style={{ ...cardStyle, padding: "0.8rem" }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.55rem" }}>
                                     <BarChart2 size={14} color="var(--navy)" />
-                                    <p style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#999" }}>Latest Result</p>
+                                    <p style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#999" }}>{t("dashboard.latest")}</p>
                                 </div>
                                 {lastResult ? (
                                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
-                                        <Metric label="Reps" value={lastResult.summary.rep_count} />
-                                        <Metric label="Frames" value={lastResult.summary.frames_analyzed} />
-                                        <Metric label="Time" value={`${Math.round(lastResult.summary.processing_ms / 1000)}s`} />
-                                        <Metric label="Quality" value={quality === undefined ? "n/a" : `${Math.round(quality * 100)}%`} />
+                                        <Metric label={t("common.reps")} value={lastResult.summary.rep_count} />
+                                        <Metric label={t("common.frames")} value={lastResult.summary.frames_analyzed} />
+                                        <Metric label={t("common.processing")} value={`${Math.round(lastResult.summary.processing_ms / 1000)}s`} />
+                                        <Metric label={t("common.quality")} value={quality === undefined ? t("common.none") : `${Math.round(quality * 100)}%`} />
                                     </div>
                                 ) : (
                                     <p style={{ fontSize: "0.82rem", color: "#888", lineHeight: 1.6 }}>
-                                        The result page opens automatically after backend analysis finishes.
+                                        {t("dashboard.resultHint")}
                                     </p>
                                 )}
                             </motion.div>
@@ -375,4 +411,10 @@ function Metric({ label, value }: { label: string; value: string | number }) {
             <p style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "#999", marginTop: "0.25rem" }}>{label}</p>
         </div>
     );
+}
+
+function formatRemaining(remaining: number | null | undefined, limit: number | null | undefined, t: (key: string) => string) {
+    if (limit === undefined) return t("common.none");
+    if (limit === null) return "∞";
+    return `${remaining ?? 0}/${limit}`;
 }

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from authentication.database import get_db
 from authentication.models import AnalysisResult, User, WorkoutSession
 from authentication.utils import get_current_user
+from entitlements import history_limit_for_user
 
 router = APIRouter(tags=["users", "workouts", "analytics"])
 
@@ -19,6 +20,9 @@ def me(current_user: User = Depends(get_current_user)) -> dict[str, Any]:
         "id": current_user.id,
         "name": current_user.name,
         "email": current_user.email,
+        "subscription_tier": current_user.subscription_tier,
+        "trial_started_at": current_user.trial_started_at,
+        "trial_ends_at": current_user.trial_ends_at,
         "created_at": current_user.created_at,
     }
 
@@ -29,7 +33,7 @@ def list_workouts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
-    limit = min(max(limit, 1), 100)
+    limit = history_limit_for_user(current_user, limit)
     sessions = (
         db.query(WorkoutSession)
         .options(joinedload(WorkoutSession.analysis_result))

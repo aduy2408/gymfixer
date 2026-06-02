@@ -6,9 +6,12 @@ import { Eye, EyeOff, AlertCircle, Activity } from "lucide-react";
 import { setSession } from "@/lib/auth";
 import { login } from "@/lib/api";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
+import LanguageToggle from "@/components/LanguageToggle";
+import { useI18n } from "@/lib/i18n";
 
 export default function LoginPage() {
     const router = useRouter();
+    const { t } = useI18n();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPass, setShowPass] = useState(false);
@@ -18,9 +21,9 @@ export default function LoginPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
-        if (!email) return setError("Email is required.");
-        if (!/\S+@\S+\.\S+/.test(email)) return setError("Please enter a valid email address.");
-        if (password.length < 6) return setError("Password must be at least 6 characters.");
+        if (!email) return setError(t("auth.emailRequired"));
+        if (!/\S+@\S+\.\S+/.test(email)) return setError(t("auth.emailInvalid"));
+        if (password.length < 6) return setError(t("auth.passwordTooShort"));
 
         setLoading(true);
         try {
@@ -29,7 +32,7 @@ export default function LoginPage() {
             router.push("/dashboard");
         } catch (err) {
             setLoading(false);
-            return setError(err instanceof Error ? err.message : "Login failed.");
+            return setError(err instanceof Error ? err.message : t("auth.loginFailed"));
         }
     };
 
@@ -64,21 +67,21 @@ export default function LoginPage() {
 
                 <div>
                     <p style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--red)", marginBottom: "1rem" }}>
-                        AI-Powered Coaching
+                        {t("auth.sideEyebrow")}
                     </p>
                     <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "3.5rem", textTransform: "uppercase", lineHeight: 0.95, color: "#fff", marginBottom: "1.5rem" }}>
-                        TRAIN SMART.<br />
-                        <span style={{ color: "var(--red)" }}>LIFT SAFE.</span>
+                        {t("auth.sideTitle1")}<br />
+                        <span style={{ color: "var(--red)" }}>{t("auth.sideTitle2")}</span>
                     </h2>
                     <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.9rem", lineHeight: 1.7, maxWidth: 340, fontWeight: 300 }}>
-                        AI-powered workout analysis that identifies posture errors and keeps you injury-free.
+                        {t("auth.sideCopy")}
                     </p>
 
                     <div style={{ marginTop: "2.5rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                        {["Pose detection across 18+ joints", "Frame-by-frame angle analysis", "Personalised correction suggestions"].map((item) => (
+                        {["auth.loginBullet1", "auth.loginBullet2", "auth.loginBullet3"].map((item) => (
                             <div key={item} style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                                 <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--red)", flexShrink: 0 }} />
-                                <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.875rem" }}>{item}</span>
+                                <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.875rem" }}>{t(item)}</span>
                             </div>
                         ))}
                     </div>
@@ -90,6 +93,9 @@ export default function LoginPage() {
             {/* Right — form */}
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem 1.5rem" }}>
                 <div style={{ width: "100%", maxWidth: 420 }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "1rem" }}>
+                        <LanguageToggle />
+                    </div>
 
                     {/* Mobile logo */}
                     <div className="lg:hidden" style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "2rem" }}>
@@ -102,19 +108,19 @@ export default function LoginPage() {
                     </div>
 
                     <p style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--red)", marginBottom: "0.5rem" }}>
-                        Welcome Back
+                        {t("auth.welcomeBack")}
                     </p>
                     <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "2.6rem", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.5rem" }}>
-                        SIGN IN
+                        {t("auth.signIn")}
                     </h1>
                     <p style={{ color: "#888", fontSize: "0.875rem", marginBottom: "2rem", fontWeight: 300 }}>
-                        Sign in to your account to continue.
+                        {t("auth.signInCopy")}
                     </p>
 
                     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                         <div>
                             <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", color: "#333" }}>
-                                Email Address
+                                {t("auth.email")}
                             </label>
                             <input
                                 id="login-email"
@@ -132,9 +138,9 @@ export default function LoginPage() {
                         <div>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
                                 <label style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#333" }}>
-                                    Password
+                                    {t("auth.password")}
                                 </label>
-                                <Link href="/auth/forgot-password" style={{ fontSize: "0.75rem", color: "var(--red)", fontWeight: 600 }}>Forgot password?</Link>
+                                <Link href="/auth/forgot-password" style={{ fontSize: "0.75rem", color: "var(--red)", fontWeight: 600 }}>{t("auth.forgot")}</Link>
                             </div>
                             <div style={{ position: "relative" }}>
                                 <input
@@ -142,7 +148,7 @@ export default function LoginPage() {
                                     type={showPass ? "text" : "password"}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="Enter your password"
+                                    placeholder={t("auth.passwordPlaceholder")}
                                     style={{ ...inputStyle, paddingRight: "2.75rem" }}
                                     autoComplete="current-password"
                                     onFocus={(e) => (e.target.style.background = "#e8e8e8")}
@@ -177,24 +183,24 @@ export default function LoginPage() {
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
                                         <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8z" />
                                     </svg>
-                                    SIGNING IN…
+                                    {t("auth.signingIn")}
                                 </span>
-                            ) : "SIGN IN"}
+                            ) : t("auth.signIn")}
                         </button>
                     </form>
 
                     <div style={{ display: "flex", alignItems: "center", gap: "1rem", margin: "1.5rem 0" }}>
                         <div style={{ flex: 1, height: 1, background: "#e8e8e8" }} />
-                        <span style={{ fontSize: "0.75rem", color: "#bbb", textTransform: "uppercase", letterSpacing: "0.08em" }}>or</span>
+                        <span style={{ fontSize: "0.75rem", color: "#bbb", textTransform: "uppercase", letterSpacing: "0.08em" }}>{t("auth.or")}</span>
                         <div style={{ flex: 1, height: 1, background: "#e8e8e8" }} />
                     </div>
 
                     <GoogleSignInButton onSuccess={() => router.push("/dashboard")} onError={setError} />
 
                     <p style={{ textAlign: "center", fontSize: "0.875rem", color: "#888", marginTop: "1.5rem" }}>
-                        Don&apos;t have an account?{" "}
+                        {t("auth.noAccount")}{" "}
                         <Link href="/auth/register" style={{ fontWeight: 700, color: "var(--red)" }}>
-                            Sign up free
+                            {t("auth.signUpFree")}
                         </Link>
                     </p>
                 </div>

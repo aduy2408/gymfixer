@@ -7,18 +7,21 @@ import { Activity, BarChart3, CalendarDays, ChevronsLeft, ChevronsRight, History
 import { useEffect, useState } from "react";
 import { clearSession, getStoredUser, AuthUser } from "@/lib/auth";
 import { logout } from "@/lib/api";
+import { tierLabel, useI18n } from "@/lib/i18n";
+import LanguageToggle from "@/components/LanguageToggle";
 
 const navLinks = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/history", label: "History", icon: History },
-  { href: "/dashboard/plans", label: "Plans", icon: CalendarDays },
-  { href: "/dashboard/statistics", label: "Statistics", icon: BarChart3 },
-  { href: "/dashboard/profile", label: "Profile", icon: User },
+  { href: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
+  { href: "/dashboard/history", labelKey: "nav.history", icon: History },
+  { href: "/dashboard/plans", labelKey: "nav.plans", icon: CalendarDays },
+  { href: "/dashboard/statistics", labelKey: "nav.statistics", icon: BarChart3 },
+  { href: "/dashboard/profile", labelKey: "nav.profile", icon: User },
 ];
 
 export default function DashboardNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useI18n();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -58,8 +61,9 @@ export default function DashboardNav() {
 
   const navItems = (
     <nav className="app-nav-list">
-      {navLinks.map(({ href, label, icon: Icon }) => {
+      {navLinks.map(({ href, labelKey, icon: Icon }) => {
         const active = isActive(href);
+        const label = t(labelKey);
         return (
           <Link key={href} href={href} className={`app-nav-item ${active ? "active" : ""}`} onClick={() => setMobileOpen(false)} title={label}>
             <Icon size={17} />
@@ -72,16 +76,16 @@ export default function DashboardNav() {
 
   const userBlock = (
     <>
-      <div className="app-user-card" title={user?.email || "Signed in"}>
+      <div className="app-user-card" title={user?.email || t("auth.signIn")}>
         <div className="app-user-avatar">{initial}</div>
         <div className="app-user-meta">
-          <p>{user?.name || "PTT User"}</p>
-          <span>{user?.email || "Signed in"}</span>
+          <p>{user?.name || t("common.defaultUser")}</p>
+          <span>{user?.email || t("auth.signIn")} · {tierLabel(user?.subscription_tier || "free", t)}</span>
         </div>
       </div>
-      <button onClick={handleLogout} className="app-logout" title="Sign out">
+      <button onClick={handleLogout} className="app-logout" title={t("auth.signOut")}>
         <LogOut size={15} />
-        <span>Sign out</span>
+        <span>{t("auth.signOut")}</span>
       </button>
     </>
   );
@@ -93,15 +97,18 @@ export default function DashboardNav() {
           <span className="brand-mark"><Activity size={16} /></span>
           <span>PTT</span>
         </div>
-        <div className="app-nav-label">Workspace</div>
+        <div className="app-nav-label">{t("nav.workspace")}</div>
         {navItems}
+        <div style={{ padding: collapsed ? "0 0.55rem" : "0 0.85rem", marginTop: "0.75rem" }}>
+          <LanguageToggle compact={collapsed} />
+        </div>
         {userBlock}
         <button
           type="button"
           onClick={toggleCollapsed}
           className="app-sidebar-handle"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={collapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")}
+          title={collapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")}
         >
           {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
         </button>
@@ -112,7 +119,7 @@ export default function DashboardNav() {
           <span className="brand-mark"><Activity size={15} /></span>
           <span>PTT</span>
         </div>
-        <button onClick={() => setMobileOpen(!mobileOpen)} className="app-menu-button" aria-label="Toggle navigation">
+        <button onClick={() => setMobileOpen(!mobileOpen)} className="app-menu-button" aria-label={t("nav.toggle")}>
           {mobileOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
@@ -120,7 +127,10 @@ export default function DashboardNav() {
       <AnimatePresence>
         {mobileOpen && (
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="app-mobile-drawer">
-            <div className="app-nav-label">Workspace</div>
+            <div className="app-nav-label">{t("nav.workspace")}</div>
+            <div style={{ padding: "0 0.85rem 0.75rem" }}>
+              <LanguageToggle />
+            </div>
             {navItems}
             {userBlock}
           </motion.div>

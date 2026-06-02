@@ -2,7 +2,7 @@ import re
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 PASSWORD_SPECIAL_RE = re.compile(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\/;\'`~]')
@@ -75,17 +75,22 @@ class TokenData(BaseModel):
     user_id: Optional[int] = None
 
 
+SubscriptionTier = Literal["free", "trial", "paid"]
+
+
 class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     email: EmailStr
     is_verified: bool
     auth_provider: str
+    subscription_tier: SubscriptionTier = "free"
+    trial_started_at: Optional[datetime] = None
+    trial_ends_at: Optional[datetime] = None
     created_at: datetime
     last_login_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
 
 
 ProfileGender = Literal["male", "female", "other", ""]
@@ -125,6 +130,9 @@ class UserProfileOut(BaseModel):
     id: int
     name: str
     email: EmailStr
+    subscription_tier: SubscriptionTier = "free"
+    trial_started_at: Optional[datetime] = None
+    trial_ends_at: Optional[datetime] = None
     height_cm: Optional[int] = None
     weight_kg: Optional[int] = None
     age: Optional[int] = None

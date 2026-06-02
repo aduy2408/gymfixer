@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loginWithGoogle } from "@/lib/api";
 import { setSession } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 
 declare global {
   interface Window {
@@ -22,6 +23,7 @@ declare global {
 }
 
 export default function GoogleSignInButton({ onSuccess, onError }: { onSuccess: () => void; onError: (message: string) => void }) {
+  const { t } = useI18n();
   const initializedRef = useRef(false);
   const [ready, setReady] = useState(false);
   const [scriptError, setScriptError] = useState(false);
@@ -36,13 +38,13 @@ export default function GoogleSignInButton({ onSuccess, onError }: { onSuccess: 
         client_id: clientId,
         use_fedcm_for_prompt: false,
         callback: async (response) => {
-          if (!response.credential) return onError("Google did not return a credential.");
+          if (!response.credential) return onError(t("auth.googleNoCredential"));
           try {
             const data = await loginWithGoogle(response.credential);
             setSession(data.access_token, data.user);
             onSuccess();
           } catch (err) {
-            onError(err instanceof Error ? err.message : "Google sign-in failed.");
+            onError(err instanceof Error ? err.message : t("auth.googleFailed"));
           }
         },
       });
@@ -69,14 +71,14 @@ export default function GoogleSignInButton({ onSuccess, onError }: { onSuccess: 
     script.onload = initialize;
     script.onerror = () => setScriptError(true);
     document.head.appendChild(script);
-  }, [clientId, onError, onSuccess]);
+  }, [clientId, onError, onSuccess, t]);
 
   if (!clientId) {
-    return <p className="field-help" style={{ textAlign: "center" }}>Google login needs NEXT_PUBLIC_GOOGLE_CLIENT_ID in frontend/.env.</p>;
+    return <p className="field-help" style={{ textAlign: "center" }}>{t("auth.googleMissing")}</p>;
   }
 
   if (scriptError) {
-    return <p className="alert-error" style={{ justifyContent: "center" }}>Could not load Google Sign-In. Check network or Google Cloud origin config.</p>;
+    return <p className="alert-error" style={{ justifyContent: "center" }}>{t("auth.googleLoadError")}</p>;
   }
 
   const buttonStyle: React.CSSProperties = {
@@ -132,7 +134,7 @@ export default function GoogleSignInButton({ onSuccess, onError }: { onSuccess: 
           fill="#EA4335"
         />
       </svg>
-      <span>{ready ? "Continue with Google" : "Loading Google..."}</span>
+      <span>{ready ? t("auth.continueGoogle") : t("auth.loadingGoogle")}</span>
     </button>
   );
 }

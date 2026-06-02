@@ -7,6 +7,9 @@
   "scripts": {
     "dev": "concurrently \"npm:backend\" \"npm:frontend\" --names BACKEND,FRONTEND --kill-others-on-fail",
     "start": "npm run dev",
+    "test": "npm run test:all",
+    "test:all": "npm run test:backend && npm --prefix frontend run lint && npm --prefix frontend run build && npm --prefix frontend run test:e2e",
+    "test:backend": "python -m pytest backend",
     "build:frontend": "npm --prefix frontend run build",
     "backend": "python -m uvicorn main:app --host 0.0.0.0 --port 5000 --reload --reload-dir backend --app-dir backend",
     "backend:single": "python -m uvicorn main:app --host 0.0.0.0 --port 5000 --app-dir backend",

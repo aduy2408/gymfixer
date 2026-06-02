@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { AlertTriangle, Dumbbell, History, RotateCcw } from "lucide-react";
 import DashboardNav from "@/components/DashboardNav";
 import { AnalyticsSummary, fetchAnalyticsSummary } from "@/lib/api";
+import { formatExerciseName, formatStatus, useI18n } from "@/lib/i18n";
 
 const cardStyle: React.CSSProperties = {
     background: "#fff",
@@ -31,6 +32,7 @@ function isProblemFeedback(item: string) {
 }
 
 export default function StatisticsPage() {
+    const { t } = useI18n();
     const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(true);
@@ -42,7 +44,7 @@ export default function StatisticsPage() {
                 if (!cancelled) setAnalytics(data);
             })
             .catch((err) => {
-                if (!cancelled) setError(err instanceof Error ? err.message : "Could not load statistics.");
+                if (!cancelled) setError(err instanceof Error ? err.message : t("stats.loadError"));
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);
@@ -50,7 +52,7 @@ export default function StatisticsPage() {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [t]);
 
     const formIssues = useMemo(() => {
         return Object.entries(analytics?.top_feedback || {})
@@ -68,13 +70,13 @@ export default function StatisticsPage() {
                 <div style={{ maxWidth: 1100, margin: "0 auto" }}>
                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
                         <p style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--red)", marginBottom: "0.35rem" }}>
-                            Training data
+                            {t("stats.eyebrow")}
                         </p>
                         <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "2.25rem", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.35rem" }}>
-                            Statistics
+                            {t("stats.title")}
                         </h1>
                         <p style={{ fontSize: "0.84rem", color: "#888" }}>
-                            Common form issues and workout trends from your saved analyses.
+                            {t("stats.copy")}
                         </p>
                     </motion.div>
 
@@ -85,16 +87,16 @@ export default function StatisticsPage() {
                     )}
 
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        <Metric label="Sessions" value={loading ? "..." : analytics?.total_sessions ?? 0} />
-                        <Metric label="Total Reps" value={loading ? "..." : analytics?.total_reps ?? 0} />
-                        <Metric label="Avg Quality" value={analytics?.avg_quality_ratio == null ? "n/a" : `${Math.round(analytics.avg_quality_ratio * 100)}%`} />
-                        <Metric label="Avg Processing" value={analytics?.avg_processing_ms == null ? "n/a" : `${Math.round(analytics.avg_processing_ms / 1000)}s`} />
+                        <Metric label={t("common.sessions")} value={loading ? "..." : analytics?.total_sessions ?? 0} />
+                        <Metric label={t("common.reps")} value={loading ? "..." : analytics?.total_reps ?? 0} />
+                        <Metric label={t("stats.avgQuality")} value={analytics?.avg_quality_ratio == null ? t("common.none") : `${Math.round(analytics.avg_quality_ratio * 100)}%`} />
+                        <Metric label={t("stats.avgProcessing")} value={analytics?.avg_processing_ms == null ? t("common.none") : `${Math.round(analytics.avg_processing_ms / 1000)}s`} />
                     </div>
 
                     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
                         <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} style={{ ...cardStyle, padding: "1.25rem" }}>
                             <h2 className="font-bold text-base mb-4 flex items-center gap-2">
-                                <AlertTriangle size={17} style={{ color: "#f59e0b" }} /> Most Common Form Issues
+                                <AlertTriangle size={17} style={{ color: "#f59e0b" }} /> {t("stats.commonIssues")}
                             </h2>
                             {formIssues.length > 0 ? (
                                 <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
@@ -102,7 +104,7 @@ export default function StatisticsPage() {
                                         <div key={issue}>
                                             <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", marginBottom: "0.35rem" }}>
                                                 <p style={{ fontSize: "0.88rem", color: "#444", lineHeight: 1.35 }}>{issue}</p>
-                                                <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "var(--red)", whiteSpace: "nowrap" }}>{count} frames</span>
+                                                <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "var(--red)", whiteSpace: "nowrap" }}>{count} {t("stats.frames")}</span>
                                             </div>
                                             <div style={{ height: 7, background: "#f0f0f0", borderRadius: 999, overflow: "hidden" }}>
                                                 <div style={{ height: "100%", width: `${Math.max(8, (count / maxIssueCount) * 100)}%`, background: "var(--red)" }} />
@@ -111,37 +113,37 @@ export default function StatisticsPage() {
                                     ))}
                                 </div>
                             ) : (
-                                <EmptyState text="No form issues have been recorded yet. Run a few video analyses first." />
+                                <EmptyState text={t("stats.noIssues")} />
                             )}
                         </motion.section>
 
                         <aside style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                             <section style={{ ...cardStyle, padding: "1rem" }}>
                                 <h2 className="font-bold text-sm mb-3 flex items-center gap-2">
-                                    <Dumbbell size={16} style={{ color: "var(--navy)" }} /> Exercises
+                                    <Dumbbell size={16} style={{ color: "var(--navy)" }} /> {t("stats.exercises")}
                                 </h2>
                                 {exerciseRows.length > 0 ? (
                                     <div style={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
                                         {exerciseRows.map((exercise) => (
                                             <div key={exercise} style={{ border: "1px solid #eee", borderRadius: 4, padding: "0.75rem", background: "#fafafa" }}>
                                                 <p style={{ fontSize: "0.78rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "#555", marginBottom: "0.45rem" }}>
-                                                    {exercise.replaceAll("_", " ")}
+                                                    {formatExerciseName(exercise, t)}
                                                 </p>
                                                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                                                    <SmallMetric label="Sessions" value={analytics?.sessions_by_exercise[exercise] ?? 0} />
-                                                    <SmallMetric label="Reps" value={analytics?.reps_by_exercise[exercise] ?? 0} />
+                                                    <SmallMetric label={t("common.sessions")} value={analytics?.sessions_by_exercise[exercise] ?? 0} />
+                                                    <SmallMetric label={t("common.reps")} value={analytics?.reps_by_exercise[exercise] ?? 0} />
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                 ) : (
-                                    <EmptyState text="No exercise history yet." />
+                                    <EmptyState text={t("stats.noExercise")} />
                                 )}
                             </section>
 
                             <section style={{ ...cardStyle, padding: "1rem" }}>
                                 <h2 className="font-bold text-sm mb-3 flex items-center gap-2">
-                                    <History size={16} style={{ color: "var(--red)" }} /> Recent Sessions
+                                    <History size={16} style={{ color: "var(--red)" }} /> {t("stats.recent")}
                                 </h2>
                                 {analytics?.recent_sessions?.length ? (
                                     <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
@@ -149,17 +151,17 @@ export default function StatisticsPage() {
                                             <Link key={session.id} href={`/dashboard/analysis/${session.id}`}>
                                                 <div style={{ border: "1px solid #eee", borderRadius: 4, padding: "0.7rem", background: "#fafafa", cursor: "pointer" }}>
                                                     <p style={{ fontSize: "0.78rem", fontWeight: 800, color: "#444", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                                        {session.exercise.replaceAll("_", " ")}
+                                                        {formatExerciseName(session.exercise, t)}
                                                     </p>
                                                     <p style={{ fontSize: "0.72rem", color: "#999", marginTop: "0.25rem" }}>
-                                                        {session.summary?.rep_count ?? 0} reps · {session.status}
+                                                        {session.summary?.rep_count ?? 0} {t("common.reps").toLowerCase()} · {formatStatus(session.status, t)}
                                                     </p>
                                                 </div>
                                             </Link>
                                         ))}
                                     </div>
                                 ) : (
-                                    <EmptyState text="No recent sessions yet." />
+                                    <EmptyState text={t("stats.noRecent")} />
                                 )}
                             </section>
                         </aside>

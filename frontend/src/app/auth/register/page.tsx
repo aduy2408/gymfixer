@@ -6,16 +6,19 @@ import { Eye, EyeOff, AlertCircle, CheckCircle, Activity } from "lucide-react";
 import { setSession } from "@/lib/auth";
 import { login, register } from "@/lib/api";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
+import LanguageToggle from "@/components/LanguageToggle";
+import { useI18n } from "@/lib/i18n";
 
 const passwordChecks = [
-    { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
-    { label: "Contains a letter", test: (p: string) => /[a-zA-Z]/.test(p) },
-    { label: "Contains a number", test: (p: string) => /\d/.test(p) },
-    { label: "Contains a special character", test: (p: string) => /[!@#$%^&*(),.?\":{}|<>_\-+=\[\]\\/;'`~]/.test(p) },
+    { labelKey: "auth.ruleLength", test: (p: string) => p.length >= 8 },
+    { labelKey: "auth.ruleLetter", test: (p: string) => /[a-zA-Z]/.test(p) },
+    { labelKey: "auth.ruleNumber", test: (p: string) => /\d/.test(p) },
+    { labelKey: "auth.ruleSpecial", test: (p: string) => /[!@#$%^&*(),.?\":{}|<>_\-+=\[\]\\/;'`~]/.test(p) },
 ];
 
 export default function RegisterPage() {
     const router = useRouter();
+    const { t } = useI18n();
     const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
     const [showPass, setShowPass] = useState(false);
     const [error, setError] = useState("");
@@ -27,10 +30,10 @@ export default function RegisterPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
-        if (!form.name.trim()) return setError("Full name is required.");
-        if (!form.email || !/\S+@\S+\.\S+/.test(form.email)) return setError("Enter a valid email.");
-        if (!passwordChecks.every((check) => check.test(form.password))) return setError("Password must be at least 8 characters and include a letter, number, and special character.");
-        if (form.password !== form.confirm) return setError("Passwords do not match.");
+        if (!form.name.trim()) return setError(t("auth.nameRequired"));
+        if (!form.email || !/\S+@\S+\.\S+/.test(form.email)) return setError(t("common.requiredEmail"));
+        if (!passwordChecks.every((check) => check.test(form.password))) return setError(t("auth.passwordRuleError"));
+        if (form.password !== form.confirm) return setError(t("auth.passwordMismatch"));
 
         setLoading(true);
         try {
@@ -40,7 +43,7 @@ export default function RegisterPage() {
             router.push("/onboarding/intro");
         } catch (err) {
             setLoading(false);
-            return setError(err instanceof Error ? err.message : "Registration failed. Please try again.");
+            return setError(err instanceof Error ? err.message : t("auth.registerFailed"));
         }
     };
 
@@ -85,22 +88,22 @@ export default function RegisterPage() {
 
                 <div>
                     <p style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--red)", marginBottom: "1rem" }}>
-                        Free to get started
+                        {t("auth.freeForever")}
                     </p>
                     <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "2.7rem", textTransform: "uppercase", lineHeight: 0.95, color: "#fff", marginBottom: "1rem" }}>
-                        START YOUR<br />
-                        <span style={{ color: "var(--red)" }}>FITNESS JOURNEY.</span>
+                        {t("auth.startJourney1")}<br />
+                        <span style={{ color: "var(--red)" }}>{t("auth.startJourney2")}</span>
                     </h2>
                     <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.82rem", lineHeight: 1.55, maxWidth: 320, fontWeight: 300 }}>
-                        Create your profile, set your goals, and let AI coach your every rep.
+                        {t("auth.sideCopy")}
                     </p>
 
                     <div style={{ marginTop: "1.6rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
                         {[
-                            { value: "Free", label: "To get started" },
-                            { value: "2 min", label: "To first analysis" },
-                            { value: "18+", label: "Joints tracked" },
-                            { value: "∞", label: "Videos stored" },
+                            { value: t("common.freeMetric"), label: t("auth.metricFreeLabel") },
+                            { value: "2 min", label: t("auth.metricFirstAnalysis") },
+                            { value: "18+", label: t("auth.metricJoints") },
+                            { value: "∞", label: t("auth.metricVideos") },
                         ].map((s) => (
                             <div key={s.label} style={{ padding: "0.75rem", borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)" }}>
                                 <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.35rem", color: "var(--red)", lineHeight: 1 }}>{s.value}</p>
@@ -116,6 +119,9 @@ export default function RegisterPage() {
             {/* Right — form */}
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem 1.25rem", overflowY: "auto" }}>
                 <div style={{ width: "100%", maxWidth: 380 }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.75rem" }}>
+                        <LanguageToggle />
+                    </div>
 
                     {/* Mobile logo */}
                     <div className="lg:hidden" style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
@@ -128,19 +134,19 @@ export default function RegisterPage() {
                     </div>
 
                     <p style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--red)", marginBottom: "0.5rem" }}>
-                        Free forever
+                        {t("auth.freeForever")}
                     </p>
                     <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "2rem", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.3rem" }}>
-                        GET STARTED NOW
+                        {t("auth.getStarted")}
                     </h1>
                     <p style={{ color: "#888", fontSize: "0.8rem", marginBottom: "1rem", fontWeight: 300 }}>
-                        No credit card required.
+                        {t("auth.noCard")}
                     </p>
 
                     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
                         {/* Name */}
                         <div>
-                            <label style={LabelStyle}>Full Name</label>
+                            <label style={LabelStyle}>{t("auth.fullName")}</label>
                             <input id="reg-name" type="text" value={form.name} onChange={update("name")}
                                 placeholder="Alex Johnson" style={inputStyle}
                                 onFocus={(e) => (e.target.style.background = "#e8e8e8")}
@@ -149,7 +155,7 @@ export default function RegisterPage() {
 
                         {/* Email */}
                         <div>
-                            <label style={LabelStyle}>Email Address</label>
+                            <label style={LabelStyle}>{t("auth.email")}</label>
                             <input id="reg-email" type="email" value={form.email} onChange={update("email")}
                                 placeholder="you@example.com" style={inputStyle} autoComplete="email"
                                 onFocus={(e) => (e.target.style.background = "#e8e8e8")}
@@ -158,10 +164,10 @@ export default function RegisterPage() {
 
                         {/* Password */}
                         <div>
-                            <label style={LabelStyle}>Password</label>
+                            <label style={LabelStyle}>{t("auth.password")}</label>
                             <div style={{ position: "relative" }}>
                                 <input id="reg-password" type={showPass ? "text" : "password"} value={form.password}
-                                    onChange={update("password")} placeholder="Enter your password"
+                                    onChange={update("password")} placeholder={t("auth.passwordPlaceholder")}
                                     style={{ ...inputStyle, paddingRight: "2.75rem" }} autoComplete="new-password"
                                     onFocus={(e) => (e.target.style.background = "#e8e8e8")}
                                     onBlur={(e) => (e.target.style.background = "#f2f2f2")} />
@@ -173,9 +179,9 @@ export default function RegisterPage() {
                             {form.password.length > 0 && (
                                 <div style={{ marginTop: "0.35rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.2rem 0.5rem" }}>
                                     {passwordChecks.map((c) => (
-                                        <div key={c.label} style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.68rem" }}>
+                                        <div key={c.labelKey} style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.68rem" }}>
                                             <CheckCircle size={11} style={{ color: c.test(form.password) ? "#10b981" : "#ccc" }} />
-                                            <span style={{ color: c.test(form.password) ? "#10b981" : "#aaa" }}>{c.label}</span>
+                                            <span style={{ color: c.test(form.password) ? "#10b981" : "#aaa" }}>{t(c.labelKey)}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -184,14 +190,14 @@ export default function RegisterPage() {
 
                         {/* Confirm */}
                         <div>
-                            <label style={LabelStyle}>Confirm Password</label>
+                            <label style={LabelStyle}>{t("auth.confirmPassword")}</label>
                             <input id="reg-confirm" type="password" value={form.confirm} onChange={update("confirm")}
-                                placeholder="Repeat your password" autoComplete="new-password"
+                                placeholder={t("auth.repeatPassword")} autoComplete="new-password"
                                 style={{ ...inputStyle, borderBottom: form.confirm && form.confirm !== form.password ? "2px solid var(--red)" : "none" }}
                                 onFocus={(e) => (e.target.style.background = "#e8e8e8")}
                                 onBlur={(e) => (e.target.style.background = "#f2f2f2")} />
                             {form.confirm && form.confirm !== form.password && (
-                                <p style={{ fontSize: "0.75rem", color: "var(--red)", marginTop: "0.25rem" }}>Passwords don&apos;t match</p>
+                                <p style={{ fontSize: "0.75rem", color: "var(--red)", marginTop: "0.25rem" }}>{t("auth.passwordsDontMatch")}</p>
                             )}
                         </div>
 
@@ -209,15 +215,15 @@ export default function RegisterPage() {
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
                                         <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8z" />
                                     </svg>
-                                    CREATING ACCOUNT…
+                                    {t("auth.creatingAccount")}
                                 </span>
-                            ) : "CREATE ACCOUNT"}
+                            ) : t("auth.createAccount")}
                         </button>
                     </form>
 
                     <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", margin: "0.85rem 0" }}>
                         <div style={{ flex: 1, height: 1, background: "#e8e8e8" }} />
-                        <span style={{ fontSize: "0.75rem", color: "#bbb", textTransform: "uppercase", letterSpacing: "0.08em" }}>or</span>
+                        <span style={{ fontSize: "0.75rem", color: "#bbb", textTransform: "uppercase", letterSpacing: "0.08em" }}>{t("auth.or")}</span>
                         <div style={{ flex: 1, height: 1, background: "#e8e8e8" }} />
                     </div>
 
@@ -226,14 +232,14 @@ export default function RegisterPage() {
                     </div>
 
                     <p style={{ textAlign: "center", fontSize: "0.68rem", color: "#bbb", marginTop: "0.8rem" }}>
-                        By creating an account you agree to our{" "}
-                        <a href="#" style={{ color: "#888", textDecoration: "underline" }}>Terms</a> and{" "}
-                        <a href="#" style={{ color: "#888", textDecoration: "underline" }}>Privacy Policy</a>.
+                        {t("auth.termsAgree1")}{" "}
+                        <a href="#" style={{ color: "#888", textDecoration: "underline" }}>{t("auth.terms")}</a> {t("auth.and")}{" "}
+                        <a href="#" style={{ color: "#888", textDecoration: "underline" }}>{t("auth.privacy")}</a>.
                     </p>
 
                     <p style={{ textAlign: "center", fontSize: "0.8rem", color: "#888", marginTop: "0.5rem" }}>
-                        Already have an account?{" "}
-                        <Link href="/auth/login" style={{ fontWeight: 700, color: "var(--red)" }}>Sign in</Link>
+                        {t("auth.haveAccount")}{" "}
+                        <Link href="/auth/login" style={{ fontWeight: 700, color: "var(--red)" }}>{t("auth.signIn")}</Link>
                     </p>
                 </div>
             </div>

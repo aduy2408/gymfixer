@@ -1,47 +1,50 @@
 "use client";
 import { motion } from "framer-motion";
+import Image from "next/image";
 import Link from "next/link";
 import {
   Activity,
   Play, CheckCircle, ArrowRight, MapPin
 } from "lucide-react";
+import LanguageToggle from "@/components/LanguageToggle";
+import { useI18n } from "@/lib/i18n";
 
 const workoutTypes = [
   {
     image: "/squat.jpg",
-    category: "LOWER BODY",
-    name: "SQUAT",
+    categoryKey: "landing.workout.lower",
+    nameKey: "landing.workout.squat",
     color: "#D6001C",
   },
   {
     image: "/barbell-row.jpg",
-    category: "BACK & PULL",
-    name: "BARBELL ROW",
+    categoryKey: "landing.workout.back",
+    nameKey: "landing.workout.row",
     color: "#211551",
   },
   {
     image: "/dumbbell-curls.webp",
-    category: "ARMS",
-    name: "DUMBBELL CURL",
+    categoryKey: "landing.workout.arms",
+    nameKey: "landing.workout.curl",
     color: "#D6001C",
   },
 ];
 
 const steps = [
-  { num: "01", title: "Upload Your Video", desc: "Record your workout and upload a short clip. Any smartphone video works." },
-  { num: "02", title: "AI Pose Analysis", desc: "Our pipeline extracts frames, detects 33 body keypoints, and computes joint angles." },
-  { num: "03", title: "Get Your Report", desc: "Receive an annotated playback, joint angle charts, and prioritised corrections." },
+  { num: "01", titleKey: "landing.how.step1.title", descKey: "landing.how.step1.desc" },
+  { num: "02", titleKey: "landing.how.step2.title", descKey: "landing.how.step2.desc" },
+  { num: "03", titleKey: "landing.how.step3.title", descKey: "landing.how.step3.desc" },
 ];
 
 const faqs = [
-  { q: "Which exercises are supported?", a: "Squat, deadlift, bench press, overhead press, lunge, push-up, pull-up, and more." },
-  { q: "How long does analysis take?", a: "Most videos under 2 minutes are processed within 60–120 seconds." },
-  { q: "Is my video data private?", a: "Yes. All videos are encrypted, stored securely, and never shared with third parties." },
+  { qKey: "landing.faq.q1", aKey: "landing.faq.a1" },
+  { qKey: "landing.faq.q2", aKey: "landing.faq.a2" },
+  { qKey: "landing.faq.q3", aKey: "landing.faq.a3" },
 ];
 
 const tickerItems = [
-  "FORM TRAINING", "LIFE CHANGING", "INJURY PREVENTION", "AI POWERED", "REAL RESULTS",
-  "FORM TRAINING", "LIFE CHANGING", "INJURY PREVENTION", "AI POWERED", "REAL RESULTS",
+  "landing.ticker.form", "landing.ticker.life", "landing.ticker.injury", "landing.ticker.ai", "landing.ticker.results",
+  "landing.ticker.form", "landing.ticker.life", "landing.ticker.injury", "landing.ticker.ai", "landing.ticker.results",
 ];
 
 const fadeUp = {
@@ -54,6 +57,7 @@ const fadeUp = {
 };
 
 export default function LandingPage() {
+  const { t } = useI18n();
   return (
     <div style={{ background: "var(--white)", color: "var(--black)" }}>
 
@@ -86,10 +90,10 @@ export default function LandingPage() {
 
         {/* Center: Links */}
         <div className="hidden md:flex flex-1 justify-center items-center gap-8 lg:gap-10 whitespace-nowrap">
-          {["Home", "Features", "How It Works", "FAQ"].map((item) => (
+          {[t("nav.home"), t("nav.features"), t("nav.how"), t("nav.faq")].map((item, index) => (
             <a
               key={item}
-              href={item === "Home" ? "/#home" : `/#${item.toLowerCase().replace(/ /g, "-")}`}
+              href={index === 0 ? "/#home" : index === 1 ? "/#features" : index === 2 ? "/#how-it-works" : "/#faq"}
               className="text-sm font-bold uppercase tracking-wider transition-colors"
               style={{ color: "var(--black)", letterSpacing: "0.08em" }}
               onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--red)")}
@@ -105,18 +109,19 @@ export default function LandingPage() {
             onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--red)")}
             onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--black)")}
           >
-            Pricing
+            {t("nav.pricing")}
           </Link>
         </div>
 
         {/* Right Side: Auth Buttons */}
         <div className="flex-1 flex justify-end items-center gap-3">
           <Link href="/auth/login">
-            <button className="btn-outline-red text-sm px-5 py-2.5">Log In</button>
+            <button className="btn-outline-red text-sm px-5 py-2.5">{t("auth.login")}</button>
           </Link>
           <Link href="/auth/register">
-            <button className="btn-red text-sm px-5 py-2.5">Start Free Trial</button>
+            <button className="btn-red text-sm px-5 py-2.5">{t("auth.startFreeTrial")}</button>
           </Link>
+          <LanguageToggle compact />
         </div>
       </nav>
 
@@ -160,9 +165,9 @@ export default function LandingPage() {
             className="heading-condensed mb-4"
             style={{ fontSize: "clamp(2.8rem, 6.2vw, 5.1rem)", color: "var(--white)" }}
           >
-            PERFECT YOUR FORM.
+            {t("landing.hero.title1")}
             <br />
-            <span style={{ color: "var(--red)" }}>PREVENT INJURIES.</span>
+            <span style={{ color: "var(--red)" }}>{t("landing.hero.title2")}</span>
           </motion.h1>
 
           <motion.p
@@ -172,8 +177,7 @@ export default function LandingPage() {
             className="text-base mb-6 max-w-xl leading-relaxed"
             style={{ color: "var(--text-on-dark)", fontWeight: 300 }}
           >
-            Upload your workout video and get instant AI-powered pose analysis — joint angle tracking,
-            posture corrections, and an injury risk score in under 2 minutes.
+            {t("landing.hero.copy")}
           </motion.p>
 
           <motion.div
@@ -184,11 +188,11 @@ export default function LandingPage() {
           >
             <Link href="/auth/register">
               <button className="btn-red px-7 py-3 text-sm">
-                Start For Free <ArrowRight size={18} />
+                {t("landing.hero.cta")} <ArrowRight size={18} />
               </button>
             </Link>
             <button className="btn-outline-white px-7 py-3 text-sm">
-              <Play size={16} fill="currentColor" /> Watch Demo
+              <Play size={16} fill="currentColor" /> {t("landing.hero.demo")}
             </button>
           </motion.div>
         </div>
@@ -199,7 +203,7 @@ export default function LandingPage() {
         <div className="ticker-inner">
           {tickerItems.map((item, i) => (
             <span key={i} className="ticker-item">
-              {item} <span className="ticker-dot">★</span>
+              {t(item)} <span className="ticker-dot">★</span>
             </span>
           ))}
         </div>
@@ -211,11 +215,11 @@ export default function LandingPage() {
         <div style={{ padding: "2.5rem 4rem 0" }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "1.5rem" }}>
             <h2 className="heading-condensed" style={{ fontSize: "clamp(1.8rem, 4vw, 2.8rem)" }}>
-              PTT WORKOUT TYPES
+              {t("landing.features.title")}
             </h2>
             <Link href="/auth/register">
               <button className="btn-red" style={{ padding: "0.65rem 1.75rem", fontSize: "0.78rem", borderRadius: 4, whiteSpace: "nowrap" }}>
-                GET STARTED
+                {t("landing.hero.cta")}
               </button>
             </Link>
           </div>
@@ -225,7 +229,7 @@ export default function LandingPage() {
         <div style={{ flex: 1, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 0, minHeight: 0 }}>
           {workoutTypes.map((w, i) => (
             <motion.div
-              key={w.name}
+              key={w.nameKey}
               custom={i}
               initial="hidden"
               whileInView="visible"
@@ -234,12 +238,12 @@ export default function LandingPage() {
               style={{ position: "relative", minHeight: "clamp(440px, calc(100vh - 170px), 680px)", overflow: "hidden" }}
             >
               {/* Background image */}
-              <img
+              <Image
                 src={w.image}
-                alt={w.name}
+                alt={t(w.nameKey)}
+                fill
+                sizes="(max-width: 768px) 100vw, 33vw"
                 style={{
-                  width: "100%",
-                  height: "100%",
                   objectFit: "cover",
                   objectPosition: "center top",
                   display: "block",
@@ -269,7 +273,7 @@ export default function LandingPage() {
                   fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase",
                   letterSpacing: "0.15em", color: "rgba(255,255,255,0.7)", marginBottom: "0.4rem",
                 }}>
-                  {w.category}
+                  {t(w.categoryKey)}
                 </p>
                 <div style={{
                   display: "inline-block",
@@ -282,7 +286,7 @@ export default function LandingPage() {
                     fontWeight: 800, fontSize: "1.1rem",
                     textTransform: "uppercase", color: "#fff", lineHeight: 1,
                   }}>
-                    {w.name}
+                    {t(w.nameKey)}
                   </p>
                 </div>
                 <br />
@@ -297,7 +301,7 @@ export default function LandingPage() {
                     onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "#b0001a")}
                     onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "var(--red)")}
                   >
-                    View Now
+                    {t("landing.viewNow")}
                   </button>
                 </Link>
               </div>
@@ -314,9 +318,9 @@ export default function LandingPage() {
       >
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-8">
-            <p className="label-small mb-2" style={{ color: "var(--red)" }}>Simple Process</p>
+            <p className="label-small mb-2" style={{ color: "var(--red)" }}>{t("landing.how.eyebrow")}</p>
             <h2 className="heading-condensed" style={{ fontSize: "clamp(2rem, 4vw, 3rem)", color: "var(--white)" }}>
-              HOW IT <span style={{ color: "var(--red)" }}>WORKS</span>
+              {t("landing.how.title")}
             </h2>
             <div className="divider-red mx-auto mt-3" />
           </div>
@@ -353,9 +357,9 @@ export default function LandingPage() {
                       {parseInt(s.num)}
                     </div>
                     <h3 className="heading-condensed text-xl mb-2" style={{ color: "var(--white)" }}>
-                      {s.title.toUpperCase()}
+                      {t(s.titleKey)}
                     </h3>
-                    <p style={{ color: "var(--text-muted-dark)", lineHeight: 1.55, fontSize: "0.82rem", fontWeight: 300 }}>{s.desc}</p>
+                    <p style={{ color: "var(--text-muted-dark)", lineHeight: 1.55, fontSize: "0.82rem", fontWeight: 300 }}>{t(s.descKey)}</p>
                   </div>
                 </div>
               </motion.div>
@@ -369,7 +373,7 @@ export default function LandingPage() {
         <div className="ticker-inner">
           {tickerItems.map((item, i) => (
             <span key={i} className="ticker-item">
-              {item} <span className="ticker-dot">★</span>
+              {t(item)} <span className="ticker-dot">★</span>
             </span>
           ))}
         </div>
@@ -379,9 +383,9 @@ export default function LandingPage() {
       <section className="px-6 md:px-16" style={{ minHeight: "calc(100vh - 68px)", display: "flex", alignItems: "center", paddingTop: "3rem", paddingBottom: "3rem", background: "var(--white)" }}>
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-8">
-            <p className="label-small mb-2" style={{ color: "var(--red)" }}>Feel the Love</p>
+            <p className="label-small mb-2" style={{ color: "var(--red)" }}>{t("landing.testimonials.eyebrow")}</p>
             <h2 className="heading-condensed" style={{ fontSize: "clamp(2rem, 4vw, 3rem)" }}>
-              WHAT MEMBERS SAY
+              {t("landing.testimonials.title")}
             </h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -389,21 +393,21 @@ export default function LandingPage() {
               {
                 name: "BRITTANY S.",
                 location: "California, USA",
-                review: "I was constantly second-guessing my squat depth. PTT gave me frame-by-frame feedback I never got from a gym mirror — my form improved in two weeks.",
+                reviewKey: "landing.testimonial.1",
               },
               {
                 name: "MAXIME G.",
                 location: "Ontario, Canada",
-                review: "I've been using PTT for three months now, and I can confidently say it has been a transformative experience. The joint angle breakdowns are incredibly detailed.",
+                reviewKey: "landing.testimonial.2",
               },
               {
                 name: "ZUBAIR K.",
                 location: "Alberta, Canada",
-                review: "For over a year I ignored a hip hinge problem on my deadlift. PTT spotted it on the first upload. I've not had a back tweak since fixing it.",
+                reviewKey: "landing.testimonial.3",
               },
-            ].map((t, i) => (
+            ].map((testimonial, i) => (
               <motion.div
-                key={t.name}
+                key={testimonial.name}
                 custom={i}
                 initial="hidden"
                 whileInView="visible"
@@ -426,12 +430,12 @@ export default function LandingPage() {
                 </div>
                 {/* Quote */}
                 <p style={{ fontSize: "0.82rem", lineHeight: 1.55, color: "#333", fontWeight: 300, flex: 1 }}>
-                  {t.review}
+                  {t(testimonial.reviewKey)}
                 </p>
                 {/* Attribution */}
                 <div style={{ borderTop: "1px solid var(--gray-mid)", paddingTop: "1rem" }}>
-                  <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "0.9rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t.name}</p>
-                  <p style={{ fontSize: "0.75rem", color: "#aaa", marginTop: "0.1rem" }}>{t.location}</p>
+                  <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "0.9rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>{testimonial.name}</p>
+                  <p style={{ fontSize: "0.75rem", color: "#aaa", marginTop: "0.1rem" }}>{testimonial.location}</p>
                 </div>
                 {/* Big red quotemark */}
                 <p style={{ fontFamily: "Georgia, serif", fontSize: "2.5rem", color: "var(--red)", lineHeight: 0.6, userSelect: "none" }}>&ldquo;</p>
@@ -445,9 +449,9 @@ export default function LandingPage() {
       <section id="faq" className="px-6 md:px-16" style={{ minHeight: "calc(100vh - 68px)", display: "flex", alignItems: "center", paddingTop: "3rem", paddingBottom: "3rem", background: "var(--gray-light)", scrollMarginTop: 68 }}>
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-8">
-            <p className="label-small mb-2" style={{ color: "var(--red)" }}>Get Answers</p>
+            <p className="label-small mb-2" style={{ color: "var(--red)" }}>{t("landing.faq.eyebrow")}</p>
             <h2 className="heading-condensed" style={{ fontSize: "clamp(2rem, 4vw, 3rem)" }}>
-              FREQUENTLY ASKED <span style={{ color: "var(--red)" }}>QUESTIONS</span>
+              {t("landing.faq.title1")} <span style={{ color: "var(--red)" }}>{t("landing.faq.title2")}</span>
             </h2>
             <div className="divider-red mx-auto mt-3" />
           </div>
@@ -471,8 +475,8 @@ export default function LandingPage() {
                     <CheckCircle size={14} color="white" />
                   </div>
                   <div>
-                    <p className="font-bold text-sm mb-1" style={{ fontFamily: "var(--font-ui)" }}>{fq.q}</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "var(--gray-dark)", fontWeight: 400 }}>{fq.a}</p>
+                    <p className="font-bold text-sm mb-1" style={{ fontFamily: "var(--font-ui)" }}>{t(fq.qKey)}</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "var(--gray-dark)", fontWeight: 400 }}>{t(fq.aKey)}</p>
                   </div>
                 </div>
               </motion.div>
@@ -500,21 +504,21 @@ export default function LandingPage() {
             className="heading-condensed mb-4"
             style={{ fontSize: "clamp(2rem, 5vw, 3.4rem)", color: "var(--white)" }}
           >
-            READY TO TRAIN
+            {t("landing.cta.title1")}
             <br />
-            <span style={{ color: "var(--red)" }}>SMARTER?</span>
+            <span style={{ color: "var(--red)" }}>{t("landing.cta.title2")}</span>
           </h2>
           <p className="text-base mb-6" style={{ color: "var(--text-on-dark)", fontWeight: 300 }}>
-            Join thousands of athletes improving their form with PTT.
+            {t("landing.cta.copy")}
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link href="/auth/register">
               <button className="btn-red px-8 py-3 text-sm">
-                Create Free Account <ArrowRight size={18} />
+                {t("landing.cta.account")} <ArrowRight size={18} />
               </button>
             </Link>
             <button className="btn-outline-white px-8 py-3 text-sm">
-              <MapPin size={16} /> Find a Gym
+              <MapPin size={16} /> {t("landing.cta.findGym")}
             </button>
           </div>
         </motion.div>
@@ -526,7 +530,7 @@ export default function LandingPage() {
         style={{ background: "var(--black)", color: "rgba(255,255,255,0.5)" }}
       >
         <div className="max-w-6xl mx-auto text-center">
-          <p className="text-xs">© 2026 PTT. All rights reserved. · Privacy Policy · Terms of Service</p>
+          <p className="text-xs">© 2026 PTT. {t("footer.rights")} · {t("footer.privacy")} · {t("footer.terms")}</p>
         </div>
       </footer>
 

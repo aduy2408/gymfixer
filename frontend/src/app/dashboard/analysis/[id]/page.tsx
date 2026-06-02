@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import DashboardNav from "@/components/DashboardNav";
 import { fetchWorkout, readLatestAnalysis, StoredAnalysis, VideoAnalysisResult, workoutToStoredAnalysis } from "@/lib/api";
+import { formatExerciseName, localeFor, useI18n } from "@/lib/i18n";
 
 const metricStyle: React.CSSProperties = {
     background: "#fff",
@@ -212,6 +214,7 @@ function buildCorrectionReps(result: VideoAnalysisResult, repBreakdown: RepBreak
 }
 
 export default function AnalysisPage() {
+    const { t } = useI18n();
     const params = useParams<{ id: string }>();
     const [analysis, setAnalysis] = useState<StoredAnalysis | null>(() => {
         const cached = readLatestAnalysis();
@@ -239,14 +242,14 @@ export default function AnalysisPage() {
             })
             .catch((err) => {
                 if (cancelled) return;
-                setLoadError(err instanceof Error ? err.message : "Could not load analysis.");
+                setLoadError(err instanceof Error ? err.message : t("analysis.loadError"));
                 if (!matchingCached) setAnalysis(null);
             });
 
         return () => {
             cancelled = true;
         };
-    }, [params.id]);
+    }, [params.id, t]);
 
     const result = analysis?.result;
     if (!analysis || !result) {
@@ -257,14 +260,14 @@ export default function AnalysisPage() {
                     <div style={{ maxWidth: 760, margin: "0 auto", ...metricStyle, padding: "2rem" }}>
                         <Link href="/dashboard">
                             <button className="flex items-center gap-1.5 text-xs mb-3" style={{ color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                <ArrowLeft size={15} /> Back to Dashboard
+                                <ArrowLeft size={15} /> {t("analysis.back")}
                             </button>
                         </Link>
                         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "2rem", textTransform: "uppercase", marginBottom: "0.5rem" }}>
-                            No Analysis Found
+                            {t("analysis.notFound")}
                         </h1>
                         <p style={{ color: "#777", fontSize: "0.9rem", lineHeight: 1.6 }}>
-                            {loadError || `Run a video analysis from the dashboard first. Analysis id requested: ${params.id}.`}
+                            {loadError || t("analysis.notFoundCopy").replace("{id}", params.id)}
                         </p>
                     </div>
                 </main>
@@ -290,26 +293,26 @@ export default function AnalysisPage() {
                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-4">
                         <Link href="/dashboard">
                             <button className="flex items-center gap-1.5 text-xs mb-3" style={{ color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                <ArrowLeft size={15} /> Back to Dashboard
+                                <ArrowLeft size={15} /> {t("analysis.back")}
                             </button>
                         </Link>
 
                         <div className="flex flex-wrap items-start justify-between gap-4">
                             <div>
                                 <p style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--red)", marginBottom: "0.35rem" }}>
-                                    Analysis {analysis.id}
+                                    {t("analysis.title")} {analysis.id}
                                 </p>
                                 <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.8rem", textTransform: "uppercase", lineHeight: 1, color: "var(--red)" }}>
-                                    {result.exercise.replace("_", " ")} Report
+                                    {formatExerciseName(result.exercise, t)} {t("analysis.report")}
                                 </h1>
                                 <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-                                    {analysis.fileName} · {new Date(analysis.analyzedAt).toLocaleString()}
+                                    {analysis.fileName} · {new Date(analysis.analyzedAt).toLocaleString(localeFor(t))}
                                 </p>
                             </div>
 
                             <Link href="/dashboard">
                                 <button className="btn-red" style={{ padding: "0.75rem 1.2rem", fontSize: "0.75rem", borderRadius: 4 }}>
-                                    <Play size={15} /> Analyse Another
+                                    <Play size={15} /> {t("analysis.another")}
                                 </button>
                             </Link>
                         </div>
@@ -321,12 +324,12 @@ export default function AnalysisPage() {
                         transition={{ delay: 0.1 }}
                         className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4"
                     >
-                        <Metric label="Quality" value={`${qualityScore}%`} color={qualityScore >= 80 ? "#10b981" : qualityScore >= 60 ? "#f59e0b" : "var(--red)"} />
-                        <Metric label="Reps" value={result.summary.rep_count} color="var(--red)" />
-                        <Metric label="Frames Analysed" value={result.summary.frames_analyzed} color="var(--navy)" />
-                        <Metric label="Processing" value={`${Math.round(result.summary.processing_ms / 1000)}s`} color="#f59e0b" />
-                        <Metric label="View" value={(result.summary.camera_view || result.camera_view || "side").replace("_", " ")} color="#555" />
-                        <Metric label="Backend" value={result.summary.pose_backend || result.pose_backend || "mediapipe"} color="#555" />
+                        <Metric label={t("common.quality")} value={`${qualityScore}%`} color={qualityScore >= 80 ? "#10b981" : qualityScore >= 60 ? "#f59e0b" : "var(--red)"} />
+                        <Metric label={t("common.reps")} value={result.summary.rep_count} color="var(--red)" />
+                        <Metric label={t("analysis.framesAnalysed")} value={result.summary.frames_analyzed} color="var(--navy)" />
+                        <Metric label={t("common.processing")} value={`${Math.round(result.summary.processing_ms / 1000)}s`} color="#f59e0b" />
+                        <Metric label={t("common.view")} value={t(`dashboard.camera.${result.summary.camera_view || result.camera_view || "side"}`)} color="#555" />
+                        <Metric label={t("common.backend")} value={result.summary.pose_backend || result.pose_backend || "mediapipe"} color="#555" />
                     </motion.div>
 
                     <div className="grid md:grid-cols-5 gap-4 mb-4">
@@ -337,10 +340,10 @@ export default function AnalysisPage() {
                             className="md:col-span-2"
                         >
                             <h2 className="font-bold text-base mb-3 flex items-center gap-2">
-                                <FileVideo size={16} style={{ color: "var(--navy)" }} /> Errors Detected
+                                <FileVideo size={16} style={{ color: "var(--navy)" }} /> {t("analysis.errors")}
                                 {correctionReps.length > 0 && (
                                     <span style={{ color: "#999", fontSize: "0.75rem", fontWeight: 500 }}>
-                                        ({correctionReps.length} reps)
+                                        ({correctionReps.length} {t("common.reps").toLowerCase()})
                                     </span>
                                 )}
                             </h2>
@@ -352,21 +355,30 @@ export default function AnalysisPage() {
                                             return (
                                                 <figure key={`rep-${rep.rep_number}-${rep.start_frame ?? "missing"}`} style={{ border: "1px solid #e8e8e8", borderRadius: 4, overflow: "hidden", background: "#fafafa" }}>
                                                     {rep.representativeFrame ? (
-                                                        <img src={rep.representativeFrame.image} alt={`Rep ${rep.rep_number} correction frame`} style={{ width: "100%", aspectRatio: "16 / 9", objectFit: "contain", background: "#111" }} />
+                                                        <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", background: "#111" }}>
+                                                            <Image
+                                                                src={rep.representativeFrame.image}
+                                                                alt={`${t("analysis.rep")} ${rep.rep_number} ${t("analysis.noFrame")}`}
+                                                                fill
+                                                                unoptimized
+                                                                sizes="(max-width: 768px) 100vw, 320px"
+                                                                style={{ objectFit: "contain" }}
+                                                            />
+                                                        </div>
                                                     ) : (
                                                         <div style={{ width: "100%", aspectRatio: "16 / 9", background: "#f1f1f1", display: "flex", alignItems: "center", justifyContent: "center", color: "#999", fontSize: "0.8rem" }}>
-                                                            No representative frame
+                                                            {t("analysis.noFrame")}
                                                         </div>
                                                     )}
                                                     <figcaption style={{ padding: "0.75rem", fontSize: "0.78rem", color: "#777" }}>
                                                         <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                                                            <span style={{ fontWeight: 800, color: "var(--red)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Rep {rep.rep_number}</span>
-                                                            <span>{rep.duration_ms ? `${(rep.duration_ms / 1000).toFixed(1)}s` : rep.completed ? "completed" : "incomplete"}</span>
+                                                            <span style={{ fontWeight: 800, color: "var(--red)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("analysis.rep")} {rep.rep_number}</span>
+                                                            <span>{rep.duration_ms ? `${(rep.duration_ms / 1000).toFixed(1)}s` : rep.completed ? t("common.completed") : t("common.incomplete")}</span>
                                                         </div>
                                                         <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
                                                             {issues.map((issue) => (
                                                                 <span key={issue} style={{ color: "#555", lineHeight: 1.35 }}>
-                                                                    <span style={{ color: "var(--red)", fontWeight: 800 }}>Issue:</span> {issue}
+                                                                    <span style={{ color: "var(--red)", fontWeight: 800 }}>{t("common.issue")}:</span> {issue}
                                                                 </span>
                                                             ))}
                                                         </div>
@@ -377,7 +389,7 @@ export default function AnalysisPage() {
                                     </div>
                                 ) : (
                                     <p style={{ fontSize: "0.85rem", color: "#888", lineHeight: 1.6 }}>
-                                        No rep-level form issues were detected in the usable exercise frames.
+                                        {t("analysis.noIssues")}
                                     </p>
                                 )}
                             </div>
@@ -390,23 +402,23 @@ export default function AnalysisPage() {
                             className="md:col-span-3"
                         >
                             <h2 className="font-bold text-base mb-2 flex items-center gap-2">
-                                <Activity size={18} style={{ color: "var(--red)" }} /> Coaching
+                                <Activity size={18} style={{ color: "var(--red)" }} /> {t("analysis.coaching")}
                             </h2>
                             <div style={{ ...metricStyle, padding: "0.9rem" }}>
                                 <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
                                     <Info size={16} style={{ color: "var(--red)", marginTop: 2, flexShrink: 0 }} />
                                     <div>
                                         <p style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--red)", marginBottom: "0.5rem" }}>
-                                            {result.llm.enabled ? `Gemini ${result.llm.model}` : "Recommendations"}
+                                            {result.llm.enabled ? `Gemini ${result.llm.model}` : t("analysis.recommendations")}
                                         </p>
                                         {result.llm.enabled && (
                                             <p style={{ fontSize: "0.72rem", color: "#999", marginBottom: "0.75rem" }}>
-                                                Max output: {result.llm.max_output_tokens ?? "n/a"}
-                                                {result.llm.finish_reason ? ` · Finish: ${result.llm.finish_reason}` : ""}
-                                                {result.llm.prompt_chars ? ` · Prompt: ${result.llm.prompt_chars} chars` : ""}
+                                                {t("analysis.maxOutput")}: {result.llm.max_output_tokens ?? t("common.none")}
+                                                {result.llm.finish_reason ? ` · ${t("analysis.finish")}: ${result.llm.finish_reason}` : ""}
+                                                {result.llm.prompt_chars ? ` · ${t("analysis.prompt")}: ${result.llm.prompt_chars} ${t("analysis.chars")}` : ""}
                                             </p>
                                         )}
-                                        <MarkdownContent content={result.llm.recommendations} />
+                                        <MarkdownContent content={result.llm.recommendations} emptyText={t("analysis.noCoaching")} />
                                         {result.llm.error && (
                                             <p style={{ color: "var(--red)", fontSize: "0.8rem", marginTop: "0.75rem" }}>{result.llm.error}</p>
                                         )}
@@ -421,9 +433,9 @@ export default function AnalysisPage() {
     );
 }
 
-function MarkdownContent({ content }: { content?: string }) {
+function MarkdownContent({ content, emptyText }: { content?: string; emptyText: string }) {
     if (!content?.trim()) {
-        return <p style={{ color: "#888", fontSize: "0.85rem" }}>No coaching recommendations were returned.</p>;
+        return <p style={{ color: "#888", fontSize: "0.85rem" }}>{emptyText}</p>;
     }
 
     const lines = content.split(/\r?\n/);

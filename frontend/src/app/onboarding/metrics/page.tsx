@@ -4,18 +4,20 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Activity, ArrowRight } from "lucide-react";
 import { updateUserProfile } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 const goals = [
-    { id: "fat_loss", emoji: "🔥", label: "Fat Loss", desc: "Reduce body fat while preserving muscle" },
-    { id: "muscle", emoji: "💪", label: "Muscle Gain", desc: "Build size and strength" },
-    { id: "strength", emoji: "🏋️", label: "Strength", desc: "Maximise your 1-rep maxes" },
-    { id: "endurance", emoji: "🏃", label: "Endurance", desc: "Improve cardio & stamina" },
-    { id: "rehab", emoji: "🩺", label: "Rehabilitation", desc: "Recover safely from injury" },
-    { id: "general", emoji: "⚡", label: "General Fitness", desc: "Stay healthy and active" },
+    { id: "fat_loss", emoji: "🔥", labelKey: "goals.fatLoss", descKey: "onboarding.goal.fatLoss" },
+    { id: "muscle", emoji: "💪", labelKey: "goals.muscle", descKey: "onboarding.goal.muscle" },
+    { id: "strength", emoji: "🏋️", labelKey: "goals.strength", descKey: "onboarding.goal.strength" },
+    { id: "endurance", emoji: "🏃", labelKey: "goals.endurance", descKey: "onboarding.goal.endurance" },
+    { id: "rehab", emoji: "🩺", labelKey: "goals.rehab", descKey: "onboarding.goal.rehab" },
+    { id: "general", emoji: "⚡", labelKey: "goals.general", descKey: "onboarding.goal.general" },
 ];
 
 export default function OnboardingMetricsPage() {
     const router = useRouter();
+    const { t } = useI18n();
     const [form, setForm] = useState({ height: "", weight: "", age: "", gender: "", goal: "" });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
@@ -38,7 +40,7 @@ export default function OnboardingMetricsPage() {
             if (typeof window !== "undefined") localStorage.removeItem("fg_profile");
             router.push("/dashboard");
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Could not save your profile.");
+            setError(err instanceof Error ? err.message : t("profile.saveError"));
             setSaving(false);
         }
     };
@@ -83,12 +85,12 @@ export default function OnboardingMetricsPage() {
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                         <div style={{ width: 24, height: 24, borderRadius: 4, border: "1px solid #ddd", background: "#fafafa", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.65rem", fontWeight: 700, color: "#10b981" }}>✓</div>
-                        <span style={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#bbb" }}>Introduction</span>
+                        <span style={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#bbb" }}>{t("onboarding.introduction")}</span>
                     </div>
                     <div style={{ width: 32, height: 1, background: "#e8e8e8" }} />
                     <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                         <div style={{ width: 24, height: 24, borderRadius: 4, background: "var(--red)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: 700, color: "#fff" }}>2</div>
-                        <span style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--red)" }}>Your Metrics</span>
+                        <span style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--red)" }}>{t("onboarding.metrics")}</span>
                     </div>
                 </div>
             </div>
@@ -97,22 +99,22 @@ export default function OnboardingMetricsPage() {
             <div style={{ maxWidth: 640, margin: "0 auto", padding: "3rem 1.5rem" }}>
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
                     <p style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--red)", marginBottom: "0.5rem" }}>
-                        Step 2 of 2
+                        {t("onboarding.step2")}
                     </p>
                     <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(2rem, 5vw, 3rem)", textTransform: "uppercase", lineHeight: 1, marginBottom: "0.75rem" }}>
-                        TELL US ABOUT YOURSELF
+                        {t("onboarding.metricsTitle")}
                     </h1>
                     <p style={{ color: "#666", fontSize: "0.875rem", lineHeight: 1.7, fontWeight: 300, marginBottom: "2rem" }}>
-                        We use this to personalise your pose analysis and recommendations.
+                        {t("onboarding.metricsCopy")}
                     </p>
 
                     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
                         {/* Body stats row */}
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem" }}>
                             {[
-                                { key: "height", label: "Height (cm)", placeholder: "175", min: 100, max: 250 },
-                                { key: "weight", label: "Weight (kg)", placeholder: "72", min: 30, max: 300 },
-                                { key: "age", label: "Age", placeholder: "28", min: 10, max: 100 },
+                                { key: "height", label: t("profile.height"), placeholder: "175", min: 100, max: 250 },
+                                { key: "weight", label: t("profile.weight"), placeholder: "72", min: 30, max: 300 },
+                                { key: "age", label: t("profile.age"), placeholder: "28", min: 10, max: 100 },
                             ].map(({ key, label, placeholder, min, max }) => (
                                 <div key={key}>
                                     <label style={labelStyle}>{label}</label>
@@ -133,23 +135,23 @@ export default function OnboardingMetricsPage() {
 
                         {/* Gender */}
                         <div>
-                            <label style={labelStyle}>Gender (optional)</label>
+                            <label style={labelStyle}>{t("profile.gender")}</label>
                             <select
                                 id="metrics-gender"
                                 value={form.gender}
                                 onChange={update("gender") as React.ChangeEventHandler<HTMLSelectElement>}
                                 style={{ ...inputStyle, cursor: "pointer", appearance: "none" }}
                             >
-                                <option value="">Prefer not to say</option>
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
-                                <option value="other">Other</option>
+                                <option value="">{t("profile.preferNot")}</option>
+                                <option value="male">{t("profile.gender.male")}</option>
+                                <option value="female">{t("profile.gender.female")}</option>
+                                <option value="other">{t("profile.gender.other")}</option>
                             </select>
                         </div>
 
                         {/* Fitness Goal */}
                         <div>
-                            <label style={labelStyle}>Fitness Goal</label>
+                            <label style={labelStyle}>{t("profile.section.goal")}</label>
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(175px, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
                                 {goals.map((g) => (
                                     <button
@@ -168,10 +170,10 @@ export default function OnboardingMetricsPage() {
                                     >
                                         <p style={{ fontSize: "1.1rem", marginBottom: "0.2rem" }}>{g.emoji}</p>
                                         <p style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.95rem", textTransform: "uppercase", color: form.goal === g.id ? "#fff" : "#111", marginBottom: "0.1rem" }}>
-                                            {g.label}
+                                            {t(g.labelKey)}
                                         </p>
                                         <p style={{ fontSize: "0.72rem", color: form.goal === g.id ? "rgba(255,255,255,0.75)" : "#888", fontWeight: 300, lineHeight: 1.4 }}>
-                                            {g.desc}
+                                            {t(g.descKey)}
                                         </p>
                                     </button>
                                 ))}
@@ -207,11 +209,11 @@ export default function OnboardingMetricsPage() {
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
                                         <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8z" />
                                     </svg>
-                                    SAVING…
+                                    {t("common.saving").toUpperCase()}
                                 </span>
                             ) : (
                                 <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-                                    GO TO DASHBOARD <ArrowRight size={16} />
+                                    {t("onboarding.goDashboard").toUpperCase()} <ArrowRight size={16} />
                                 </span>
                             )}
                         </motion.button>

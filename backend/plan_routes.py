@@ -10,12 +10,13 @@ from typing import Any, Literal
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from authentication.database import get_db
 from authentication.models import User, WeeklyMealPlan, WeeklyWorkoutPlan
 from authentication.utils import get_current_user
+from entitlements import require_plan_access
 from usage_events import log_usage_event
 
 
@@ -67,6 +68,44 @@ FOOD_DATABASE: dict[str, dict[str, Any]] = {
     "Bơ": {"unit": "g", "basis": 100, "calories": 160, "protein_g": 2, "carbs_g": 8.5, "fat_g": 14.7, "min": 40, "max": 160, "cost_vnd": 7000},
     "Đậu phộng": {"unit": "g", "basis": 100, "calories": 567, "protein_g": 25.8, "carbs_g": 16, "fat_g": 49, "min": 15, "max": 60, "cost_vnd": 6500},
     "Hạt bí": {"unit": "g", "basis": 100, "calories": 559, "protein_g": 30, "carbs_g": 11, "fat_g": 49, "min": 10, "max": 50, "cost_vnd": 30000},
+}
+FOOD_NAME_EN: dict[str, str] = {
+    "Ức gà": "Chicken breast",
+    "Đùi gà bỏ da": "Skinless chicken thigh",
+    "Thịt bò nạc": "Lean beef",
+    "Cá basa": "Basa fish",
+    "Cá ngừ": "Tuna",
+    "Trứng gà": "Chicken egg",
+    "Sữa chua không đường": "Unsweetened yogurt",
+    "Whey protein": "Whey protein",
+    "Đậu phụ": "Firm tofu",
+    "Đậu hũ non": "Silken tofu",
+    "Đậu xanh nấu chín": "Cooked mung beans",
+    "Sữa đậu nành không đường": "Unsweetened soy milk",
+    "Cơm trắng": "White rice",
+    "Cơm gạo lứt": "Brown rice",
+    "Bún tươi": "Fresh rice vermicelli",
+    "Phở tươi": "Fresh pho noodles",
+    "Khoai lang": "Sweet potato",
+    "Yến mạch": "Oats",
+    "Chuối": "Banana",
+    "Rau muống": "Water spinach",
+    "Cải xanh": "Mustard greens",
+    "Dưa leo": "Cucumber",
+    "Cà chua": "Tomato",
+    "Dầu ăn": "Cooking oil",
+    "Bơ": "Avocado",
+    "Đậu phộng": "Peanuts",
+    "Hạt bí": "Pumpkin seeds",
+}
+MEAL_SLOT_NAMES: dict[str, dict[str, str]] = {
+    "Main Meal": {"en": "Main Meal", "vi": "Bữa chính"},
+    "Breakfast": {"en": "Breakfast", "vi": "Bữa sáng"},
+    "Morning Snack": {"en": "Morning Snack", "vi": "Bữa phụ sáng"},
+    "Lunch": {"en": "Lunch", "vi": "Bữa trưa"},
+    "Afternoon Snack": {"en": "Afternoon Snack", "vi": "Bữa phụ chiều"},
+    "Dinner": {"en": "Dinner", "vi": "Bữa tối"},
+    "Evening Snack": {"en": "Evening Snack", "vi": "Bữa phụ tối"},
 }
 CARB_SOURCE_NAMES = {
     "Cơm trắng",
@@ -203,6 +242,8 @@ class DailyTargets(BaseModel):
 
 class MealIngredient(BaseModel):
     name: str
+    name_en: str = ""
+    name_vi: str = ""
     quantity: float = Field(..., ge=0)
     unit: PortionUnit
     calories: int = Field(..., ge=0, le=3000)
@@ -211,9 +252,17 @@ class MealIngredient(BaseModel):
     fat_g: int = Field(..., ge=0, le=200)
     estimated_cost_vnd: int = Field(default=0, ge=0)
 
+    @model_validator(mode="after")
+    def fill_localised_names(self) -> "MealIngredient":
+        self.name_vi = self.name_vi or _food_name_vi(self.name)
+        self.name_en = self.name_en or _food_name_en(self.name)
+        return self
+
 
 class MealItem(BaseModel):
     name: str
+    name_en: str = ""
+    name_vi: str = ""
     time: str = ""
     items: list[MealIngredient] = Field(default_factory=list)
     calories: int = Field(..., ge=0, le=7000)
@@ -245,6 +294,13 @@ class MealItem(BaseModel):
                     normalised.append(value)
             return normalised
         return values
+
+    @model_validator(mode="after")
+    def fill_localised_names(self) -> "MealItem":
+        labels = MEAL_SLOT_NAMES.get(self.name)
+        self.name_en = self.name_en or (labels["en"] if labels else self.name)
+        self.name_vi = self.name_vi or (labels["vi"] if labels else self.name)
+        return self
 
 
 class MealDay(BaseModel):
@@ -299,6 +355,7 @@ def create_workout_plan(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> WorkoutPlanResponse:
+    require_plan_access(db, current_user, plan_type="workout")
     payload, source = _generate_workout_plan(request)
     row = WeeklyWorkoutPlan(
         user_id=current_user.id,
@@ -346,6 +403,7 @@ def create_meal_plan(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> MealPlanResponse:
+    require_plan_access(db, current_user, plan_type="meal")
     workout_plan_row = _latest_workout_plan(db, current_user.id) if request.adjust_for_workout_plan else None
     payload, source = _generate_meal_plan(request, workout_plan_row=workout_plan_row)
     row = WeeklyMealPlan(
@@ -437,7 +495,7 @@ def _generate_meal_plan(
     workout_schedule = _workout_schedule_from_row(workout_plan_row) if workout_plan_row else None
     workout_sync = _workout_sync_metadata(request, workout_plan_row, workout_schedule)
     meal_slots_json = json.dumps(
-        [{"name": slot["name"], "time": slot["time"]} for slot in _meal_slots(request.meals_per_day)],
+        [{"name": slot["name"], "name_en": slot["name_en"], "name_vi": slot["name_vi"], "time": slot["time"]} for slot in _meal_slots(request.meals_per_day)],
         ensure_ascii=False,
     )
     allowed_foods = [
@@ -445,15 +503,18 @@ def _generate_meal_plan(
         for name in FOOD_DATABASE
         if _diet_allows_food(name, request.diet_preference) and not _food_blocked(name, f"{request.allergies} {request.disliked_foods}")
     ]
-    allowed_foods_json = json.dumps(allowed_foods, ensure_ascii=False)
+    allowed_foods_json = json.dumps(
+        [{"name": name, "name_vi": _food_name_vi(name), "name_en": _food_name_en(name)} for name in allowed_foods],
+        ensure_ascii=False,
+    )
     meal_schema = (
         "Required JSON contract: top-level object only with keys daily_targets, days, and safety_notes. "
         "daily_targets must include integer calories 1000-7000, protein_g 20-400, carbs_g 20-900, fat_g 10-250. "
         "days must be an array of exactly 7 objects in this exact order: Mon, Tue, Wed, Thu, Fri, Sat, Sun. "
         "Each day.day must be exactly one of Mon, Tue, Wed, Thu, Fri, Sat, Sun. "
         "Each day.meals must contain exactly the requested meal slots, no more and no fewer. "
-        "Each meal must include name string, time string, items array, calories integer, protein_g integer, carbs_g integer, fat_g integer. "
-        "Each item must include name string, quantity positive number, unit exactly one of g, ml, large, piece, slice, scoop, tbsp, cup, "
+        "Each meal must include name string, name_en string, name_vi string, time string, items array, calories integer, protein_g integer, carbs_g integer, fat_g integer. "
+        "Each item must include name string, name_en string, name_vi string, quantity positive number, unit exactly one of g, ml, large, piece, slice, scoop, tbsp, cup, "
         "and calories/protein_g/carbs_g/fat_g as non-negative integers. Do not output decimals for calories or macros. "
         "Every meal must have at least one item and every item must have calories greater than 0. "
         "safety_notes must be a JSON array of short strings; if there is one note, return [\"note\"], never a plain string. "
@@ -472,14 +533,14 @@ def _generate_meal_plan(
         "Do not include markdown. Do not provide medical treatment. Build a 7-day meal plan from this input. "
         "Avoid allergies and disliked foods. Every food item must include a practical portion quantity. "
         f"{meal_schema}"
-        f"Use only these exact food names for item.name: {allowed_foods_json}. "
+        f"Use only the exact Vietnamese canonical value from this list for item.name, and copy its matching name_en/name_vi: {allowed_foods_json}. "
         "Use Vietnamese, Vietnam-friendly meals and ingredient combinations. "
         "Use matching practical units: grams for meat, fish, tofu, beans, rice, noodles, potatoes, oats, vegetables, yogurt, nuts, seeds, and avocado; "
         "ml for soy milk, large for Trứng gà, scoop for Whey protein, piece for Chuối, and tbsp for Dầu ăn. "
         "Keep foods practical for Vietnam and respect budget_vnd_per_day and cooking_time_hours_per_day when feasible. "
         "Meal calories and macros must equal the sum of that meal's item calories and macros within normal rounding. "
         "Use exactly Mon-Sun once. "
-        f"Use exactly these meal slots for every day, in this order: {meal_slots_json}. "
+        f"Use exactly these meal slots for every day, in this order; copy each slot's name, name_en, name_vi, and time: {meal_slots_json}. "
         f"{workout_context}"
         f"Input JSON: {json.dumps(request.model_dump(), ensure_ascii=False)}"
     )
@@ -1243,6 +1304,8 @@ def _recompute_meal(meal: MealItem) -> MealItem:
     totals = _sum_ingredients(meal.items)
     return MealItem(
         name=meal.name,
+        name_en=meal.name_en,
+        name_vi=meal.name_vi,
         time=meal.time,
         items=meal.items,
         calories=totals["calories"],
@@ -1344,6 +1407,8 @@ def _merge_ingredient(items: list[MealIngredient], ingredient: MealIngredient) -
         else:
             items[index] = MealIngredient(
                 name=existing.name,
+                name_en=existing.name_en,
+                name_vi=existing.name_vi,
                 quantity=existing.quantity + ingredient.quantity,
                 unit=existing.unit,
                 calories=existing.calories + ingredient.calories,
@@ -1376,6 +1441,8 @@ def _ingredient_with_calorie_delta(item: MealIngredient, calorie_delta: int) -> 
     scale = quantity / item.quantity
     return MealIngredient(
         name=item.name,
+        name_en=item.name_en,
+        name_vi=item.name_vi,
         quantity=quantity,
         unit=item.unit,
         calories=max(0, round(item.calories * scale)),
@@ -1396,6 +1463,8 @@ def _ingredient_from_food_unbounded(food: dict[str, Any], quantity: float) -> Me
     scale = rounded_quantity / float(food["basis"])
     return MealIngredient(
         name=food["name"],
+        name_en=_food_name_en(food["name"]),
+        name_vi=_food_name_vi(food["name"]),
         quantity=rounded_quantity,
         unit=food["unit"],
         calories=max(0, round(float(food["calories"]) * scale)),
@@ -1478,6 +1547,15 @@ def _is_low_protein_source(item: MealIngredient) -> bool:
 def _canonical_food_name(name: str) -> str:
     food = _ingredient_food(name)
     return food["name"] if food else name
+
+
+def _food_name_vi(name: str) -> str:
+    food = _ingredient_food(name)
+    return food["name"] if food else name
+
+
+def _food_name_en(name: str) -> str:
+    return FOOD_NAME_EN.get(_food_name_vi(name), name)
 
 
 def _adjust_daily_targets_for_workout(
@@ -1658,6 +1736,8 @@ def _ingredient_from_food(food: dict[str, Any], quantity: float) -> MealIngredie
     scale = quantity / float(food["basis"])
     return MealIngredient(
         name=food["name"],
+        name_en=_food_name_en(food["name"]),
+        name_vi=_food_name_vi(food["name"]),
         quantity=quantity,
         unit=food["unit"],
         calories=round(float(food["calories"]) * scale),
@@ -1705,7 +1785,16 @@ def _meal_slots(total: int) -> list[dict[str, Any]]:
             ("Evening Snack", "21:00", 0.16),
         ],
     }
-    return [{"name": name, "time": meal_time, "share": share} for name, meal_time, share in presets[total]]
+    return [
+        {
+            "name": name,
+            "name_en": MEAL_SLOT_NAMES.get(name, {}).get("en", name),
+            "name_vi": MEAL_SLOT_NAMES.get(name, {}).get("vi", name),
+            "time": meal_time,
+            "share": share,
+        }
+        for name, meal_time, share in presets[total]
+    ]
 
 
 def _meal_share(index: int, total: int) -> float:
