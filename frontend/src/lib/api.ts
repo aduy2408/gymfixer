@@ -332,11 +332,16 @@ export type MealPlan = {
 };
 
 let latestAnalysisMemory: StoredAnalysis | null = null;
-const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
+const VIDEO_ANALYSIS_TIMEOUT_MS = 180000;
 
 export function apiBase(): string {
   const envBase = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
-  if (envBase) return envBase.replace(/\/$/, "");
+  if (envBase) {
+    const normalized = envBase.replace(/\/$/, "");
+    if (/^https?:\/\//i.test(normalized)) return normalized;
+    return `https://${normalized}`;
+  }
   return "http://localhost:5000";
 }
 
@@ -381,7 +386,10 @@ async function authFetch(path: string, init: RequestInit = {}) {
   const token = getAuthToken();
   const headers = new Headers(init.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetchWithTimeout(apiPath(path), { ...init, headers });
+  const timeoutMs = path.startsWith("/posture/analyze-video")
+    ? VIDEO_ANALYSIS_TIMEOUT_MS
+    : DEFAULT_REQUEST_TIMEOUT_MS;
+  return fetchWithTimeout(apiPath(path), { ...init, headers }, timeoutMs);
 }
 
 export async function login(email: string, password: string): Promise<AuthResponse> {

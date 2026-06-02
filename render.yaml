@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: gymfixer-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile.render
+    dockerContext: ./backend
+    plan: starter
+    region: singapore
+    healthCheckPath: /health
+    preDeployCommand: alembic upgrade head
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: FRONTEND_ORIGINS
+        sync: false
+      - key: POSE_BACKEND
+        value: mediapipe
+      - key: MP_MODEL_COMPLEXITY
+        value: "0"
+      - key: MP_MIN_DET_CONF
+        value: "0.5"
+      - key: MP_MIN_TRACK_CONF
+        value: "0.5"
+      - key: MP_VIS_THRESHOLD
+        value: "0.5"
+      - key: POSTURE_SUBJECT_READY_MIN_FRAMES
+        value: "10"
+      - key: POSTURE_SUBJECT_MIN_BBOX_AREA
+        value: "0.035"
+      - key: POSTURE_SUBJECT_MIN_BBOX_WIDTH
+        value: "0.12"
+      - key: POSTURE_SUBJECT_MIN_BBOX_HEIGHT
+        value: "0.20"
+
+  - type: web
+    name: gymfixer-frontend
+    runtime: node
+    rootDir: frontend
+    plan: starter
+    region: singapore
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_BASE_URL
+        sync: false

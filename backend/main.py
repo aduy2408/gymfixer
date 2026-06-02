@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from authentication.database import init_db
@@ -10,18 +11,30 @@ from plan_routes import router as plan_router
 from workout_routes import router as workout_router
 import os
 
-app = FastAPI(title="Project1 API")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development").strip().lower()
+IS_PRODUCTION = ENVIRONMENT == "production"
 
-# CORS settings: allow the frontend dev server and localhost for local testing
-origins = [
+app = FastAPI(
+    title="GymFixer API",
+    docs_url=None if IS_PRODUCTION else "/docs",
+    redoc_url=None if IS_PRODUCTION else "/redoc",
+)
+
+DEFAULT_DEV_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:8080",
     "http://127.0.0.1:8080",
-    "*"  # Allow all origins for testing purposes; restrict in production
 ]
+
+configured_origins = os.getenv("FRONTEND_ORIGINS") or os.getenv("FRONTEND_ORIGIN")
+origins = (
+    [origin.strip() for origin in configured_origins.split(",") if origin.strip()]
+    if configured_origins
+    else DEFAULT_DEV_ORIGINS
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,11 +43,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    if "X-Content-Type-Options" not in response.headers:
+        response.headers["X-Content-Type-Options"] = "nosniff"
+    if "X-Frame-Options" not in response.headers:
+        response.headers["X-Frame-Options"] = "DENY"
+    if "Referrer-Policy" not in response.headers:
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if IS_PRODUCTION and "Strict-Transport-Security" not in response.headers:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
+@app.get("/health", include_in_schema=False)
+def health():
+    return {"status": "ok"}
 
 
 @app.options("/{full_path:path}", include_in_schema=False)
 def options_handler(full_path: str):
-    return {}
+    return Response(status_code=204)
 
 
 # Include posture websocket router and other routers
