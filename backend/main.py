@@ -35,10 +35,12 @@ origins = (
     if configured_origins
     else DEFAULT_DEV_ORIGINS
 )
+origin_regex = os.getenv("FRONTEND_ORIGIN_REGEX")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

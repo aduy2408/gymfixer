@@ -352,8 +352,18 @@ async function fetchWithTimeout(
 ): Promise<Response> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  const headers = new Headers(init.headers);
+  const requestUrl = input instanceof Request ? input.url : input.toString();
   try {
-    return await fetch(input, { ...init, signal: init.signal || controller.signal });
+    const hostname = new URL(requestUrl).hostname;
+    if (hostname.endsWith(".ngrok-free.app")) {
+      headers.set("ngrok-skip-browser-warning", "true");
+    }
+  } catch {
+    // Relative URLs are resolved before reaching this helper in normal API calls.
+  }
+  try {
+    return await fetch(input, { ...init, headers, signal: init.signal || controller.signal });
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
       throw new Error(`Request timed out. Check that the backend is reachable at ${apiBase()}.`);

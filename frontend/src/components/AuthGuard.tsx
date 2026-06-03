@@ -25,7 +25,8 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         if (!active) return;
         setStoredUser(user);
         setReady(true);
-      } catch {
+      } catch (err) {
+        console.error("Session check failed", err);
         clearSession();
         router.replace("/auth/login");
       }
