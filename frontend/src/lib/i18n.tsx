@@ -264,6 +264,7 @@ const dictionary: Dictionary = {
   "analysis.errors": { en: "Errors Detected", vi: "Lỗi được phát hiện" },
   "analysis.noIssues": { en: "No rep-level form issues were detected in the usable exercise frames.", vi: "Không phát hiện lỗi kỹ thuật theo rep trong các khung hình dùng được." },
   "analysis.coaching": { en: "Coaching", vi: "Huấn luyện" },
+  "analysis.pttCoaching": { en: "PTT Coaching", vi: "PTT Coaching" },
   "analysis.recommendations": { en: "Recommendations", vi: "Gợi ý" },
   "analysis.maxOutput": { en: "Max output", vi: "Đầu ra tối đa" },
   "analysis.noCoaching": { en: "No coaching recommendations were returned.", vi: "Không có gợi ý huấn luyện nào được trả về." },

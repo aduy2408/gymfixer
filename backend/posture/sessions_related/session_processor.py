@@ -41,7 +41,8 @@ def analyze_posture_session(
     pose_backend = normalise_pose_backend(pose_backend)
 
     try:
-        pose_processor = mediapipe_utils.PoseProcessor(backend_name=pose_backend)
+        pose_processor = mediapipe_utils.get_cached_pose_processor(pose_backend)
+        pose_processor.reset_state()
     except RuntimeError as exc:
         raise ValueError(str(exc)) from exc
     pose_backend = getattr(pose_processor, "backend_name", "mediapipe")

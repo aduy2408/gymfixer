@@ -415,7 +415,7 @@ export default function AnalysisPage() {
                                     <Info size={16} style={{ color: "var(--red)", marginTop: 2, flexShrink: 0 }} />
                                     <div>
                                         <p style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--red)", marginBottom: "0.5rem" }}>
-                                            {result.llm.enabled ? `Gemini ${result.llm.model}` : t("analysis.recommendations")}
+                                            {result.llm.enabled ? t("analysis.pttCoaching") : t("analysis.recommendations")}
                                         </p>
                                         {result.llm.enabled && (
                                             <p style={{ fontSize: "0.72rem", color: "#999", marginBottom: "0.75rem" }}>

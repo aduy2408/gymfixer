@@ -1,6 +1,7 @@
 import cv2
 import logging
 import os
+from threading import Lock
 
 logger = logging.getLogger("posture.mediapipe_utils")
 
@@ -212,6 +213,14 @@ class PoseProcessor:
             f"track_conf={self.min_tracking_confidence}"
         )
 
+    def reset_state(self):
+        if self._delegate is not None:
+            smoother = getattr(self._delegate, "smoother", None)
+            if smoother is not None:
+                smoother.update(None)
+            return
+        self.smoother.update(None)
+
     def process(self, frame):
         """Process an OpenCV BGR frame.
 
@@ -271,6 +280,8 @@ def get_angles_for_exercise(exercise, landmarks):
 # ---------------------------------------------------------------------------
 
 DEFAULT_POSE_PROCESSOR = None
+_POSE_PROCESSORS_BY_BACKEND: dict[str, PoseProcessor] = {}
+_POSE_PROCESSORS_LOCK = Lock()
 
 
 def get_default_pose_processor() -> PoseProcessor:
@@ -278,3 +289,15 @@ def get_default_pose_processor() -> PoseProcessor:
     if DEFAULT_POSE_PROCESSOR is None:
         DEFAULT_POSE_PROCESSOR = PoseProcessor()
     return DEFAULT_POSE_PROCESSOR
+
+
+def get_cached_pose_processor(backend_name: str | None = None) -> PoseProcessor:
+    cache_key = (backend_name or os.getenv("POSE_BACKEND", "mediapipe")).strip().lower()
+    if cache_key == "mp":
+        cache_key = "mediapipe"
+    with _POSE_PROCESSORS_LOCK:
+        processor = _POSE_PROCESSORS_BY_BACKEND.get(cache_key)
+        if processor is None:
+            processor = PoseProcessor(backend_name=cache_key)
+            _POSE_PROCESSORS_BY_BACKEND[cache_key] = processor
+        return processor
