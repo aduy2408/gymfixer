@@ -452,7 +452,7 @@ const dictionary: Dictionary = {
   "auth.emailVerified": { en: "Email verified successfully. You can continue using GymFixer.", vi: "Email đã được xác minh. Bạn có thể tiếp tục dùng GymFixer." },
   "auth.verifyEmailError": { en: "Could not verify email.", vi: "Không thể xác minh email." },
   "auth.goDashboard": { en: "Go to dashboard", vi: "Vào bảng điều khiển" },
-  "auth.googleMissing": { en: "Google login needs NEXT_PUBLIC_GOOGLE_CLIENT_ID in frontend/.env.", vi: "Đăng nhập Google cần NEXT_PUBLIC_GOOGLE_CLIENT_ID trong frontend/.env." },
+  "auth.googleMissing": { en: "Google login needs NEXT_PUBLIC_GOOGLE_CLIENT_ID in the project .env.", vi: "Đăng nhập Google cần NEXT_PUBLIC_GOOGLE_CLIENT_ID trong file .env của dự án." },
   "auth.googleLoadError": { en: "Could not load Google Sign-In. Check network or Google Cloud origin config.", vi: "Không thể tải Google Sign-In. Kiểm tra mạng hoặc cấu hình Google Cloud origin." },
   "auth.googleNoCredential": { en: "Google did not return a credential.", vi: "Google không trả về thông tin xác thực." },
   "auth.googleFailed": { en: "Google sign-in failed.", vi: "Đăng nhập Google thất bại." },
