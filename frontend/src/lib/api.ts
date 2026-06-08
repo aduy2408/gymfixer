@@ -38,6 +38,7 @@ export type UserProfile = {
   age: number | null;
   gender: "male" | "female" | "other" | "";
   goal: "fat_loss" | "muscle" | "strength" | "endurance" | "rehab" | "general" | "";
+  is_verified?: boolean;
   created_at: string;
   updated_at?: string | null;
 };

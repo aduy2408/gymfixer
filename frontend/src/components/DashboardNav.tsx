@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Activity, BarChart3, CalendarDays, ChevronsLeft, ChevronsRight, History, LayoutDashboard, User, LogOut, Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { clearSession, getStoredUser, AuthUser } from "@/lib/auth";
-import { logout } from "@/lib/api";
+import { logout, fetchUserProfile } from "@/lib/api";
 import { tierLabel, useI18n } from "@/lib/i18n";
 import LanguageToggle from "@/components/LanguageToggle";
 
@@ -33,7 +33,26 @@ export default function DashboardNav() {
     const syncUser = () => setUser(getStoredUser());
     syncUser();
     window.addEventListener("gymfixer-auth-change", syncUser);
-    return () => window.removeEventListener("gymfixer-auth-change", syncUser);
+
+    const handleProfileUpdate = async () => {
+      try {
+        const profile = await fetchUserProfile();
+        setUser((prev) => {
+          const base = prev || getStoredUser();
+          return base ? { ...base, name: profile.name, email: profile.email } : null;
+        });
+      } catch (err) {
+        console.error("Lỗi khi đồng bộ dữ liệu user trên Nav:", err);
+      }
+    };
+
+    handleProfileUpdate();
+    window.addEventListener("userProfileUpdated", handleProfileUpdate);
+
+    return () => {
+      window.removeEventListener("gymfixer-auth-change", syncUser);
+      window.removeEventListener("userProfileUpdated", handleProfileUpdate);
+    };
   }, []);
 
   const toggleCollapsed = () => {

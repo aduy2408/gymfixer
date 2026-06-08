@@ -175,7 +175,7 @@ def update_profile(
 
     profile = _get_or_create_profile(db, current_user)
     for field_name in ("height_cm", "weight_kg", "age", "gender", "goal"):
-        value = getattr(profile_in, field_name)
+        value = getattr(profile_in, field_name, None)
         if value is not None:
             setattr(profile, field_name, value or None)
 
