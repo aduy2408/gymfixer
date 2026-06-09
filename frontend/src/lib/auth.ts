@@ -7,6 +7,7 @@ export type AuthUser = {
   is_verified?: boolean;
   auth_provider?: string;
   subscription_tier?: "free" | "trial" | "paid";
+  role?: "user" | "admin";
   trial_started_at?: string | null;
   trial_ends_at?: string | null;
 };

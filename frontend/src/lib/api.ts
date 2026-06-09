@@ -6,6 +6,7 @@ export type ExerciseId = "squat" | "lunge" | "bicep_curl";
 export type CameraView = "auto" | "side" | "front" | "three_quarter";
 export type PoseBackend = "mediapipe" | "vitpose";
 export type SubscriptionTier = "free" | "trial" | "paid";
+export type UserRole = "user" | "admin";
 
 export type AuthUser = {
   id: number | string;
@@ -14,6 +15,7 @@ export type AuthUser = {
   is_verified?: boolean;
   auth_provider?: string;
   subscription_tier?: SubscriptionTier;
+  role?: UserRole;
   trial_started_at?: string | null;
   trial_ends_at?: string | null;
   created_at?: string;
@@ -31,6 +33,7 @@ export type UserProfile = {
   name: string;
   email: string;
   subscription_tier?: SubscriptionTier;
+  role?: UserRole;
   trial_started_at?: string | null;
   trial_ends_at?: string | null;
   height_cm: number | null;
@@ -38,6 +41,7 @@ export type UserProfile = {
   age: number | null;
   gender: "male" | "female" | "other" | "";
   goal: "fat_loss" | "muscle" | "strength" | "endurance" | "rehab" | "general" | "";
+  discovery_source: "facebook" | "tiktok" | "word_of_mouth" | "";
   created_at: string;
   updated_at?: string | null;
 };
@@ -50,7 +54,81 @@ export type UserProfileUpdate = Partial<{
   age: number;
   gender: UserProfile["gender"];
   goal: UserProfile["goal"];
+  discovery_source: UserProfile["discovery_source"];
 }>;
+
+export type FeedbackSource = "popup" | "sidebar";
+
+export type FeedbackCreate = {
+  rating: number;
+  message: string;
+  source: FeedbackSource;
+};
+
+export type FeedbackItem = {
+  id: number;
+  rating: number;
+  message: string;
+  source: FeedbackSource | string;
+  created_at: string;
+};
+
+export type AdminFeedbackItem = FeedbackItem & {
+  user_id: number;
+  user_name: string;
+  user_email: string;
+};
+
+export type AdminRange = "7d" | "30d" | "all";
+
+export type AnalyticsDatum = {
+  count: number;
+  percentage: number;
+};
+
+export type AdminAnalytics = {
+  range: AdminRange;
+  user_counts: {
+    total: number;
+    new: number;
+    admins: number;
+    regular: number;
+  };
+  top_metrics: {
+    video_analyses: number;
+    plan_generations: number;
+  };
+  discovery_sources: Array<AnalyticsDatum & { source: string }>;
+  feature_usage: Array<AnalyticsDatum & { feature: string }>;
+  feedback_sources: Array<AnalyticsDatum & { source: string }>;
+  rating_distribution: Array<AnalyticsDatum & { rating: number }>;
+  usage_events: Array<AnalyticsDatum & { event_name: string }>;
+  feedback_summary: {
+    count: number;
+    average_rating: number | null;
+  };
+  recent_events: Array<{
+    id: number;
+    event_name: string;
+    user_id: number | null;
+    user_name: string | null;
+    user_email: string | null;
+    properties: Record<string, string | number | boolean | null>;
+    created_at: string;
+  }>;
+};
+
+export type ClientUsageEventName =
+  | "dashboard_viewed"
+  | "admin_viewed"
+  | "feedback_popup_shown"
+  | "feedback_popup_dismissed"
+  | "feedback_sidebar_opened"
+  | "onboarding_intro_viewed"
+  | "onboarding_metrics_started"
+  | "onboarding_completed"
+  | "quota_error_shown"
+  | "plan_generation_failed";
 
 export type SubscriptionSummary = {
   tier: SubscriptionTier;
@@ -438,6 +516,84 @@ export async function fetchSubscription(): Promise<SubscriptionSummary> {
 export async function startTrial(): Promise<SubscriptionSummary> {
   const response = await authFetch("/auth/trial/start", { method: "POST" });
   return parseResponse<SubscriptionSummary>(response, "Could not start trial.");
+}
+
+export async function submitFeedback(params: FeedbackCreate): Promise<FeedbackItem> {
+  const response = await authFetch("/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  return parseResponse<FeedbackItem>(response, "Could not submit feedback.");
+}
+
+export async function fetchAdminFeedback(): Promise<AdminFeedbackItem[]> {
+  const response = await authFetch("/admin/feedback");
+  return parseResponse<AdminFeedbackItem[]>(response, "Could not load feedback.");
+}
+
+export async function fetchAdminAnalytics(range: AdminRange = "30d"): Promise<AdminAnalytics> {
+  const response = await authFetch(`/admin/analytics?range=${encodeURIComponent(range)}`);
+  const data = await parseResponse<Partial<AdminAnalytics>>(response, "Could not load admin analytics.");
+  const usageEvents = data.usage_events || [];
+  const videoAnalyses = data.top_metrics?.video_analyses
+    ?? usageEvents.find((row) => row.event_name === "analysis_completed")?.count
+    ?? 0;
+  const planGenerations = data.top_metrics?.plan_generations
+    ?? usageEvents
+      .filter((row) => row.event_name === "weekly_workout_plan_created" || row.event_name === "weekly_meal_plan_created")
+      .reduce((sum, row) => sum + row.count, 0);
+  return {
+    range: data.range || range,
+    user_counts: {
+      total: data.user_counts?.total ?? 0,
+      new: data.user_counts?.new ?? 0,
+      admins: data.user_counts?.admins ?? 0,
+      regular: data.user_counts?.regular ?? 0,
+    },
+    top_metrics: {
+      video_analyses: videoAnalyses,
+      plan_generations: planGenerations,
+    },
+    discovery_sources: withPercent(data.discovery_sources || []),
+    feature_usage: data.feature_usage || withPercent(
+      usageEvents.map((row) => ({ feature: row.event_name.replaceAll("_", " "), count: row.count })),
+    ),
+    feedback_sources: withPercent(data.feedback_sources || []),
+    rating_distribution: withPercent(data.rating_distribution || []),
+    usage_events: withPercent(usageEvents),
+    feedback_summary: {
+      count: data.feedback_summary?.count ?? 0,
+      average_rating: data.feedback_summary?.average_rating ?? null,
+    },
+    recent_events: data.recent_events || [],
+  };
+}
+
+function withPercent<T extends { count: number; percentage?: number }>(rows: T[]): Array<T & { percentage: number }> {
+  const total = rows.reduce((sum, row) => sum + row.count, 0);
+  return rows.map((row) => ({
+    ...row,
+    percentage: row.percentage ?? (total ? Math.round((row.count / total) * 1000) / 10 : 0),
+  }));
+}
+
+export async function logUsageEvent(
+  eventName: ClientUsageEventName,
+  properties: Record<string, string | number | boolean | null> = {},
+): Promise<{ ok: boolean }> {
+  if (!getAuthToken()) return { ok: false };
+  try {
+    const response = await authFetch("/usage-events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_name: eventName, properties }),
+    });
+    if (!response.ok) return { ok: false };
+    return parseResponse<{ ok: boolean }>(response, "Could not log usage event.");
+  } catch {
+    return { ok: false };
+  }
 }
 
 export async function updateUserProfile(params: UserProfileUpdate): Promise<UserProfile> {

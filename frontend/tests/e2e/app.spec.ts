@@ -111,6 +111,29 @@ test.describe("authenticated entitlement flows", () => {
     await expect(page.getByRole("button", { name: /Start 7-Day Trial/i })).toHaveCount(0);
   });
 
+  test("sidebar feedback modal submits a quick rating", async ({ page }) => {
+    await mockDashboardApi(page, freeSubscription);
+    await page.goto("/dashboard");
+
+    await page.getByRole("button", { name: "Feedback" }).click();
+    await expect(page.getByRole("heading", { name: /How is GymFixer working/i })).toBeVisible();
+    await page.getByRole("button", { name: /5 stars/i }).click();
+    await page.getByPlaceholder(/useful, confusing, or missing/i).fill("Helpful");
+    await page.getByRole("button", { name: /Send feedback/i }).click();
+
+    await expect(page.getByText(/Thanks/i)).toBeVisible();
+  });
+
+  test("admin page shows analytics and latest feedback for admin users", async ({ page }) => {
+    await mockDashboardApi(page, freeSubscription, "admin");
+    await page.goto("/dashboard/admin");
+
+    await expect(page.getByRole("heading", { name: /ADMIN ANALYTICS/i })).toBeVisible();
+    await expect(page.getByText("analysis completed")).toBeVisible();
+    await expect(page.getByText("Helpful")).toBeVisible();
+    await expect(page.getByText("Facebook")).toBeVisible();
+  });
+
   test("plans page shows plan quotas and validates workout inputs", async ({ page }) => {
     await mockDashboardApi(page, freeSubscription);
     await page.goto("/dashboard/plans");

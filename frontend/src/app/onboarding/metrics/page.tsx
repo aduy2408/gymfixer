@@ -1,9 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Activity, ArrowRight } from "lucide-react";
-import { updateUserProfile } from "@/lib/api";
+import { logUsageEvent, updateUserProfile } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 const goals = [
@@ -15,12 +15,22 @@ const goals = [
     { id: "general", emoji: "⚡", labelKey: "goals.general", descKey: "onboarding.goal.general" },
 ];
 
+const discoverySources = [
+    { id: "facebook", labelKey: "onboarding.discovery.facebook" },
+    { id: "tiktok", labelKey: "onboarding.discovery.tiktok" },
+    { id: "word_of_mouth", labelKey: "onboarding.discovery.wordOfMouth" },
+];
+
 export default function OnboardingMetricsPage() {
     const router = useRouter();
     const { t } = useI18n();
-    const [form, setForm] = useState({ height: "", weight: "", age: "", gender: "", goal: "" });
+    const [form, setForm] = useState({ height: "", weight: "", age: "", gender: "", goal: "", discoverySource: "" });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
+
+    useEffect(() => {
+        void logUsageEvent("onboarding_metrics_started");
+    }, []);
 
     const update = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
         setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -36,6 +46,11 @@ export default function OnboardingMetricsPage() {
                 age: Number(form.age),
                 gender: form.gender as "" | "male" | "female" | "other",
                 goal: form.goal as "fat_loss" | "muscle" | "strength" | "endurance" | "rehab" | "general",
+                discovery_source: form.discoverySource as "facebook" | "tiktok" | "word_of_mouth",
+            });
+            void logUsageEvent("onboarding_completed", {
+                goal: form.goal,
+                discovery_source: form.discoverySource,
             });
             if (typeof window !== "undefined") localStorage.removeItem("fg_profile");
             router.push("/dashboard");
@@ -45,7 +60,7 @@ export default function OnboardingMetricsPage() {
         }
     };
 
-    const isComplete = form.height && form.weight && form.age && form.goal;
+    const isComplete = form.height && form.weight && form.age && form.goal && form.discoverySource;
 
     const inputStyle: React.CSSProperties = {
         width: "100%",
@@ -147,6 +162,36 @@ export default function OnboardingMetricsPage() {
                                 <option value="female">{t("profile.gender.female")}</option>
                                 <option value="other">{t("profile.gender.other")}</option>
                             </select>
+                        </div>
+
+                        {/* Discovery Source */}
+                        <div>
+                            <label style={labelStyle}>{t("profile.section.discovery")}</label>
+                            <p style={{ color: "#777", fontSize: "0.78rem", lineHeight: 1.5, marginBottom: "0.75rem" }}>
+                                {t("onboarding.discoveryCopy")}
+                            </p>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
+                                {discoverySources.map((source) => (
+                                    <button
+                                        key={source.id}
+                                        type="button"
+                                        onClick={() => setForm((f) => ({ ...f, discoverySource: source.id }))}
+                                        style={{
+                                            background: form.discoverySource === source.id ? "var(--red)" : "#fff",
+                                            color: form.discoverySource === source.id ? "#fff" : "#111",
+                                            border: "none",
+                                            padding: "0.9rem",
+                                            fontSize: "0.85rem",
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                            textAlign: "center",
+                                            transition: "background 0.15s",
+                                        }}
+                                    >
+                                        {t(source.labelKey)}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         {/* Fitness Goal */}

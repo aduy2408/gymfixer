@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, BarChart3, CalendarDays, ChevronsLeft, ChevronsRight, History, LayoutDashboard, User, LogOut, Menu, X } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, ChevronsLeft, ChevronsRight, History, LayoutDashboard, User, LogOut, Menu, MessageSquare, Shield, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { clearSession, getStoredUser, AuthUser } from "@/lib/auth";
-import { logout } from "@/lib/api";
+import { logUsageEvent, logout } from "@/lib/api";
 import { tierLabel, useI18n } from "@/lib/i18n";
+import FeedbackModal from "@/components/FeedbackModal";
 import LanguageToggle from "@/components/LanguageToggle";
 
 const navLinks = [
@@ -28,6 +29,7 @@ export default function DashboardNav() {
     return localStorage.getItem("ptt_sidebar_collapsed") === "true";
   });
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   useEffect(() => {
     const syncUser = () => setUser(getStoredUser());
@@ -69,11 +71,21 @@ export default function DashboardNav() {
           </Link>
         );
       })}
+      {user?.role === "admin" && (
+        <Link href="/dashboard/admin" className={`app-nav-item ${isActive("/dashboard/admin") ? "active" : ""}`} onClick={() => setMobileOpen(false)} title={t("nav.admin")}>
+          <Shield size={17} />
+          <span>{t("nav.admin")}</span>
+        </Link>
+      )}
     </nav>
   );
 
   const userBlock = (
     <>
+      <button type="button" onClick={() => { void logUsageEvent("feedback_sidebar_opened"); setFeedbackOpen(true); }} className="app-nav-item" title={t("feedback.nav")} style={{ width: "auto", margin: "0.45rem 0.85rem 0", border: "none" }}>
+        <MessageSquare size={17} />
+        <span>{t("feedback.nav")}</span>
+      </button>
       <div className="app-user-card" title={user?.email || t("auth.signIn")}>
         <div className="app-user-avatar">{initial}</div>
         <div className="app-user-meta">
@@ -134,6 +146,7 @@ export default function DashboardNav() {
           </motion.div>
         )}
       </AnimatePresence>
+      <FeedbackModal open={feedbackOpen} source="sidebar" onClose={() => setFeedbackOpen(false)} />
     </>
   );
 }

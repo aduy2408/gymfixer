@@ -1,8 +1,10 @@
 "use client";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Activity, Shield, Video, Cpu, ArrowRight, CheckCircle } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { logUsageEvent } from "@/lib/api";
 
 const features = [
     {
@@ -30,6 +32,10 @@ const features = [
 export default function OnboardingIntroPage() {
     const router = useRouter();
     const { t } = useI18n();
+
+    useEffect(() => {
+        void logUsageEvent("onboarding_intro_viewed");
+    }, []);
 
     return (
         <div style={{ minHeight: "100vh", background: "#fff", fontFamily: "var(--font-ui)" }}>

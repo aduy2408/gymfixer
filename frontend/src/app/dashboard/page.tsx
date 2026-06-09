@@ -23,9 +23,11 @@ import {
     saveLatestAnalysis,
     SubscriptionSummary,
     VideoAnalysisResult,
+    logUsageEvent,
 } from "@/lib/api";
 import { tierLabel, translateKey, useI18n } from "@/lib/i18n";
 import { mockProfile } from "@/lib/mockData";
+import { recordMeaningfulAction } from "@/lib/feedbackPrompt";
 
 const exerciseOptions: Array<{ id: ExerciseId; labelKey: string }> = [
     { id: "squat", labelKey: "dashboard.exercise.squat" },
@@ -83,6 +85,7 @@ export default function DashboardPage() {
     const [subscription, setSubscription] = useState<SubscriptionSummary | null>(null);
 
     useEffect(() => {
+        void logUsageEvent("dashboard_viewed");
         let cancelled = false;
         fetchAnalyticsSummary()
             .then((data) => {
@@ -172,12 +175,22 @@ export default function DashboardPage() {
                 result,
             });
             setLastResult(result);
+            recordMeaningfulAction();
             fetchAnalyticsSummary().then(setAnalytics).catch(() => {});
             fetchSubscription().then(setSubscription).catch(() => {});
             router.push(`/dashboard/analysis/${id}`);
         } catch (err) {
             const maybeSub = (err as Error & { subscription?: SubscriptionSummary }).subscription;
             if (maybeSub) setSubscription(maybeSub);
+            const code = (err as Error & { code?: string }).code || "";
+            if (maybeSub || code) {
+                void logUsageEvent("quota_error_shown", {
+                    feature: "video_analysis",
+                    code: code || "subscription_limit",
+                    tier: maybeSub?.tier || null,
+                    message_short: err instanceof Error ? err.message : t("dashboard.analysisFailed"),
+                });
+            }
             setError(err instanceof Error ? err.message : t("dashboard.analysisFailed"));
         } finally {
             setIsLoading(false);

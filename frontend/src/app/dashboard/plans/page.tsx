@@ -16,8 +16,10 @@ import {
     SubscriptionSummary,
     WorkoutPlan,
     WorkoutPlanRequest,
+    logUsageEvent,
 } from "@/lib/api";
 import { localeFor, tierLabel, useI18n } from "@/lib/i18n";
+import { recordMeaningfulAction } from "@/lib/feedbackPrompt";
 
 const cardStyle: React.CSSProperties = {
     background: "#fff",
@@ -206,11 +208,18 @@ export default function PlansPage() {
                 focus_muscles: splitCsv(workoutForm.focus_muscles),
             };
             setWorkoutPlan(await createWorkoutPlan(payload));
+            recordMeaningfulAction();
             fetchSubscription().then(setSubscription).catch(() => {});
             setShowWorkoutForm(false);
         } catch (err) {
             const maybeSub = (err as Error & { subscription?: SubscriptionSummary }).subscription;
             if (maybeSub) setSubscription(maybeSub);
+            void logUsageEvent("plan_generation_failed", {
+                feature: "workout_plan",
+                code: (err as Error & { code?: string }).code || null,
+                tier: maybeSub?.tier || null,
+                message_short: err instanceof Error ? err.message : t("plans.createWorkoutError"),
+            });
             setWorkoutError(err instanceof Error ? err.message : t("plans.createWorkoutError"));
         } finally {
             setWorkoutLoading(false);
@@ -252,11 +261,18 @@ export default function PlansPage() {
                 adjust_for_workout_plan: mealForm.adjust_for_workout_plan,
             };
             setMealPlan(await createMealPlan(payload));
+            recordMeaningfulAction();
             fetchSubscription().then(setSubscription).catch(() => {});
             setShowMealForm(false);
         } catch (err) {
             const maybeSub = (err as Error & { subscription?: SubscriptionSummary }).subscription;
             if (maybeSub) setSubscription(maybeSub);
+            void logUsageEvent("plan_generation_failed", {
+                feature: "meal_plan",
+                code: (err as Error & { code?: string }).code || null,
+                tier: maybeSub?.tier || null,
+                message_short: err instanceof Error ? err.message : t("plans.createMealError"),
+            });
             setMealError(err instanceof Error ? err.message : t("plans.createMealError"));
         } finally {
             setMealLoading(false);

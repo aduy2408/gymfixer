@@ -373,6 +373,9 @@ def create_workout_plan(
             "plan_id": row.id,
             "generation_source": source,
             "goal": request.goal,
+            "level": request.level,
+            "training_location": request.training_location,
+            "days_per_week": request.days_per_week,
             "fallback_reason": payload.generation_diagnostics.fallback_reason if payload.generation_diagnostics else None,
         },
     )
@@ -422,6 +425,9 @@ def create_meal_plan(
             "plan_id": row.id,
             "generation_source": source,
             "goal": request.goal,
+            "diet_preference": request.diet_preference,
+            "budget_vnd_per_day": request.budget_vnd_per_day,
+            "adjust_for_workout_plan": request.adjust_for_workout_plan,
             "fallback_reason": payload.generation_diagnostics.fallback_reason if payload.generation_diagnostics else None,
         },
     )

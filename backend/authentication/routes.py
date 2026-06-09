@@ -67,6 +67,7 @@ def _profile_response(user: User) -> dict:
         "name": user.name,
         "email": user.email,
         "subscription_tier": user.subscription_tier,
+        "role": getattr(user, "role", "user"),
         "trial_started_at": user.trial_started_at,
         "trial_ends_at": user.trial_ends_at,
         "height_cm": profile.height_cm if profile else None,
@@ -74,6 +75,7 @@ def _profile_response(user: User) -> dict:
         "age": profile.age if profile else None,
         "gender": profile.gender if profile and profile.gender else "",
         "goal": profile.goal if profile and profile.goal else "",
+        "discovery_source": profile.discovery_source if profile and profile.discovery_source else "",
         "created_at": user.created_at,
         "updated_at": profile.updated_at if profile else None,
     }
@@ -174,7 +176,7 @@ def update_profile(
         current_user.name = profile_in.name
 
     profile = _get_or_create_profile(db, current_user)
-    for field_name in ("height_cm", "weight_kg", "age", "gender", "goal"):
+    for field_name in ("height_cm", "weight_kg", "age", "gender", "goal", "discovery_source"):
         value = getattr(profile_in, field_name)
         if value is not None:
             setattr(profile, field_name, value or None)

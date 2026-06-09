@@ -72,12 +72,13 @@ export async function seedLoggedInUser(page: Page) {
         name: "Test User",
         email: "test@example.com",
         subscription_tier: "free",
+        role: "user",
       })
     );
   });
 }
 
-export async function mockDashboardApi(page: Page, subscription = freeSubscription) {
+export async function mockDashboardApi(page: Page, subscription = freeSubscription, role: "user" | "admin" = "user") {
   await page.route("**/auth/me", async (route) => {
     await route.fulfill({
       json: {
@@ -87,6 +88,7 @@ export async function mockDashboardApi(page: Page, subscription = freeSubscripti
         is_verified: true,
         auth_provider: "local",
         subscription_tier: subscription.tier,
+        role,
         trial_started_at: subscription.trial_started_at,
         trial_ends_at: subscription.trial_ends_at,
         created_at: "2026-06-01T00:00:00Z",
@@ -102,6 +104,7 @@ export async function mockDashboardApi(page: Page, subscription = freeSubscripti
           name: "Test User",
           email: "test@example.com",
           subscription_tier: subscription.tier,
+          role,
           trial_started_at: subscription.trial_started_at,
           trial_ends_at: subscription.trial_ends_at,
           height_cm: 175,
@@ -109,6 +112,7 @@ export async function mockDashboardApi(page: Page, subscription = freeSubscripti
           age: 28,
           gender: "male",
           goal: "muscle",
+          discovery_source: "facebook",
           created_at: "2026-06-01T00:00:00Z",
           updated_at: "2026-06-01T00:00:00Z",
         },
@@ -119,6 +123,75 @@ export async function mockDashboardApi(page: Page, subscription = freeSubscripti
   });
   await page.route("**/auth/subscription", async (route) => {
     await route.fulfill({ json: subscription });
+  });
+  await page.route("**/feedback", async (route) => {
+    await route.fulfill({
+      json: {
+        id: 1,
+        rating: 5,
+        message: "Helpful",
+        source: "sidebar",
+        created_at: "2026-06-09T00:00:00Z",
+      },
+    });
+  });
+  await page.route("**/usage-events", async (route) => {
+    await route.fulfill({ json: { ok: true } });
+  });
+  await page.route("**/admin/analytics**", async (route) => {
+    await route.fulfill({
+      json: {
+        range: "30d",
+        user_counts: { total: 3, new: 2, admins: 1, regular: 2 },
+        top_metrics: { video_analyses: 5, plan_generations: 2 },
+        discovery_sources: [
+          { source: "facebook", count: 2, percentage: 66.7 },
+          { source: "tiktok", count: 1, percentage: 33.3 },
+        ],
+        feature_usage: [
+          { feature: "Video Analysis", count: 5, percentage: 71.4 },
+          { feature: "Workout Plans", count: 2, percentage: 28.6 },
+        ],
+        feedback_sources: [
+          { source: "sidebar", count: 1, percentage: 100 },
+        ],
+        rating_distribution: [
+          { rating: 5, count: 1, percentage: 100 },
+        ],
+        usage_events: [
+          { event_name: "analysis_completed", count: 5, percentage: 71.4 },
+          { event_name: "weekly_workout_plan_created", count: 2, percentage: 28.6 },
+        ],
+        feedback_summary: { count: 1, average_rating: 5 },
+        recent_events: [
+          {
+            id: 1,
+            event_name: "analysis_completed",
+            user_id: 1,
+            user_name: "Test User",
+            user_email: "test@example.com",
+            properties: { feature: "video_analysis" },
+            created_at: "2026-06-09T00:00:00Z",
+          },
+        ],
+      },
+    });
+  });
+  await page.route("**/admin/feedback", async (route) => {
+    await route.fulfill({
+      json: [
+        {
+          id: 1,
+          user_id: 1,
+          user_name: "Test User",
+          user_email: "test@example.com",
+          rating: 5,
+          message: "Helpful",
+          source: "sidebar",
+          created_at: "2026-06-09T00:00:00Z",
+        },
+      ],
+    });
   });
   await page.route("**/auth/trial/start", async (route) => {
     await route.fulfill({ json: trialSubscription });

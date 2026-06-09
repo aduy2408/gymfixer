@@ -111,6 +111,12 @@ def persist_analysis_result(
         session_id=workout_session.id,
         properties={
             "analysis_id": analysis.id,
+            "exercise": workout_session.exercise,
+            "camera_view": workout_session.camera_view,
+            "pose_backend": workout_session.pose_backend,
+            "llm_requested": workout_session.llm_requested,
+            "status": workout_session.status,
+            "processing_ms": analysis.processing_ms,
             "rep_count": analysis.rep_count,
             "frames_analyzed": analysis.frames_analyzed,
             "quality_ratio": analysis.quality_ratio,

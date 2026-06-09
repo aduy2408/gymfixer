@@ -5,6 +5,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from authentication.database import init_db
 from authentication.routes import router as auth_router
+from admin_routes import router as admin_router
+from feedback_routes import router as feedback_router
+from usage_routes import router as usage_router
 from posture.session_analysis import router as session_analysis_router
 from posture.websocket import router as posture_router
 from plan_routes import router as plan_router
@@ -83,6 +86,9 @@ def on_startup():
 
 # Include auth routes
 app.include_router(auth_router)
+app.include_router(feedback_router)
+app.include_router(usage_router)
+app.include_router(admin_router)
 app.include_router(workout_router)
 app.include_router(plan_router)
 

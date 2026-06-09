@@ -18,6 +18,7 @@ class User(Base):
     google_sub = Column(String, unique=True, nullable=True, index=True)
     last_login_at = Column(DateTime(timezone=True), nullable=True)
     subscription_tier = Column(String, default="free", nullable=False, index=True)
+    role = Column(String, default="user", nullable=False, index=True)
     trial_started_at = Column(DateTime(timezone=True), nullable=True)
     trial_ends_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -26,6 +27,7 @@ class User(Base):
     profile = relationship("UserProfile", back_populates="user", cascade="all, delete-orphan", uselist=False)
     workout_sessions = relationship("WorkoutSession", back_populates="user")
     usage_events = relationship("UsageEvent", back_populates="user")
+    feedback_items = relationship("UserFeedback", back_populates="user", cascade="all, delete-orphan")
     weekly_workout_plans = relationship("WeeklyWorkoutPlan", back_populates="user")
     weekly_meal_plans = relationship("WeeklyMealPlan", back_populates="user")
 
@@ -71,6 +73,7 @@ class UserProfile(Base):
     age = Column(Integer, nullable=True)
     gender = Column(String, nullable=True)
     goal = Column(String, nullable=True)
+    discovery_source = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -128,6 +131,19 @@ class UsageEvent(Base):
 
     user = relationship("User", back_populates="usage_events")
     session = relationship("WorkoutSession", back_populates="usage_events")
+
+
+class UserFeedback(Base):
+    __tablename__ = "user_feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    rating = Column(Integer, nullable=False)
+    message = Column(String, nullable=False)
+    source = Column(String, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="feedback_items")
 
 
 class WeeklyWorkoutPlan(Base):

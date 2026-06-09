@@ -7,6 +7,7 @@ import Link from "next/link";
 import { fetchSubscription, fetchUserProfile, startTrial, SubscriptionSummary, updateUserProfile, UserProfile } from "@/lib/api";
 import { setStoredUser } from "@/lib/auth";
 import { localeFor, tierLabel, useI18n } from "@/lib/i18n";
+import { recordMeaningfulAction } from "@/lib/feedbackPrompt";
 
 const goals = [
     { id: "fat_loss", emoji: "🔥", labelKey: "goals.fatLoss" },
@@ -15,6 +16,13 @@ const goals = [
     { id: "endurance", emoji: "🏃", labelKey: "goals.endurance" },
     { id: "rehab", emoji: "🩺", labelKey: "goals.rehab" },
     { id: "general", emoji: "⚡", labelKey: "goals.general" },
+];
+
+const discoverySources = [
+    { id: "", labelKey: "profile.preferNot" },
+    { id: "facebook", labelKey: "onboarding.discovery.facebook" },
+    { id: "tiktok", labelKey: "onboarding.discovery.tiktok" },
+    { id: "word_of_mouth", labelKey: "onboarding.discovery.wordOfMouth" },
 ];
 
 const inputStyle: React.CSSProperties = {
@@ -91,6 +99,7 @@ export default function ProfilePage() {
         age: "",
         gender: "",
         goal: "",
+        discoverySource: "",
     });
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
@@ -114,6 +123,7 @@ export default function ProfilePage() {
                     age: data.age ? String(data.age) : "",
                     gender: data.gender || "",
                     goal: data.goal || "",
+                    discoverySource: data.discovery_source || "",
                 });
                 setLoading(false);
             })
@@ -147,6 +157,7 @@ export default function ProfilePage() {
                 age: form.age ? Number(form.age) : undefined,
                 gender: form.gender as "" | "male" | "female" | "other",
                 goal: form.goal as "" | "fat_loss" | "muscle" | "strength" | "endurance" | "rehab" | "general",
+                discovery_source: form.discoverySource as "" | "facebook" | "tiktok" | "word_of_mouth",
             });
             setProfile(updated);
             setStoredUser({
@@ -154,6 +165,7 @@ export default function ProfilePage() {
                 name: updated.name,
                 email: updated.email,
                 subscription_tier: updated.subscription_tier,
+                role: updated.role,
                 trial_started_at: updated.trial_started_at,
                 trial_ends_at: updated.trial_ends_at,
             });
@@ -175,9 +187,11 @@ export default function ProfilePage() {
                 name: form.name,
                 email: form.email,
                 subscription_tier: next.tier,
+                role: profile?.role,
                 trial_started_at: next.trial_started_at,
                 trial_ends_at: next.trial_ends_at,
             });
+            recordMeaningfulAction();
         } catch (err) {
             setTrialError(err instanceof Error ? err.message : t("profile.startTrialError"));
         } finally {
@@ -265,6 +279,16 @@ export default function ProfilePage() {
                                         <option value="other">{t("profile.gender.other")}</option>
                                     </select>
                                 </div>
+
+                                <Divider />
+
+                                {sectionTitle(t("profile.section.discovery"))}
+                                <select value={form.discoverySource} onChange={update("discoverySource") as React.ChangeEventHandler<HTMLSelectElement>}
+                                    style={{ ...inputStyle, cursor: "pointer", appearance: "none" }}>
+                                    {discoverySources.map((source) => (
+                                        <option key={source.id || "none"} value={source.id}>{t(source.labelKey)}</option>
+                                    ))}
+                                </select>
 
                                 <Divider />
 

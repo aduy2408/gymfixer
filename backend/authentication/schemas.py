@@ -76,6 +76,7 @@ class TokenData(BaseModel):
 
 
 SubscriptionTier = Literal["free", "trial", "paid"]
+UserRole = Literal["user", "admin"]
 
 
 class UserOut(BaseModel):
@@ -87,6 +88,7 @@ class UserOut(BaseModel):
     is_verified: bool
     auth_provider: str
     subscription_tier: SubscriptionTier = "free"
+    role: UserRole = "user"
     trial_started_at: Optional[datetime] = None
     trial_ends_at: Optional[datetime] = None
     created_at: datetime
@@ -95,6 +97,7 @@ class UserOut(BaseModel):
 
 ProfileGender = Literal["male", "female", "other", ""]
 ProfileGoal = Literal["fat_loss", "muscle", "strength", "endurance", "rehab", "general", ""]
+DiscoverySource = Literal["facebook", "tiktok", "word_of_mouth", ""]
 
 
 class UserProfileUpdate(BaseModel):
@@ -105,6 +108,7 @@ class UserProfileUpdate(BaseModel):
     age: Optional[int] = Field(default=None, ge=10, le=100)
     gender: Optional[ProfileGender] = None
     goal: Optional[ProfileGoal] = None
+    discovery_source: Optional[DiscoverySource] = None
 
     @field_validator("name")
     @classmethod
@@ -131,6 +135,7 @@ class UserProfileOut(BaseModel):
     name: str
     email: EmailStr
     subscription_tier: SubscriptionTier = "free"
+    role: UserRole = "user"
     trial_started_at: Optional[datetime] = None
     trial_ends_at: Optional[datetime] = None
     height_cm: Optional[int] = None
@@ -138,6 +143,7 @@ class UserProfileOut(BaseModel):
     age: Optional[int] = None
     gender: str = ""
     goal: str = ""
+    discovery_source: str = ""
     created_at: datetime
     updated_at: Optional[datetime] = None
 
