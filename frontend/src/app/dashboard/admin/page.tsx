@@ -248,7 +248,7 @@ function FeedbackTable({ feedback, t }: { feedback: AdminFeedbackItem[]; t: (key
                 <tr key={item.id} style={{ borderBottom: "1px solid #f1f1f1", verticalAlign: "top" }}>
                   <td style={tdStyle}>
                     <strong style={{ display: "block", color: "#222" }}>{item.user_name}</strong>
-                    <span style={{ color: "#999" }}>{item.user_email}</span>
+                    <span style={{ color: "#999" }}>User ID: {item.user_id}</span>
                   </td>
                   <td style={tdStyle}>{item.rating}/5</td>
                   <td style={{ ...tdStyle, minWidth: 220, lineHeight: 1.45 }}>{item.message}</td>
@@ -275,7 +275,7 @@ function RecentEventsTable({ events, t }: { events: AdminAnalytics["recent_event
           <div key={event.id} style={{ borderBottom: "1px solid #f1f1f1", paddingBottom: "0.65rem" }}>
             <p style={{ fontSize: "0.78rem", fontWeight: 900, color: "#222", textTransform: "capitalize" }}>{formatEventName(event.event_name)}</p>
             <p style={{ fontSize: "0.72rem", color: "#888", marginTop: "0.16rem" }}>
-              {event.user_email || "anonymous"} · {new Date(event.created_at).toLocaleString(localeFor(t), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              {event.user_id ? `User ID: ${event.user_id}` : "anonymous"} · {new Date(event.created_at).toLocaleString(localeFor(t), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
             </p>
           </div>
         ))}

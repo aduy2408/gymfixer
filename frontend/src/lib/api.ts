@@ -76,7 +76,6 @@ export type FeedbackItem = {
 export type AdminFeedbackItem = FeedbackItem & {
   user_id: number;
   user_name: string;
-  user_email: string;
 };
 
 export type AdminRange = "7d" | "30d" | "all";
@@ -112,7 +111,6 @@ export type AdminAnalytics = {
     event_name: string;
     user_id: number | null;
     user_name: string | null;
-    user_email: string | null;
     properties: Record<string, string | number | boolean | null>;
     created_at: string;
   }>;

@@ -48,7 +48,6 @@ class AdminFeedbackItem(BaseModel):
     id: int
     user_id: int
     user_name: str
-    user_email: str
     rating: int
     message: str
     source: str
@@ -72,7 +71,6 @@ def list_feedback(
             "id": feedback.id,
             "user_id": user.id,
             "user_name": user.name,
-            "user_email": user.email,
             "rating": feedback.rating,
             "message": feedback.message,
             "source": feedback.source,
@@ -223,7 +221,6 @@ def admin_analytics(
                 "event_name": event.event_name,
                 "user_id": user.id if user else None,
                 "user_name": user.name if user else None,
-                "user_email": user.email if user else None,
                 "properties": event.properties_json or {},
                 "created_at": event.created_at,
             }
