@@ -1,59 +1,24 @@
-services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: project1-postgres
-    environment:
-      POSTGRES_DB: gymfixer
-      POSTGRES_USER: gymfixer
-      POSTGRES_PASSWORD: gymfixer_password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    networks:
-      - project1-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gymfixer -d gymfixer"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
+services:
   backend:
-    image: gymfixer-backend:cpu-mediapipe
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.cpu
-    container_name: project1-backend
+    image: aduy2408/gymfixer-backend:cpu-mediapipe
+    container_name: gymfixer-backend
     ports:
       - "5000:5000"
-    environment:
-      - PYTHONUNBUFFERED=1
-      - POSE_BACKEND=mediapipe
-      - MP_MODEL_COMPLEXITY=0
     env_file:
       - ./.env
-    depends_on:
-      postgres:
-        condition: service_healthy
+    environment:
+      ENVIRONMENT: production
+      POSE_BACKEND: mediapipe
+      MP_MODEL_COMPLEXITY: "0"
     volumes:
       - backend-data:/app/data
-    networks:
-      - project1-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
-
-networks:
-  project1-network:
-    driver: bridge
 
 volumes:
-  postgres-data:
-    driver: local
   backend-data:
-    driver: local
