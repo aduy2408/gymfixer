@@ -18,3 +18,5 @@ build
 .DS_Store
 .git
 .gitignore
+model/
+backend.db
