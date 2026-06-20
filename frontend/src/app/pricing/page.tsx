@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { Activity, CheckCircle, ArrowRight } from "lucide-react";
 import LanguageToggle from "@/components/LanguageToggle";
-import { createVnpayCheckout } from "@/lib/api";
+import { createPayosCheckout } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 
@@ -100,7 +100,7 @@ export default function PricingPage() {
         setCheckoutError("");
         setCheckoutLoading(true);
         try {
-            const checkout = await createVnpayCheckout();
+            const checkout = await createPayosCheckout();
             window.location.href = checkout.payment_url;
         } catch (err) {
             setCheckoutError(err instanceof Error ? err.message : t("billing.checkoutError"));

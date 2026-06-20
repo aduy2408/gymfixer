@@ -5,7 +5,7 @@ import { Save, CheckCircle } from "lucide-react";
 import DashboardNav from "@/components/DashboardNav";
 import Link from "next/link";
 import {
-    createVnpayCheckout,
+    createPayosCheckout,
     fetchSubscription,
     fetchUserProfile,
     startTrial,
@@ -213,7 +213,7 @@ export default function ProfilePage() {
         setBillingError("");
         setBillingLoading(true);
         try {
-            const checkout = await createVnpayCheckout();
+            const checkout = await createPayosCheckout();
             window.location.href = checkout.payment_url;
         } catch (err) {
             setBillingError(err instanceof Error ? err.message : t("billing.checkoutError"));
@@ -411,7 +411,7 @@ export default function ProfilePage() {
                                             </p>
                                             {subscription.billing.payment_method && (
                                                 <p style={{ fontSize: "0.78rem", color: "#555" }}>
-                                                    {t("billing.paymentMethod")}: {subscription.billing.payment_method.masked_card || subscription.billing.payment_method.bank_code || "VNPay"}
+                                                    {t("billing.paymentMethod")}: {subscription.billing.payment_method.masked_card || subscription.billing.payment_method.bank_code || "PayOS"}
                                                 </p>
                                             )}
                                         </div>

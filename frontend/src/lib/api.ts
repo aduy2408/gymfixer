@@ -537,8 +537,8 @@ export async function startTrial(): Promise<SubscriptionSummary> {
   return parseResponse<SubscriptionSummary>(response, "Could not start trial.");
 }
 
-export async function createVnpayCheckout(): Promise<{ payment_url: string; payment_id: number; amount_vnd: number }> {
-  const response = await authFetch("/billing/vnpay/start", { method: "POST" });
+export async function createPayosCheckout(): Promise<{ payment_url: string; payment_id: number; amount_vnd: number }> {
+  const response = await authFetch("/billing/payos/start", { method: "POST" });
   return parseResponse<{ payment_url: string; payment_id: number; amount_vnd: number }>(response, "Could not start payment.");
 }
 
