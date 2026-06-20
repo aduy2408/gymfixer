@@ -33,6 +33,7 @@ const exerciseOptions: Array<{ id: ExerciseId; labelKey: string }> = [
     { id: "squat", labelKey: "dashboard.exercise.squat" },
     { id: "lunge", labelKey: "dashboard.exercise.lunge" },
     { id: "bicep_curl", labelKey: "dashboard.exercise.bicepCurl" },
+    { id: "romanian_deadlift", labelKey: "dashboard.exercise.romanianDeadlift" },
 ];
 
 // Camera view selector is intentionally disabled for now. The backend
@@ -282,7 +283,7 @@ export default function DashboardPage() {
 
                             <div style={{ marginBottom: "0.9rem" }}>
                                 <label style={labelStyle}>{t("dashboard.exercise")}</label>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "1px", background: "#e8e8e8", border: "1px solid #e8e8e8" }}>
                                     {exerciseOptions.map((option) => (
                                         <button
                                             key={option.id}
@@ -304,7 +305,7 @@ export default function DashboardPage() {
                                     ))}
                                 </div>
                                 <p style={{ fontSize: "0.78rem", color: "#888", lineHeight: 1.55, marginTop: "0.55rem" }}>
-                                    {t("dashboard.clipHint")}
+                                    {exercise === "romanian_deadlift" ? t("dashboard.rdlCameraHint") : t("dashboard.clipHint")}
                                 </p>
                             </div>
 

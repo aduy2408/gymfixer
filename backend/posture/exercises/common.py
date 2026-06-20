@@ -2,16 +2,29 @@ from __future__ import annotations
 
 import logging
 import math
+import os
+import sys
+import types
 from collections import deque
 
 
 logger = logging.getLogger("posture.exercises")
 
 
+def import_mediapipe():
+    # MediaPipe 0.10.x imports its audio Tasks API at package import time. On
+    # headless Linux, sounddevice/PortAudio can hang while probing audio devices,
+    # even though GymFixer only uses pose estimation.
+    if os.getenv("POSTURE_DISABLE_MEDIAPIPE_AUDIO", "1") == "1" and "sounddevice" not in sys.modules:
+        sys.modules["sounddevice"] = types.ModuleType("sounddevice")
+    import mediapipe as mp
+
+    return mp
+
+
 class _LazyMediaPipePose:
     def __getattr__(self, name: str):
-        import mediapipe as mp
-
+        mp = import_mediapipe()
         return getattr(mp.solutions.pose, name)
 
 

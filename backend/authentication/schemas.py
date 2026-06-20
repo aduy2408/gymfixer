@@ -91,6 +91,7 @@ class UserOut(BaseModel):
     role: UserRole = "user"
     trial_started_at: Optional[datetime] = None
     trial_ends_at: Optional[datetime] = None
+    premium_expires_at: Optional[datetime] = None
     created_at: datetime
     last_login_at: Optional[datetime] = None
 
@@ -138,6 +139,7 @@ class UserProfileOut(BaseModel):
     role: UserRole = "user"
     trial_started_at: Optional[datetime] = None
     trial_ends_at: Optional[datetime] = None
+    premium_expires_at: Optional[datetime] = None
     height_cm: Optional[int] = None
     weight_kg: Optional[int] = None
     age: Optional[int] = None

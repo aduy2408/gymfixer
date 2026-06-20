@@ -2,7 +2,7 @@
 
 import { getAuthToken } from "@/lib/auth";
 
-export type ExerciseId = "squat" | "lunge" | "bicep_curl";
+export type ExerciseId = "squat" | "lunge" | "bicep_curl" | "romanian_deadlift";
 export type CameraView = "auto" | "side" | "front" | "three_quarter";
 export type PoseBackend = "mediapipe" | "vitpose";
 export type SubscriptionTier = "free" | "trial" | "paid";
@@ -18,6 +18,7 @@ export type AuthUser = {
   role?: UserRole;
   trial_started_at?: string | null;
   trial_ends_at?: string | null;
+  premium_expires_at?: string | null;
   created_at?: string;
   last_login_at?: string | null;
 };
@@ -36,6 +37,7 @@ export type UserProfile = {
   role?: UserRole;
   trial_started_at?: string | null;
   trial_ends_at?: string | null;
+  premium_expires_at?: string | null;
   height_cm: number | null;
   weight_kg: number | null;
   age: number | null;
@@ -133,6 +135,7 @@ export type SubscriptionSummary = {
   stored_tier: SubscriptionTier;
   trial_started_at: string | null;
   trial_ends_at: string | null;
+  premium_expires_at?: string | null;
   trial_expired: boolean;
   window: "month" | "trial";
   window_started_at: string;
@@ -161,6 +164,23 @@ export type SubscriptionSummary = {
     ai_coaching: boolean;
     full_history: boolean;
   };
+  billing?: {
+    status: "active" | "past_due" | "canceled" | "expired" | string;
+    amount_vnd: number;
+    interval: "monthly" | string;
+    current_period_start: string | null;
+    current_period_end: string | null;
+    next_billing_at: string | null;
+    cancel_at_period_end: boolean;
+    payment_method: null | {
+      id: number;
+      provider: string;
+      masked_card: string | null;
+      bank_code: string | null;
+      card_type: string | null;
+      status: string;
+    };
+  } | null;
 };
 
 export type VideoAnalysisResult = {
@@ -178,6 +198,7 @@ export type VideoAnalysisResult = {
     frames_received: number;
     frames_analyzed: number;
     waiting_for_subject_frames?: number;
+    unsupported_view_frames?: number;
     rep_count: number;
     rep_breakdown?: Array<{
       rep_number: number;
@@ -514,6 +535,11 @@ export async function fetchSubscription(): Promise<SubscriptionSummary> {
 export async function startTrial(): Promise<SubscriptionSummary> {
   const response = await authFetch("/auth/trial/start", { method: "POST" });
   return parseResponse<SubscriptionSummary>(response, "Could not start trial.");
+}
+
+export async function createVnpayCheckout(): Promise<{ payment_url: string; payment_id: number; amount_vnd: number }> {
+  const response = await authFetch("/billing/vnpay/start", { method: "POST" });
+  return parseResponse<{ payment_url: string; payment_id: number; amount_vnd: number }>(response, "Could not start payment.");
 }
 
 export async function submitFeedback(params: FeedbackCreate): Promise<FeedbackItem> {

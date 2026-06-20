@@ -31,6 +31,9 @@ def build_session_summary(
     waiting_for_subject_frames = sum(
         1 for entry in frame_log if entry.get("status") == "waiting_for_subject"
     )
+    unsupported_view_frames = sum(
+        1 for entry in frame_log if entry.get("status") == "unsupported_camera_view"
+    )
     decode_errors = sum(1 for entry in frame_log if entry.get("status") == "decode_error")
 
     angle_stats = {}
@@ -87,6 +90,7 @@ def build_session_summary(
         "no_pose_frames": no_pose_frames,
         "visibility_failed_frames": visibility_failed_frames,
         "waiting_for_subject_frames": waiting_for_subject_frames,
+        "unsupported_view_frames": unsupported_view_frames,
         "decode_errors": decode_errors,
         "rep_count": rep_count,
         "rep_breakdown": rep_breakdown,
@@ -141,6 +145,15 @@ def build_analysis_quality(frame_log: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def local_recommendations(summary: dict[str, Any]) -> str:
+    if (
+        summary.get("exercise") == "romanian_deadlift"
+        and not summary.get("frames_analyzed")
+        and summary.get("unsupported_view_frames")
+    ):
+        return (
+            "No usable side-view frames were found. Record the full body and both hands "
+            "from the side, then upload the video again."
+        )
     top_feedback = list(summary.get("top_feedback", {}).keys())
     if not top_feedback:
         return "No reliable posture issues were detected in the submitted frames."

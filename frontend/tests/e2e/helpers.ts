@@ -62,6 +62,48 @@ export const trialSubscription = {
   },
 };
 
+export const paidSubscription = {
+  ...freeSubscription,
+  tier: "paid",
+  stored_tier: "paid",
+  premium_expires_at: "2026-07-20T00:00:00Z",
+  limits: {
+    video_analyses: 100,
+    ai_coaching: 50,
+    workout_plans: 30,
+    meal_plans: 30,
+    history_items: null,
+  },
+  remaining: {
+    video_analyses: 98,
+    ai_coaching: 50,
+    workout_plans: 30,
+    meal_plans: 30,
+  },
+  features: {
+    vitpose: true,
+    ai_coaching: true,
+    full_history: true,
+  },
+  billing: {
+    status: "active",
+    amount_vnd: 59000,
+    interval: "monthly",
+    current_period_start: "2026-06-20T00:00:00Z",
+    current_period_end: "2026-07-20T00:00:00Z",
+    next_billing_at: "2026-07-20T00:00:00Z",
+    cancel_at_period_end: false,
+    payment_method: {
+      id: 1,
+      provider: "vnpay",
+      masked_card: "9704xxxx1234",
+      bank_code: "NCB",
+      card_type: "ATM",
+      status: "active",
+    },
+  },
+};
+
 export async function seedLoggedInUser(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem("gf_token", "test-token");

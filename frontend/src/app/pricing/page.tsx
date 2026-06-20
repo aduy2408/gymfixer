@@ -1,8 +1,11 @@
 "use client";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Activity, CheckCircle, ArrowRight } from "lucide-react";
 import LanguageToggle from "@/components/LanguageToggle";
+import { createVnpayCheckout } from "@/lib/api";
+import { getAuthToken } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 
 const plans = [
@@ -41,7 +44,7 @@ const plans = [
     },
     {
         name: "PAID",
-        price: "$39",
+        price: "59.000đ",
         periodKey: "pricing.paid.period",
         descriptionKey: "pricing.paid.desc",
         features: [
@@ -86,6 +89,26 @@ const navButtonBase: React.CSSProperties = {
 
 export default function PricingPage() {
     const { t } = useI18n();
+    const [checkoutLoading, setCheckoutLoading] = useState(false);
+    const [checkoutError, setCheckoutError] = useState("");
+
+    const startCheckout = async () => {
+        if (!getAuthToken()) {
+            window.location.href = "/auth/login";
+            return;
+        }
+        setCheckoutError("");
+        setCheckoutLoading(true);
+        try {
+            const checkout = await createVnpayCheckout();
+            window.location.href = checkout.payment_url;
+        } catch (err) {
+            setCheckoutError(err instanceof Error ? err.message : t("billing.checkoutError"));
+        } finally {
+            setCheckoutLoading(false);
+        }
+    };
+
     return (
         <div style={{ background: "var(--white)", color: "var(--black)", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
 
@@ -234,18 +257,35 @@ export default function PricingPage() {
                                     ))}
                                 </ul>
 
-                                <Link href={plan.name === "FREE" ? "/auth/register" : "/dashboard/profile"} style={{ width: "100%" }}>
+                                {plan.name === "PAID" ? (
                                     <button
+                                        type="button"
+                                        onClick={startCheckout}
+                                        disabled={checkoutLoading}
                                         className={plan.buttonClass}
                                         style={{ width: "100%", minHeight: 58, padding: "0.7rem 1rem", fontSize: "0.82rem", borderRadius: 999, display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem", lineHeight: 1.15 }}
                                     >
-                                        {t(plan.buttonKey)} {plan.name !== "FREE" && <ArrowRight size={18} />}
+                                        {checkoutLoading ? t("billing.redirecting") : t(plan.buttonKey)} <ArrowRight size={18} />
                                     </button>
-                                </Link>
+                                ) : (
+                                    <Link href={plan.name === "FREE" ? "/auth/register" : "/dashboard/profile"} style={{ width: "100%" }}>
+                                        <button
+                                            className={plan.buttonClass}
+                                            style={{ width: "100%", minHeight: 58, padding: "0.7rem 1rem", fontSize: "0.82rem", borderRadius: 999, display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem", lineHeight: 1.15 }}
+                                        >
+                                            {t(plan.buttonKey)} {plan.name !== "FREE" && <ArrowRight size={18} />}
+                                        </button>
+                                    </Link>
+                                )}
                             </div>
                         </motion.div>
                     ))}
                 </div>
+                {checkoutError && (
+                    <p className="mt-4 text-xs" style={{ color: "var(--red)", fontWeight: 700 }}>
+                        {checkoutError}
+                    </p>
+                )}
 
                 {/* ─── FAQ Reference ─── */}
                 <motion.div

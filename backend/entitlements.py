@@ -7,12 +7,13 @@ from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 
-from authentication.models import UsageEvent, User, WeeklyMealPlan, WeeklyWorkoutPlan, WorkoutSession
+from authentication.models import BillingSubscription, UsageEvent, User, WeeklyMealPlan, WeeklyWorkoutPlan, WorkoutSession
 
 SubscriptionTier = Literal["free", "trial", "paid"]
 QuotaKind = Literal["video_analysis", "ai_coaching", "workout_plan", "meal_plan"]
 
 TRIAL_DAYS = 7
+BILLING_GRACE_DAYS = 3
 
 TIER_LIMITS: dict[SubscriptionTier, dict[str, int | None]] = {
     "free": {
@@ -67,8 +68,51 @@ def stored_tier(user: User) -> SubscriptionTier:
     return tier if tier in TIER_LIMITS else "free"  # type: ignore[return-value]
 
 
-def effective_tier(user: User, reference: datetime | None = None) -> SubscriptionTier:
+def billing_grace_days() -> int:
+    try:
+        import os
+
+        return max(0, int(os.getenv("BILLING_GRACE_DAYS", str(BILLING_GRACE_DAYS))))
+    except ValueError:
+        return BILLING_GRACE_DAYS
+
+
+def latest_billing_subscription(db: Session, user: User) -> BillingSubscription | None:
+    if not hasattr(db, "query"):
+        return None
+    return (
+        db.query(BillingSubscription)
+        .filter(BillingSubscription.user_id == user.id)
+        .order_by(BillingSubscription.created_at.desc(), BillingSubscription.id.desc())
+        .first()
+    )
+
+
+def paid_access_active(
+    user: User,
+    reference: datetime | None = None,
+    subscription: BillingSubscription | None = None,
+) -> bool:
+    current = reference or now_utc()
+    if subscription:
+        period_end = as_aware(subscription.current_period_end)
+        if subscription.status == "active" and period_end and period_end >= current:
+            return True
+        if subscription.status == "past_due" and period_end and period_end + timedelta(days=billing_grace_days()) >= current:
+            return True
+        return False
+    premium_expires_at = as_aware(getattr(user, "premium_expires_at", None))
+    return bool(premium_expires_at and premium_expires_at >= current)
+
+
+def effective_tier(
+    user: User,
+    reference: datetime | None = None,
+    subscription: BillingSubscription | None = None,
+) -> SubscriptionTier:
     tier = stored_tier(user)
+    if tier == "paid":
+        return "paid" if paid_access_active(user, reference, subscription) else "free"
     if tier != "trial":
         return tier
     trial_ends_at = as_aware(getattr(user, "trial_ends_at", None))
@@ -140,7 +184,8 @@ def _count_meal_plans(db: Session, user: User, since: datetime) -> int:
 
 def subscription_summary(db: Session, user: User) -> dict[str, Any]:
     reference = now_utc()
-    tier = effective_tier(user, reference)
+    billing_subscription = latest_billing_subscription(db, user)
+    tier = effective_tier(user, reference, billing_subscription)
     window, since, reset_at = usage_window(user, reference)
     limits = TIER_LIMITS[tier]
     usage = {
@@ -153,18 +198,42 @@ def subscription_summary(db: Session, user: User) -> dict[str, Any]:
         key: None if limits[key] is None else max(0, int(limits[key] or 0) - int(usage.get(key, 0)))
         for key in ("video_analyses", "ai_coaching", "workout_plans", "meal_plans")
     }
+    billing = None
+    if billing_subscription:
+        payment_method = getattr(billing_subscription, "payment_method", None)
+        billing = {
+            "status": billing_subscription.status,
+            "amount_vnd": billing_subscription.amount_vnd,
+            "interval": billing_subscription.interval,
+            "current_period_start": billing_subscription.current_period_start,
+            "current_period_end": billing_subscription.current_period_end,
+            "next_billing_at": billing_subscription.next_billing_at,
+            "cancel_at_period_end": billing_subscription.cancel_at_period_end,
+            "payment_method": None
+            if not payment_method
+            else {
+                "id": payment_method.id,
+                "provider": payment_method.provider,
+                "masked_card": payment_method.masked_card,
+                "bank_code": payment_method.bank_code,
+                "card_type": payment_method.card_type,
+                "status": payment_method.status,
+            },
+        }
     return {
         "tier": tier,
         "stored_tier": stored_tier(user),
         "trial_started_at": getattr(user, "trial_started_at", None),
         "trial_ends_at": getattr(user, "trial_ends_at", None),
         "trial_expired": is_trial_expired(user, reference),
+        "premium_expires_at": getattr(user, "premium_expires_at", None),
         "window": window,
         "window_started_at": since,
         "resets_at": reset_at,
         "limits": limits,
         "usage": usage,
         "remaining": remaining,
+        "billing": billing,
         "features": {
             "vitpose": tier in {"trial", "paid"},
             "ai_coaching": tier in {"trial", "paid"} and int(limits["ai_coaching"] or 0) > 0,

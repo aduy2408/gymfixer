@@ -4,7 +4,15 @@ import { motion } from "framer-motion";
 import { Save, CheckCircle } from "lucide-react";
 import DashboardNav from "@/components/DashboardNav";
 import Link from "next/link";
-import { fetchSubscription, fetchUserProfile, startTrial, SubscriptionSummary, updateUserProfile, UserProfile } from "@/lib/api";
+import {
+    createVnpayCheckout,
+    fetchSubscription,
+    fetchUserProfile,
+    startTrial,
+    SubscriptionSummary,
+    updateUserProfile,
+    UserProfile,
+} from "@/lib/api";
 import { setStoredUser } from "@/lib/auth";
 import { localeFor, tierLabel, useI18n } from "@/lib/i18n";
 import { recordMeaningfulAction } from "@/lib/feedbackPrompt";
@@ -108,6 +116,8 @@ export default function ProfilePage() {
     const [subscription, setSubscription] = useState<SubscriptionSummary | null>(null);
     const [trialError, setTrialError] = useState("");
     const [startingTrial, setStartingTrial] = useState(false);
+    const [billingLoading, setBillingLoading] = useState(false);
+    const [billingError, setBillingError] = useState("");
 
     useEffect(() => {
         let cancelled = false;
@@ -196,6 +206,18 @@ export default function ProfilePage() {
             setTrialError(err instanceof Error ? err.message : t("profile.startTrialError"));
         } finally {
             setStartingTrial(false);
+        }
+    };
+
+    const handleCheckout = async () => {
+        setBillingError("");
+        setBillingLoading(true);
+        try {
+            const checkout = await createVnpayCheckout();
+            window.location.href = checkout.payment_url;
+        } catch (err) {
+            setBillingError(err instanceof Error ? err.message : t("billing.checkoutError"));
+            setBillingLoading(false);
         }
     };
 
@@ -373,6 +395,28 @@ export default function ProfilePage() {
                                         {subscription ? subscriptionCopy(subscription, t) : t("profile.loadingSub")}
                                     </p>
 
+                                    {subscription?.billing && (
+                                        <div style={{ padding: "0.9rem", background: "#f9f9f9", borderRadius: 6, border: "1px solid #f0f0f0", marginBottom: "1rem" }}>
+                                            <p style={{ fontSize: "0.72rem", fontWeight: 700, marginBottom: "0.65rem", color: "#333", textTransform: "uppercase" }}>
+                                                {t("billing.title")}
+                                            </p>
+                                            <p style={{ fontSize: "0.78rem", color: "#555", marginBottom: "0.35rem" }}>
+                                                {t("billing.price")}
+                                            </p>
+                                            <p style={{ fontSize: "0.78rem", color: "#555", marginBottom: "0.35rem" }}>
+                                                {t("billing.endsOn")}{" "}
+                                                {subscription.billing.current_period_end
+                                                    ? new Date(subscription.billing.current_period_end).toLocaleDateString(localeFor(t))
+                                                    : t("common.none")}
+                                            </p>
+                                            {subscription.billing.payment_method && (
+                                                <p style={{ fontSize: "0.78rem", color: "#555" }}>
+                                                    {t("billing.paymentMethod")}: {subscription.billing.payment_method.masked_card || subscription.billing.payment_method.bank_code || "VNPay"}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+
                                     <div style={{ padding: "0.9rem", background: "#f9f9f9", borderRadius: 6, border: "1px solid #f0f0f0", marginBottom: "1rem" }}>
                                         <p style={{ fontSize: "0.72rem", fontWeight: 700, marginBottom: "0.7rem", color: "#333", textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("profile.featuresIncluded")}</p>
                                         <ul style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
@@ -385,6 +429,7 @@ export default function ProfilePage() {
                                     </div>
 
                                     {trialError && <div style={{ marginBottom: "0.75rem" }}><p style={{ color: "var(--red)", fontSize: "0.78rem" }}>{trialError}</p></div>}
+                                    {billingError && <div style={{ marginBottom: "0.75rem" }}><p style={{ color: "var(--red)", fontSize: "0.78rem" }}>{billingError}</p></div>}
 
                                     <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
                                         {subscription?.tier === "free" && !subscription.trial_started_at && (
@@ -392,14 +437,20 @@ export default function ProfilePage() {
                                                 {startingTrial ? t("common.loading") : t("subscription.startTrial")}
                                             </button>
                                         )}
-                                        <Link href="/pricing" style={{ width: "100%" }}>
-                                            <button className="btn-red" style={{ width: "100%", padding: "0.65rem", fontSize: "0.78rem", borderRadius: 4 }}>
-                                                {t("profile.upgradePlan")}
-                                            </button>
-                                        </Link>
-                                        <button className="btn-outline-red" style={{ width: "100%", padding: "0.65rem", fontSize: "0.78rem", borderRadius: 4 }}>
-                                            {t("subscription.manageBilling")}
+                                        <button type="button" onClick={handleCheckout} disabled={billingLoading} className={subscription?.tier === "paid" ? "btn-outline-red" : "btn-red"} style={{ width: "100%", padding: "0.65rem", fontSize: "0.78rem", borderRadius: 4 }}>
+                                            {billingLoading
+                                                ? t("billing.redirecting")
+                                                : subscription?.tier === "paid"
+                                                    ? t("billing.extend")
+                                                    : t("profile.upgradePlan")}
                                         </button>
+                                        {!subscription?.billing && (
+                                            <Link href="/pricing" style={{ width: "100%" }}>
+                                                <button className="btn-outline-red" style={{ width: "100%", padding: "0.65rem", fontSize: "0.78rem", borderRadius: 4 }}>
+                                                    {t("subscription.manageBilling")}
+                                                </button>
+                                            </Link>
+                                        )}
                                     </div>
                                 </div>
                             </div>

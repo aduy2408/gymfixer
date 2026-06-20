@@ -70,6 +70,7 @@ def _profile_response(user: User) -> dict:
         "role": getattr(user, "role", "user"),
         "trial_started_at": user.trial_started_at,
         "trial_ends_at": user.trial_ends_at,
+        "premium_expires_at": user.premium_expires_at,
         "height_cm": profile.height_cm if profile else None,
         "weight_kg": profile.weight_kg if profile else None,
         "age": profile.age if profile else None,

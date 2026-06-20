@@ -20,6 +20,7 @@ def user(**overrides):
         "subscription_tier": "free",
         "trial_started_at": None,
         "trial_ends_at": None,
+        "premium_expires_at": None,
     }
     data.update(overrides)
     return SimpleNamespace(**data)
@@ -106,6 +107,31 @@ def test_paid_user_cannot_start_trial(monkeypatch):
     assert exc.value.detail["code"] == "already_paid"
 
 
+def test_paid_access_requires_current_period(monkeypatch):
+    patch_usage(monkeypatch)
+    active = user(subscription_tier="paid", premium_expires_at=e.now_utc() + timedelta(days=10))
+    expired = user(subscription_tier="paid", premium_expires_at=e.now_utc() - timedelta(days=1))
+
+    assert e.effective_tier(active) == "paid"
+    assert e.effective_tier(expired) == "free"
+
+
+def test_past_due_subscription_uses_grace_period(monkeypatch):
+    patch_usage(monkeypatch)
+    current = user(subscription_tier="paid")
+    within_grace = SimpleNamespace(
+        status="past_due",
+        current_period_end=e.now_utc() - timedelta(days=2),
+    )
+    outside_grace = SimpleNamespace(
+        status="past_due",
+        current_period_end=e.now_utc() - timedelta(days=e.billing_grace_days() + 1),
+    )
+
+    assert e.effective_tier(current, subscription=within_grace) == "paid"
+    assert e.effective_tier(current, subscription=outside_grace) == "free"
+
+
 def test_free_blocks_vitpose_and_ai_coaching(monkeypatch):
     patch_usage(monkeypatch)
 
@@ -151,4 +177,7 @@ def test_plan_quota_and_history_limits(monkeypatch):
     assert meal_exc.value.detail["code"] == "tier_limit_exceeded"
 
     assert e.history_limit_for_user(user(), 100) == 5
-    assert e.history_limit_for_user(user(subscription_tier="paid"), 100) == 100
+    assert e.history_limit_for_user(
+        user(subscription_tier="paid", premium_expires_at=e.now_utc() + timedelta(days=30)),
+        100,
+    ) == 100

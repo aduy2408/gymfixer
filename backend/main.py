@@ -12,6 +12,7 @@ from posture.session_analysis import router as session_analysis_router
 from posture.websocket import router as posture_router
 from plan_routes import router as plan_router
 from workout_routes import router as workout_router
+from billing_routes import router as billing_router
 import os
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development").strip().lower()
@@ -91,6 +92,7 @@ app.include_router(usage_router)
 app.include_router(admin_router)
 app.include_router(workout_router)
 app.include_router(plan_router)
+app.include_router(billing_router)
 
 # ---------------------------------------------------------------------------
 # Serve built frontend as static files (single-port deployment)

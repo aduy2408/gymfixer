@@ -7,6 +7,7 @@ from typing import Any, Callable
 INCOMPLETE_REP_ISSUES = {
     "squat": "Complete the rep — reach squat depth before standing up.",
     "lunge": "Complete the rep — lower into the lunge before standing up.",
+    "romanian_deadlift": "Complete the rep — hinge deeper before returning to standing.",
 }
 INCOMPLETE_SQUAT_REP_ISSUE = INCOMPLETE_REP_ISSUES["squat"]
 INCOMPLETE_LUNGE_REP_ISSUE = INCOMPLETE_REP_ISSUES["lunge"]
@@ -29,6 +30,10 @@ def build_rep_breakdown(
             "active": {"DESCENDING", "BOTTOM", "ASCENDING"},
         },
         "lunge": {
+            "idle": {"STANDING"},
+            "active": {"DESCENDING", "BOTTOM", "ASCENDING"},
+        },
+        "romanian_deadlift": {
             "idle": {"STANDING"},
             "active": {"DESCENDING", "BOTTOM", "ASCENDING"},
         },

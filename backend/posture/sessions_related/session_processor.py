@@ -164,8 +164,6 @@ def analyze_posture_session(
             )
             continue
 
-        angles = mediapipe_utils.get_angles_for_exercise(exercise, smoothed_landmarks)
-        phase, rep_count = phase_detector.update(angles)
         camera_view_estimate = (
             camera_view_detector.update(smoothed_landmarks)
             if camera_view == "auto"
@@ -176,6 +174,37 @@ def analyze_posture_session(
             if camera_view_estimate is not None
             else camera_view
         )
+        if exercise == "romanian_deadlift" and effective_camera_view == "front":
+            entry = {
+                "frame_index": index,
+                "timestamp_ms": session_frame.timestamp_ms,
+                "status": "unsupported_camera_view",
+                "visibility_ok": True,
+                "camera_view": effective_camera_view,
+                "camera_view_confidence": (
+                    camera_view_estimate.confidence
+                    if camera_view_estimate is not None
+                    else None
+                ),
+                "feedback": [
+                    "Record Romanian deadlifts from the side so hip hinge and bar path can be assessed."
+                ],
+                "problem_feedback": [],
+            }
+            frame_log.append(entry)
+            maybe_add_preview_frame(
+                preview_frames,
+                frame=frame,
+                pose_landmarks=pose_landmarks,
+                entry=entry,
+                include_preview=include_preview,
+                preview_max_frames=preview_max_frames,
+                preview_stride=preview_stride,
+            )
+            continue
+
+        angles = mediapipe_utils.get_angles_for_exercise(exercise, smoothed_landmarks)
+        phase, rep_count = phase_detector.update(angles)
 
         feedback = feedback_module.generate_feedback(
             exercise,

@@ -54,6 +54,7 @@ def is_problem_feedback(item: str) -> bool:
         "neutral spine",
         "torso upright",
         "chest up",
+        "bar close",
         "complete the rep",
     )
     return any(marker in lower for marker in issue_markers)

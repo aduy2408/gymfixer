@@ -60,6 +60,7 @@ function isProblemFeedback(item: string) {
         "extension",
         "neutral spine",
         "chest up",
+        "bar close",
     ].some((marker) => lower.includes(marker));
 }
 
@@ -77,6 +78,8 @@ function buildRepBreakdownFromFrameLog(result: VideoAnalysisResult): RepBreakdow
     const activePhasesByExercise: Record<string, Set<string>> = {
         bicep_curl: new Set(["CURLING", "CONTRACTED", "LOWERING"]),
         squat: new Set(["DESCENDING", "BOTTOM", "ASCENDING"]),
+        lunge: new Set(["DESCENDING", "BOTTOM", "ASCENDING"]),
+        romanian_deadlift: new Set(["DESCENDING", "BOTTOM", "ASCENDING"]),
     };
     const activePhases = activePhasesByExercise[result.exercise] || activePhasesByExercise.bicep_curl;
     const reps: RepBreakdown = [];

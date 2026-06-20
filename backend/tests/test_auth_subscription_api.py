@@ -20,6 +20,7 @@ def make_user(**overrides):
         "subscription_tier": "free",
         "trial_started_at": None,
         "trial_ends_at": None,
+        "premium_expires_at": None,
         "created_at": datetime(2026, 6, 1, tzinfo=timezone.utc),
     }
     data.update(overrides)

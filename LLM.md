@@ -11,7 +11,7 @@ The frontend is now focused on after-session video analysis instead of live webc
 ```text
 Browser
   -> register/login and store JWT
-  -> select exercise: squat | lunge | bicep_curl
+  -> select exercise: squat | lunge | bicep_curl | romanian_deadlift
   -> upload video
   -> POST /posture/analyze-video multipart/form-data with Bearer token
 
@@ -33,6 +33,8 @@ Backend
 
 The old WebSocket path still exists in backend code, but the active `frontend/` Dashboard no longer uses live realtime posture detection.
 
+Romanian deadlift analysis currently targets MediaPipe side-view videos. Front-view frames are excluded with `status=unsupported_camera_view`. The upper-back/neck rounding rule is a shoulder-hip-head pose proxy, not a direct spinal-curvature measurement or diagnosis.
+
 ## 2. Main Endpoints
 
 ### `POST /posture/analyze-video`
@@ -46,7 +48,7 @@ Authorization: Bearer <access_token>
 Form fields:
 
 ```text
-exercise=squat | lunge | bicep_curl
+exercise=squat | lunge | bicep_curl | romanian_deadlift
 camera_view=auto | side | front | three_quarter
 pose_backend=mediapipe | vitpose
 file=@video.mp4

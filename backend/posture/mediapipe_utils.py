@@ -3,13 +3,14 @@ import logging
 import os
 from threading import Lock
 
+from posture.exercises.common import import_mediapipe
+
 logger = logging.getLogger("posture.mediapipe_utils")
 
 
 class _LazyMediaPipePose:
     def __getattr__(self, name: str):
-        import mediapipe as mp
-
+        mp = import_mediapipe()
         return getattr(mp.solutions.pose, name)
 
 
@@ -99,6 +100,18 @@ def _critical_kp(exercise: str) -> list[int]:
             pose.LEFT_WRIST.value,
             pose.RIGHT_WRIST.value,
         ],
+        'romanian_deadlift': [
+            pose.LEFT_SHOULDER.value,
+            pose.RIGHT_SHOULDER.value,
+            pose.LEFT_HIP.value,
+            pose.RIGHT_HIP.value,
+            pose.LEFT_KNEE.value,
+            pose.RIGHT_KNEE.value,
+            pose.LEFT_ANKLE.value,
+            pose.RIGHT_ANKLE.value,
+            pose.LEFT_WRIST.value,
+            pose.RIGHT_WRIST.value,
+        ],
     }.get(exercise, [])
 
 
@@ -112,19 +125,31 @@ def check_visibility(landmarks, exercise: str) -> tuple[bool, list[str]]:
     if not _person_anchor_visible(landmarks):
         return False, ["face"]
 
-    if exercise == 'bicep_curl':
+    if exercise in {'bicep_curl', 'romanian_deadlift'}:
         visible_sides = []
         missing_by_side = []
         for side, indices in [
             ("left", [
                 mp_pose.PoseLandmark.LEFT_SHOULDER.value,
-                mp_pose.PoseLandmark.LEFT_ELBOW.value,
-                mp_pose.PoseLandmark.LEFT_WRIST.value,
+                *([] if exercise == 'bicep_curl' else [
+                    mp_pose.PoseLandmark.LEFT_HIP.value,
+                    mp_pose.PoseLandmark.LEFT_KNEE.value,
+                ]),
+                *([
+                    mp_pose.PoseLandmark.LEFT_ELBOW.value,
+                    mp_pose.PoseLandmark.LEFT_WRIST.value,
+                ] if exercise == 'bicep_curl' else []),
             ]),
             ("right", [
                 mp_pose.PoseLandmark.RIGHT_SHOULDER.value,
-                mp_pose.PoseLandmark.RIGHT_ELBOW.value,
-                mp_pose.PoseLandmark.RIGHT_WRIST.value,
+                *([] if exercise == 'bicep_curl' else [
+                    mp_pose.PoseLandmark.RIGHT_HIP.value,
+                    mp_pose.PoseLandmark.RIGHT_KNEE.value,
+                ]),
+                *([
+                    mp_pose.PoseLandmark.RIGHT_ELBOW.value,
+                    mp_pose.PoseLandmark.RIGHT_WRIST.value,
+                ] if exercise == 'bicep_curl' else []),
             ]),
         ]:
             missing = []
@@ -198,6 +223,15 @@ class PoseProcessor:
         # EMA smoothing in this class compensates for Lite's extra jitter.
         # Override via MP_MODEL_COMPLEXITY env var if running on a capable host.
         self.model_complexity = int(os.getenv("MP_MODEL_COMPLEXITY", model_complexity))
+        self.pose = self._create_pose()
+        self.smoother = LandmarkSmoother()
+        logger.info(
+            f"PoseProcessor initialised: complexity={self.model_complexity}, "
+            f"det_conf={self.min_detection_confidence}, "
+            f"track_conf={self.min_tracking_confidence}"
+        )
+
+    def _create_pose(self):
         self.pose = mp_pose.Pose(
             static_image_mode=False,
             model_complexity=self.model_complexity,
@@ -206,12 +240,7 @@ class PoseProcessor:
             min_detection_confidence=self.min_detection_confidence,
             min_tracking_confidence=self.min_tracking_confidence,
         )
-        self.smoother = LandmarkSmoother()
-        logger.info(
-            f"PoseProcessor initialised: complexity={self.model_complexity}, "
-            f"det_conf={self.min_detection_confidence}, "
-            f"track_conf={self.min_tracking_confidence}"
-        )
+        return self.pose
 
     def reset_state(self):
         if self._delegate is not None:
@@ -220,6 +249,11 @@ class PoseProcessor:
                 smoother.update(None)
             return
         self.smoother.update(None)
+        try:
+            self.pose.close()
+        except Exception:
+            logger.exception("Error closing MediaPipe Pose graph during reset")
+        self.pose = self._create_pose()
 
     def process(self, frame):
         """Process an OpenCV BGR frame.

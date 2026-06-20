@@ -10,6 +10,7 @@ export type AuthUser = {
   role?: "user" | "admin";
   trial_started_at?: string | null;
   trial_ends_at?: string | null;
+  premium_expires_at?: string | null;
 };
 
 const TOKEN_KEY = "gf_token";

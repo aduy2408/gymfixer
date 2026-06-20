@@ -1,6 +1,6 @@
 # GymFixer
 
-AI-assisted workout posture analysis. The active product flow is after-session video analysis: upload a short squat or bicep-curl video, the backend samples frames, runs the selected pose backend, computes angles and reps, groups detected errors by rep, and optionally calls Gemini for coaching.
+AI-assisted workout posture analysis. The active product flow is after-session video analysis: upload a short squat, lunge, bicep-curl, or Romanian-deadlift video, the backend samples frames, runs the selected pose backend, computes angles and reps, groups detected errors by rep, and optionally calls Gemini for coaching.
 
 ## Current Stack
 
@@ -147,6 +147,14 @@ GEMINI_MODEL=gemini-3-flash-preview
 GEMINI_MAX_OUTPUT_TOKENS=3000
 POSTURE_LLM_MAX_LOG_FRAMES=60
 
+# VNPay Pay Premium (59,000 VND for one month)
+FRONTEND_URL=http://localhost:3000
+BACKEND_PUBLIC_URL=http://localhost:5000
+VNPAY_TMN_CODE=your-vnpay-terminal-code
+VNPAY_HASH_SECRET=your-vnpay-hash-secret
+VNPAY_PAYMENT_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+VNPAY_RETURN_URL=http://localhost:5000/billing/vnpay/return
+
 # Pose/session analysis
 POSE_BACKEND=mediapipe
 POSTURE_SUBJECT_READY_MIN_FRAMES=10
@@ -186,7 +194,8 @@ psql -U postgres -h localhost -d gymfixer -c "\dt"
 ```
 
 Expected tables include `users`, `workout_sessions`, `analysis_results`,
-`usage_events`, and `alembic_version`.
+`usage_events`, `billing_subscriptions`, `payment_methods`, `payments`, and
+`alembic_version`.
 
 Recent migrations add `analysis_results.rep_breakdown_json`, which stores
 per-rep analysis summaries used by the report UI and history views.
@@ -253,7 +262,7 @@ npm run install:all
 1. Register or log in.
 2. Open the dashboard.
 3. Upload a workout video. Video analysis requires the JWT from login/register.
-4. Choose `squat`, `lunge`, or `bicep_curl`.
+4. Choose `squat`, `lunge`, `bicep_curl`, or `romanian_deadlift`. Romanian deadlifts require a full-body side view with both hands visible.
 5. Use videos around 15-30 seconds. Longer videos require more processing time. Sample FPS, camera view, pose backend, max frame, and mistake-frame limits are handled internally.
 6. Leave `Gemini coaching` off for normal dev usage. Turn it on only when you intentionally want to spend Gemini API quota.
 7. Review the analysis page:
@@ -265,7 +274,24 @@ npm run install:all
    - rule-based or Gemini coaching
 8. Open `History` from the dashboard sidebar to revisit previous sessions.
 
+Romanian deadlift analysis is MediaPipe-first and side-view only. Its rounded-back cue is inferred from shoulder, hip, and head alignment because pose landmarks do not measure spinal curvature directly; treat it as a coaching prompt, not a diagnosis.
+
 ## API Endpoints
+
+### Premium Billing
+
+Premium costs `59,000 VND` for one month. Users can buy another month at any time;
+the new period is added after their current expiry date.
+
+```http
+POST /billing/vnpay/start
+GET  /billing/vnpay/return
+GET  /billing/vnpay/ipn
+```
+
+Checkout requires a Bearer token. Configure VNPay to call the public IPN URL.
+The return URL is for browser navigation; only a valid signed callback can grant
+Premium access.
 
 ### Auth
 
@@ -285,7 +311,7 @@ Content-Type: multipart/form-data
 Form fields:
 
 ```text
-exercise=squat | lunge | bicep_curl
+exercise=squat | lunge | bicep_curl | romanian_deadlift
 camera_view=auto | side | front | three_quarter
 pose_backend=mediapipe | vitpose
 file=@video.mp4

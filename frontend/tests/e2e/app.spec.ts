@@ -4,6 +4,7 @@ import {
   freeSubscription,
   mockDashboardApi,
   mockLatestMealPlan,
+  paidSubscription,
   seedLoggedInUser,
 } from "./helpers";
 
@@ -28,6 +29,7 @@ test.describe("public bilingual pages", () => {
     await expect(page.getByText("FREE").first()).toBeVisible();
     await expect(page.getByText("TRIAL").first()).toBeVisible();
     await expect(page.getByText("PAID").first()).toBeVisible();
+    await expect(page.getByText("59.000đ").first()).toBeVisible();
 
     await page.getByRole("button", { name: /^vi$/i }).click();
 
@@ -65,6 +67,28 @@ test.describe("authenticated entitlement flows", () => {
     await expect(page.getByRole("button", { name: "ViTPose" })).toHaveCount(0);
     await expect(page.getByRole("checkbox", { name: /AI Coaching/i })).toBeDisabled();
     await expect(page.getByText("3/5").first()).toBeVisible();
+  });
+
+  test("Romanian deadlift selection shows side-view recording guidance", async ({ page }) => {
+    await mockDashboardApi(page, freeSubscription);
+    let requestBody = "";
+    await page.route("**/posture/analyze-video", async (route) => {
+      requestBody = route.request().postData() || "";
+      await route.fulfill({ status: 400, json: { detail: "Test request captured." } });
+    });
+    await page.goto("/dashboard");
+
+    await page.getByRole("button", { name: "Romanian Deadlift" }).click();
+    await expect(page.getByText(/Record 15-30 seconds from the side/i)).toBeVisible();
+
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "rdl.mp4",
+      mimeType: "video/mp4",
+      buffer: Buffer.from("fake video"),
+    });
+    await page.getByRole("button", { name: /Analyse Video/i }).click();
+
+    await expect.poll(() => requestBody).toContain("romanian_deadlift");
   });
 
   test("quota errors from video analysis are shown to the user", async ({ page }) => {
@@ -109,6 +133,16 @@ test.describe("authenticated entitlement flows", () => {
 
     await expect(page.getByText(/TRIAL\s+Plan/i).first()).toBeVisible();
     await expect(page.getByRole("button", { name: /Start 7-Day Trial/i })).toHaveCount(0);
+  });
+
+  test("paid profile shows recurring billing and cancellation controls", async ({ page }) => {
+    await mockDashboardApi(page, paidSubscription);
+    await page.goto("/dashboard/profile");
+
+    await expect(page.getByText(/PAID\s+Plan/i).first()).toBeVisible();
+    await expect(page.getByText("59,000 VND per month")).toBeVisible();
+    await expect(page.getByText("9704xxxx1234")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Cancel renewal/i })).toBeVisible();
   });
 
   test("sidebar feedback modal submits a quick rating", async ({ page }) => {
