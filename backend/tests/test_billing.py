@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import timedelta
 from types import SimpleNamespace
-from urllib.parse import parse_qs, urlparse
+
+import pytest
+from fastapi import HTTPException
 
 import billing_routes as billing
 from authentication.models import BillingSubscription, Payment, User
@@ -43,128 +45,215 @@ class FakeDB:
     def flush(self):
         return None
 
+    def commit(self):
+        return None
 
-def pay_payload(txn_ref: str = "GF123", amount: str = "5900000") -> dict[str, str]:
-    return {
-        "vnp_TxnRef": txn_ref,
-        "vnp_Amount": amount,
-        "vnp_ResponseCode": "00",
-        "vnp_TransactionStatus": "00",
-        "vnp_TransactionNo": "999",
-        "vnp_BankCode": "NCB",
-    }
+    def refresh(self, row):
+        return None
 
 
-def test_vnpay_pay_signature_round_trip(monkeypatch):
-    monkeypatch.setattr(billing, "_hash_secret", lambda: "test-secret")
-    params = {
-        "vnp_Amount": "5900000",
-        "vnp_Command": "pay",
-        "vnp_TxnRef": "GF123",
-    }
-    params["vnp_SecureHash"] = billing.vnpay_secure_hash(params)
-
-    assert billing.verify_vnpay_signature(params) is True
-    params["vnp_Amount"] = "100"
-    assert billing.verify_vnpay_signature(params) is False
+class MockWebhookData:
+    def __init__(self, order_code, amount, code, status, description="test"):
+        self.order_code = order_code
+        self.amount = amount
+        self.code = code
+        self.status = status
+        self.description = description
 
 
-def test_signed_url_uses_standard_pay_hash_parameter(monkeypatch):
-    monkeypatch.setattr(billing, "_hash_secret", lambda: "test-secret")
-    url = billing._signed_url(
-        "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html",
-        {"vnp_Command": "pay", "vnp_Amount": 5900000},
-    )
-    query = parse_qs(urlparse(url).query)
-
-    assert query["vnp_Command"] == ["pay"]
-    assert query["vnp_Amount"] == ["5900000"]
-    assert "vnp_SecureHash" in query
-    assert "vnp_secure_hash" not in query
+class MockPaymentLink:
+    def __init__(self, checkout_url, id):
+        self.checkout_url = checkout_url
+        self.id = id
 
 
-def test_successful_pay_ipn_activates_one_month_without_autorenew(monkeypatch):
+class MockPaymentRequests:
+    def __init__(self, link_info=None):
+        self.link_info = link_info
+        self.created_data = None
+
+    def create(self, payment_data):
+        self.created_data = payment_data
+        return MockPaymentLink("http://test.payos.vn/checkout", "payos-link-id")
+
+    def get_payment_link_information(self, order_id):
+        return self.link_info
+
+
+class MockWebhooks:
+    def __init__(self, verified_data):
+        self.verified_data = verified_data
+
+    def verify(self, body):
+        if self.verified_data is None:
+            raise Exception("Invalid signature")
+        return self.verified_data
+
+
+class MockPayOS:
+    def __init__(self, verified_data=None, link_info=None):
+        self.webhooks = MockWebhooks(verified_data)
+        self.payment_requests = MockPaymentRequests(link_info)
+
+
+def test_get_val_helper():
+    data = MockWebhookData(123, 59000, "00", "PAID")
+    assert billing._get_val(data, "order_code") == 123
+    assert billing._get_val(data, "amount") == 59000
+    assert billing._get_val(data, "code") == "00"
+    assert billing._get_val(data, "status") == "PAID"
+
+    # Test dictionary fallback
+    d = {"orderCode": 456, "status": "PENDING"}
+    class DummyObj:
+        def model_dump(self):
+            return d
+    dummy = DummyObj()
+    assert billing._get_val(dummy, "order_code") == 456
+    assert billing._get_val(dummy, "status") == "PENDING"
+
+
+def test_start_payos_checkout(monkeypatch):
+    user = SimpleNamespace(id=1)
+    db = FakeDB({User: user})
+    
+    mock_client = MockPayOS()
+    monkeypatch.setattr(billing, "_payos_client", lambda: mock_client)
+    monkeypatch.setattr(billing, "_env", lambda name, default="": "test-env" if "PAYOS" in name else default)
+    monkeypatch.setattr(billing, "log_usage_event", lambda *args, **kwargs: None)
+    
+    class FakeRequest:
+        pass
+    
+    res = billing.start_payos_checkout(FakeRequest(), current_user=user, db=db)
+    
+    assert res["payment_url"] == "http://test.payos.vn/checkout"
+    assert res["amount_vnd"] == 59000
+    assert len(db.added) == 1
+    payment = db.added[0]
+    assert payment.user_id == 1
+    assert payment.provider == "payos"
+    assert payment.vnp_txn_ref == str(payment.id)
+    assert payment.vnp_transaction_no == "payos-link-id"
+
+
+@pytest.mark.anyio
+async def test_payos_webhook_success(monkeypatch):
     user = SimpleNamespace(id=1, subscription_tier="free", premium_expires_at=None)
     payment = Payment(
-        id=10,
+        id=100,
         user_id=1,
         status="pending",
         attempt_type="one_time",
         amount_vnd=59000,
-        vnp_txn_ref="GF123",
+        vnp_txn_ref="100",
         raw_request_json={},
         raw_response_json={},
     )
     db = FakeDB({Payment: payment, User: user, BillingSubscription: None})
-    monkeypatch.setattr(billing, "verify_vnpay_signature", lambda payload: True)
+    
+    mock_data = MockWebhookData(100, 59000, "00", "PAID")
+    mock_client = MockPayOS(verified_data=mock_data)
+    
+    monkeypatch.setattr(billing, "_payos_client", lambda: mock_client)
     monkeypatch.setattr(billing, "log_usage_event", lambda *args, **kwargs: None)
-
-    code, _message, handled = billing._handle_vnpay_payload(db, pay_payload())
-
-    subscription = db.values[BillingSubscription]
-    assert code == "00"
-    assert handled is payment
+    
+    class FakeRequest:
+        async def body(self):
+            return b"raw-body"
+            
+    res = await billing.payos_webhook(FakeRequest(), db=db)
+    
+    assert res["status"] == "success"
     assert payment.status == "paid"
-    assert payment.payment_method_id is None
     assert user.subscription_tier == "paid"
-    assert user.premium_expires_at == subscription.current_period_end
-    assert subscription.amount_vnd == 59000
-    assert subscription.next_billing_at is None
-    assert subscription.cancel_at_period_end is True
+    assert db.values[BillingSubscription] is not None
+    assert db.values[BillingSubscription].status == "active"
 
 
-def test_ipn_rejects_wrong_amount_and_is_idempotent(monkeypatch):
+@pytest.mark.anyio
+async def test_payos_webhook_failed(monkeypatch):
+    user = SimpleNamespace(id=1, subscription_tier="free", premium_expires_at=None)
     payment = Payment(
-        id=10,
+        id=100,
         user_id=1,
         status="pending",
         attempt_type="one_time",
         amount_vnd=59000,
-        vnp_txn_ref="GF123",
+        vnp_txn_ref="100",
+        raw_request_json={},
+        raw_response_json={},
+    )
+    db = FakeDB({Payment: payment, User: user, BillingSubscription: None})
+    
+    mock_data = MockWebhookData(100, 59000, "01", "FAILED")
+    mock_client = MockPayOS(verified_data=mock_data)
+    
+    monkeypatch.setattr(billing, "_payos_client", lambda: mock_client)
+    monkeypatch.setattr(billing, "log_usage_event", lambda *args, **kwargs: None)
+    
+    class FakeRequest:
+        async def body(self):
+            return b"raw-body"
+            
+    res = await billing.payos_webhook(FakeRequest(), db=db)
+    
+    assert res["status"] == "failed"
+    assert payment.status == "failed"
+    assert user.subscription_tier == "free"
+
+
+def test_payos_return_paid(monkeypatch):
+    user = SimpleNamespace(id=1, subscription_tier="free", premium_expires_at=None)
+    payment = Payment(
+        id=100,
+        user_id=1,
+        status="pending",
+        attempt_type="one_time",
+        amount_vnd=59000,
+        vnp_txn_ref="100",
+        raw_request_json={},
+        raw_response_json={},
+    )
+    db = FakeDB({Payment: payment, User: user, BillingSubscription: None})
+    
+    mock_info = MockWebhookData(100, 59000, "00", "PAID")
+    mock_client = MockPayOS(link_info=mock_info)
+    
+    monkeypatch.setattr(billing, "_payos_client", lambda: mock_client)
+    monkeypatch.setattr(billing, "_frontend_url", lambda: "http://localhost:3000")
+    
+    class FakeRequest:
+        def __init__(self):
+            self.query_params = {"orderCode": "100", "status": "PAID"}
+            
+    res = billing.payos_return(FakeRequest(), db=db)
+    
+    assert res.headers["location"] == "http://localhost:3000/payment/result?status=success&txn_ref=100"
+    assert payment.status == "paid"
+    assert user.subscription_tier == "paid"
+
+
+def test_payos_cancel(monkeypatch):
+    payment = Payment(
+        id=100,
+        user_id=1,
+        status="pending",
+        attempt_type="one_time",
+        amount_vnd=59000,
+        vnp_txn_ref="100",
         raw_request_json={},
         raw_response_json={},
     )
     db = FakeDB({Payment: payment})
-    monkeypatch.setattr(billing, "verify_vnpay_signature", lambda payload: True)
-
-    code, _message, _handled = billing._handle_vnpay_payload(db, pay_payload(amount="100"))
-    assert code == "04"
-
-    payment.status = "paid"
-    code, _message, _handled = billing._handle_vnpay_payload(db, pay_payload())
-    assert code == "02"
-
-
-def test_second_one_time_payment_extends_existing_period(monkeypatch):
-    current_end = billing.now_utc() + timedelta(days=5)
-    user = SimpleNamespace(id=1, subscription_tier="paid", premium_expires_at=current_end)
-    subscription = BillingSubscription(
-        id=30,
-        user_id=1,
-        status="active",
-        amount_vnd=59000,
-        interval="monthly",
-        current_period_end=current_end,
-        cancel_at_period_end=True,
-    )
-    payment = Payment(
-        id=40,
-        user_id=1,
-        status="pending",
-        attempt_type="one_time",
-        amount_vnd=59000,
-        vnp_txn_ref="GF456",
-        raw_request_json={},
-        raw_response_json={},
-    )
-    db = FakeDB({Payment: payment, User: user, BillingSubscription: subscription})
-    monkeypatch.setattr(billing, "verify_vnpay_signature", lambda payload: True)
-    monkeypatch.setattr(billing, "log_usage_event", lambda *args, **kwargs: None)
-
-    code, _message, _handled = billing._handle_vnpay_payload(db, pay_payload("GF456"))
-
-    assert code == "00"
-    assert subscription.current_period_start == current_end
-    assert subscription.current_period_end == billing.add_month(current_end)
-    assert subscription.next_billing_at is None
-    assert user.premium_expires_at == subscription.current_period_end
+    
+    monkeypatch.setattr(billing, "_frontend_url", lambda: "http://localhost:3000")
+    
+    class FakeRequest:
+        def __init__(self):
+            self.query_params = {"orderCode": "100"}
+            
+    res = billing.payos_cancel(FakeRequest(), db=db)
+    
+    assert res.headers["location"] == "http://localhost:3000/payment/result?status=cancelled&txn_ref=100"
+    assert payment.status == "failed"

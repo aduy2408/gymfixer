@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import hashlib
-import hmac
 import os
-import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Any
-from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
+from payos import PayOS
+from payos.types import CreatePaymentLinkRequest
 
 from authentication.database import get_db
 from authentication.models import BillingSubscription, Payment, User
@@ -22,9 +20,7 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 
 PREMIUM_AMOUNT_VND = 59000
 PREMIUM_INTERVAL = "monthly"
-PAYMENT_PROVIDER = "vnpay"
-VNPAY_VERSION = "2.1.0"
-VNPAY_COMMAND = "pay"
+PAYMENT_PROVIDER = "payos"
 
 
 def _env(name: str, default: str = "") -> str:
@@ -35,76 +31,33 @@ def _frontend_url() -> str:
     return _env("FRONTEND_URL", "http://localhost:3000").rstrip("/")
 
 
-def _payment_url() -> str:
-    return _env("VNPAY_PAYMENT_URL", "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html")
+def _payos_client() -> PayOS:
+    client_id = _env("PAYOS_CLIENT_ID")
+    api_key = _env("PAYOS_API_KEY")
+    checksum_key = _env("PAYOS_CHECKSUM_KEY")
+    if not client_id or not api_key or not checksum_key:
+        raise HTTPException(status_code=500, detail="PayOS credentials are not configured.")
+    return PayOS(client_id=client_id, api_key=api_key, checksum_key=checksum_key)
 
 
-def _tmn_code() -> str:
-    value = _env("VNPAY_TMN_CODE")
-    if not value:
-        raise HTTPException(status_code=500, detail="VNPAY_TMN_CODE is not configured.")
-    return value
-
-
-def _hash_secret() -> str:
-    value = _env("VNPAY_HASH_SECRET")
-    if not value:
-        raise HTTPException(status_code=500, detail="VNPAY_HASH_SECRET is not configured.")
-    return value
-
-
-def _return_url() -> str:
-    return _env("VNPAY_RETURN_URL", f"{_env('BACKEND_PUBLIC_URL', 'http://localhost:5000').rstrip('/')}/billing/vnpay/return")
-
-
-def _vnpay_time(value: datetime | None = None) -> str:
-    current = value or now_utc()
-    if current.tzinfo is None:
-        current = current.replace(tzinfo=timezone.utc)
-    return current.astimezone(timezone(timedelta(hours=7))).strftime("%Y%m%d%H%M%S")
-
-
-def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "127.0.0.1"
-
-
-def _txn_ref(prefix: str) -> str:
-    return f"{prefix}{now_utc().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:10]}"
-
-
-def _hash_data(params: dict[str, Any]) -> str:
-    filtered = {
-        key: str(value)
-        for key, value in params.items()
-        if value is not None
-        and value != ""
-        and key not in {"vnp_secure_hash", "vnp_SecureHash", "vnp_SecureHashType"}
-    }
-    return urlencode(sorted(filtered.items()))
-
-
-def vnpay_secure_hash(params: dict[str, Any]) -> str:
-    return hmac.new(_hash_secret().encode("utf-8"), _hash_data(params).encode("utf-8"), hashlib.sha512).hexdigest()
-
-
-def verify_vnpay_signature(params: dict[str, Any]) -> bool:
-    provided = str(params.get("vnp_secure_hash") or params.get("vnp_SecureHash") or "")
-    if not provided:
-        return False
-    return hmac.compare_digest(provided.lower(), vnpay_secure_hash(params).lower())
-
-
-def _signed_url(base_url: str, params: dict[str, Any]) -> str:
-    clean = {key: value for key, value in params.items() if value is not None and value != ""}
-    clean["vnp_SecureHash"] = vnpay_secure_hash(clean)
-    return f"{base_url}?{urlencode(clean)}"
-
-
-def _vnp_param(payload: dict[str, Any], name: str) -> Any:
-    return payload.get(name) if name in payload else payload.get(name.lower())
+def _get_val(obj: Any, attr_name: str) -> Any:
+    if hasattr(obj, attr_name):
+        return getattr(obj, attr_name)
+    camel = "".join(word.capitalize() if i > 0 else word for i, word in enumerate(attr_name.split("_")))
+    if hasattr(obj, camel):
+        return getattr(obj, camel)
+    try:
+        d = obj.model_dump()
+    except Exception:
+        try:
+            d = obj.dict()
+        except Exception:
+            d = getattr(obj, "__dict__", {})
+    if attr_name in d:
+        return d[attr_name]
+    if camel in d:
+        return d[camel]
+    return None
 
 
 def _active_subscription(db: Session, user_id: int) -> BillingSubscription | None:
@@ -148,79 +101,12 @@ def _activate_subscription(
     return subscription
 
 
-def _mark_payment_failed(payment: Payment, payload: dict[str, Any]) -> None:
-    payment.status = "failed"
-    payment.failed_at = now_utc()
-    payment.vnp_response_code = _vnp_param(payload, "vnp_ResponseCode")
-    payment.vnp_transaction_status = _vnp_param(payload, "vnp_TransactionStatus")
-    payment.raw_response_json = payload
-
-
-def _handle_vnpay_payload(db: Session, payload: dict[str, Any]) -> tuple[str, str, Payment | None]:
-    if not verify_vnpay_signature(payload):
-        return "97", "Invalid checksum", None
-
-    txn_ref = str(_vnp_param(payload, "vnp_TxnRef") or "")
-    payment = db.query(Payment).filter(Payment.vnp_txn_ref == txn_ref).first()
-    if not payment:
-        return "01", "Order not found", None
-    try:
-        returned_amount = int(_vnp_param(payload, "vnp_Amount") or 0)
-    except (TypeError, ValueError):
-        returned_amount = 0
-    if payment.amount_vnd * 100 != returned_amount:
-        return "04", "Invalid amount", payment
-    if payment.status == "paid":
-        return "02", "Order already confirmed", payment
-
-    payment.raw_response_json = payload
-    payment.vnp_transaction_no = _vnp_param(payload, "vnp_TransactionNo")
-    payment.vnp_response_code = _vnp_param(payload, "vnp_ResponseCode")
-    payment.vnp_transaction_status = _vnp_param(payload, "vnp_TransactionStatus")
-
-    success = (
-        _vnp_param(payload, "vnp_ResponseCode") == "00"
-        and _vnp_param(payload, "vnp_TransactionStatus") == "00"
-    )
-    user = db.query(User).filter(User.id == payment.user_id).first() if payment.user_id else None
-    if not user:
-        return "01", "User not found", payment
-
-    if not success:
-        _mark_payment_failed(payment, payload)
-        log_usage_event(db, event_name="payment_failed", user_id=user.id, properties={"attempt_type": payment.attempt_type})
-        return "00", "Confirm success", payment
-
-    paid_at = now_utc()
-    _activate_subscription(db, user=user, payment=payment, paid_at=paid_at)
-    log_usage_event(db, event_name="payment_paid", user_id=user.id, properties={"attempt_type": payment.attempt_type})
-    return "00", "Confirm success", payment
-
-
-@router.post("/vnpay/start")
-def start_vnpay_checkout(
+@router.post("/payos/start")
+def start_payos_checkout(
     request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    txn_ref = _txn_ref("GF")
-    created_at = now_utc()
-    params = {
-        "vnp_Version": VNPAY_VERSION,
-        "vnp_Command": VNPAY_COMMAND,
-        "vnp_TmnCode": _tmn_code(),
-        "vnp_Amount": PREMIUM_AMOUNT_VND * 100,
-        "vnp_CurrCode": "VND",
-        "vnp_IpAddr": _client_ip(request),
-        "vnp_Locale": "vn",
-        "vnp_OrderInfo": f"GymFixer Premium user {current_user.id}",
-        "vnp_OrderType": "other",
-        "vnp_ReturnUrl": _return_url(),
-        "vnp_TxnRef": txn_ref,
-        "vnp_CreateDate": _vnpay_time(created_at),
-        "vnp_ExpireDate": _vnpay_time(created_at + timedelta(minutes=15)),
-    }
-    payment_url = _signed_url(_payment_url(), params)
     payment = Payment(
         user_id=current_user.id,
         provider=PAYMENT_PROVIDER,
@@ -230,31 +116,144 @@ def start_vnpay_checkout(
         currency="VND",
         plan_tier="paid",
         interval=PREMIUM_INTERVAL,
-        vnp_txn_ref=txn_ref,
-        payment_url=payment_url,
-        raw_request_json=params,
+        vnp_txn_ref="",
+        raw_request_json={},
         raw_response_json={},
     )
     db.add(payment)
+    db.flush()
+
+    order_code = payment.id
+    payment.vnp_txn_ref = str(order_code)
+
+    return_url = f"{_env('BACKEND_PUBLIC_URL', 'http://localhost:5000').rstrip('/')}/billing/payos/return"
+    cancel_url = f"{_env('BACKEND_PUBLIC_URL', 'http://localhost:5000').rstrip('/')}/billing/payos/cancel"
+
+    payment_request = CreatePaymentLinkRequest(
+        order_code=order_code,
+        amount=PREMIUM_AMOUNT_VND,
+        description=f"GymFixer Premium user {current_user.id}",
+        cancel_url=cancel_url,
+        return_url=return_url,
+    )
+
+    try:
+        payos_link = _payos_client().payment_requests.create(payment_data=payment_request)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create PayOS payment link: {str(e)}")
+
+    checkout_url = _get_val(payos_link, "checkout_url")
+    payos_id = _get_val(payos_link, "id")
+
+    payment.payment_url = checkout_url
+    payment.vnp_transaction_no = payos_id
+    payment.raw_request_json = {
+        "order_code": order_code,
+        "amount": PREMIUM_AMOUNT_VND,
+        "description": payment_request.description,
+        "cancel_url": cancel_url,
+        "return_url": return_url,
+    }
+
     log_usage_event(db, event_name="checkout_started", user_id=current_user.id)
     db.commit()
     db.refresh(payment)
-    return {"payment_url": payment_url, "payment_id": payment.id, "amount_vnd": PREMIUM_AMOUNT_VND}
+    return {
+        "payment_url": checkout_url,
+        "payment_id": payment.id,
+        "amount_vnd": PREMIUM_AMOUNT_VND,
+    }
 
 
-@router.get("/vnpay/ipn")
-def vnpay_ipn(request: Request, db: Session = Depends(get_db)) -> dict[str, str]:
-    payload = dict(request.query_params)
-    code, message, _payment = _handle_vnpay_payload(db, payload)
-    db.commit()
-    return {"RspCode": code, "Message": message}
+@router.post("/payos/webhook")
+async def payos_webhook(request: Request, db: Session = Depends(get_db)):
+    body = await request.body()
+    try:
+        webhook_data = _payos_client().webhooks.verify(body)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    order_code = _get_val(webhook_data, "order_code")
+    if not order_code:
+        raise HTTPException(status_code=400, detail="Missing order_code in webhook data.")
+
+    payment = db.query(Payment).filter(Payment.id == int(order_code)).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Order not found.")
+
+    payment.raw_response_json = {
+        "webhook_data": {
+            "orderCode": order_code,
+            "amount": _get_val(webhook_data, "amount"),
+            "description": _get_val(webhook_data, "description"),
+            "status": _get_val(webhook_data, "status") or _get_val(webhook_data, "code"),
+        }
+    }
+
+    user = db.query(User).filter(User.id == payment.user_id).first() if payment.user_id else None
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    code = _get_val(webhook_data, "code")
+    status = _get_val(webhook_data, "status")
+    success = code == "00" or status == "PAID"
+
+    if success:
+        if payment.status != "paid":
+            _activate_subscription(db, user=user, payment=payment, paid_at=now_utc())
+            log_usage_event(db, event_name="payment_paid", user_id=user.id, properties={"attempt_type": payment.attempt_type})
+        db.commit()
+        return {"status": "success", "message": "Confirm success"}
+    else:
+        payment.status = "failed"
+        payment.failed_at = now_utc()
+        log_usage_event(db, event_name="payment_failed", user_id=user.id, properties={"attempt_type": payment.attempt_type})
+        db.commit()
+        return {"status": "failed", "message": "Payment failed"}
 
 
-@router.get("/vnpay/return")
-def vnpay_return(request: Request, db: Session = Depends(get_db)):
-    payload = dict(request.query_params)
-    code, _message, payment = _handle_vnpay_payload(db, payload)
-    db.commit()
-    status = "success" if code in {"00", "02"} and payment and payment.status == "paid" else "failed"
-    txn_ref = _vnp_param(payload, "vnp_TxnRef") or ""
-    return RedirectResponse(f"{_frontend_url()}/payment/result?status={status}&txn_ref={txn_ref}")
+@router.get("/payos/return")
+def payos_return(request: Request, db: Session = Depends(get_db)):
+    params = dict(request.query_params)
+    order_code = params.get("orderCode")
+    status = "failed"
+    if order_code:
+        payment = db.query(Payment).filter(Payment.id == int(order_code)).first()
+        if payment:
+            try:
+                payment_info = _payos_client().payment_requests.get_payment_link_information(int(order_code))
+                info_status = _get_val(payment_info, "status")
+                if info_status == "PAID":
+                    if payment.status != "paid":
+                        user = db.query(User).filter(User.id == payment.user_id).first()
+                        if user:
+                            _activate_subscription(db, user=user, payment=payment, paid_at=now_utc())
+                            db.commit()
+                    status = "success"
+                else:
+                    if info_status in {"CANCELLED", "FAILED"}:
+                        payment.status = "failed"
+                        payment.failed_at = now_utc()
+                        db.commit()
+                        status = "failed"
+                    else:
+                        status = "pending"
+            except Exception:
+                if params.get("status") == "PAID":
+                    status = "success"
+    return RedirectResponse(f"{_frontend_url()}/payment/result?status={status}&txn_ref={order_code}")
+
+
+@router.get("/payos/cancel")
+def payos_cancel(request: Request, db: Session = Depends(get_db)):
+    params = dict(request.query_params)
+    order_code = params.get("orderCode")
+    if order_code:
+        payment = db.query(Payment).filter(Payment.id == int(order_code)).first()
+        if payment and payment.status == "pending":
+            payment.status = "failed"
+            payment.failed_at = now_utc()
+            payment.raw_response_json = params
+            db.commit()
+    return RedirectResponse(f"{_frontend_url()}/payment/result?status=cancelled&txn_ref={order_code}")
