@@ -685,6 +685,7 @@ export async function analyzeVideo(params: {
   cameraView: CameraView;
   poseBackend: PoseBackend;
   callLlm: boolean;
+  language: "en" | "vi";
   sampleFps: number;
   maxFrames: number;
   includePreview: boolean;
@@ -696,6 +697,7 @@ export async function analyzeVideo(params: {
   formData.append("pose_backend", params.poseBackend);
   formData.append("file", params.file);
   formData.append("call_llm", String(params.callLlm));
+  formData.append("language", params.language);
   formData.append("sample_fps", String(params.sampleFps));
   formData.append("max_frames", String(params.maxFrames));
   formData.append("include_preview", String(params.includePreview));

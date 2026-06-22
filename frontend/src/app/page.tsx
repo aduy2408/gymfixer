@@ -6,7 +6,6 @@ import {
   Activity,
   Play, CheckCircle, ArrowRight, MapPin
 } from "lucide-react";
-import LanguageToggle from "@/components/LanguageToggle";
 import { useI18n } from "@/lib/i18n";
 
 const workoutTypes = [
@@ -121,7 +120,6 @@ export default function LandingPage() {
           <Link href="/auth/register">
             <button className="btn-red text-sm px-5 py-2.5">{t("auth.startFreeTrial")}</button>
           </Link>
-          <LanguageToggle compact />
         </div>
       </nav>
 

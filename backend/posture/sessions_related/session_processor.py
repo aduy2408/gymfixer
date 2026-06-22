@@ -17,7 +17,7 @@ from posture.sessions_related.llm_coach import (
 )
 from posture.phase_detector import PhaseDetector
 from posture.sessions_related.preview_frames import maybe_add_preview_frame
-from posture.sessions_related.session_models import SessionFrame, normalise_camera_view, normalise_pose_backend
+from posture.sessions_related.session_models import SessionFrame, normalise_camera_view, normalise_language, normalise_pose_backend
 from posture.sessions_related.session_summary import build_session_summary, local_recommendations
 from posture.sessions_related.subject_gate import SUBJECT_READY_MIN_FRAMES, subject_ready_for_analysis
 from posture.sessions_related.video_sampling import decode_base64_frame
@@ -32,6 +32,7 @@ def analyze_posture_session(
     preview_max_frames: int = 24,
     camera_view: str = "auto",
     pose_backend: str | None = None,
+    language: str = "en",
 ) -> dict[str, Any]:
     """Process a full exercise session and return rule/LLM coaching output."""
     if exercise not in mediapipe_utils.ANGLE_FUNCTIONS:
@@ -39,6 +40,7 @@ def analyze_posture_session(
         raise ValueError(f"Unsupported exercise '{exercise}'. Supported: {supported}")
     camera_view = normalise_camera_view(camera_view)
     pose_backend = normalise_pose_backend(pose_backend)
+    language = normalise_language(language)
 
     try:
         pose_processor = mediapipe_utils.get_cached_pose_processor(pose_backend)
@@ -271,11 +273,11 @@ def analyze_posture_session(
         "prompt_chars": 0,
         "finish_reason": None,
         "usage_metadata": None,
-        "recommendations": local_recommendations(summary),
+        "recommendations": local_recommendations(summary, language=language),
         "error": None,
     }
     if call_llm:
-        prompt = build_gemini_posture_prompt(summary, frame_log)
+        prompt = build_gemini_posture_prompt(summary, frame_log, language=language)
         llm["enabled"] = True
         llm["prompt_chars"] = len(prompt)
         llm_result = call_gemini_posture_coach(prompt)

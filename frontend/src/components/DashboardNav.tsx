@@ -9,7 +9,6 @@ import { clearSession, getStoredUser, AuthUser } from "@/lib/auth";
 import { logUsageEvent, logout } from "@/lib/api";
 import { tierLabel, useI18n } from "@/lib/i18n";
 import FeedbackModal from "@/components/FeedbackModal";
-import LanguageToggle from "@/components/LanguageToggle";
 
 const navLinks = [
   { href: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
@@ -109,9 +108,6 @@ export default function DashboardNav() {
         </div>
         <div className="app-nav-label">{t("nav.workspace")}</div>
         {navItems}
-        <div style={{ padding: collapsed ? "0 0.55rem" : "0 0.85rem", marginTop: "0.75rem" }}>
-          <LanguageToggle compact={collapsed} />
-        </div>
         {userBlock}
         <button
           type="button"
@@ -138,9 +134,6 @@ export default function DashboardNav() {
         {mobileOpen && (
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="app-mobile-drawer">
             <div className="app-nav-label">{t("nav.workspace")}</div>
-            <div style={{ padding: "0 0.85rem 0.75rem" }}>
-              <LanguageToggle />
-            </div>
             {navItems}
             {userBlock}
           </motion.div>

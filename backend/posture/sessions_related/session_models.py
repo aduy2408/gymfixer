@@ -40,6 +40,13 @@ def normalise_pose_backend(pose_backend: str | None) -> str:
     return aliases[value]
 
 
+def normalise_language(language: str | None) -> str:
+    value = (language or "en").strip().lower()
+    if value in {"vi", "vn", "vietnamese", "tieng_viet", "tiếng_việt"}:
+        return "vi"
+    return "en"
+
+
 class SessionFrame(BaseModel):
     frame: str = Field(..., description="Base64-encoded JPEG/PNG frame.")
     timestamp_ms: int | None = Field(
@@ -62,4 +69,8 @@ class PostureSessionRequest(BaseModel):
     call_llm: bool = Field(
         default=False,
         description="When true, send the processed posture log to Gemini.",
+    )
+    language: str = Field(
+        default="en",
+        description="Response language for coaching text: en or vi.",
     )

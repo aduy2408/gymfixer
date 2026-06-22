@@ -12,6 +12,7 @@ from authentication.utils import get_current_user
 from entitlements import require_video_analysis_access
 from posture.sessions_related.session_models import (
     PostureSessionRequest,
+    normalise_language,
     normalise_pose_backend,
 )
 from posture.sessions_related.session_persistence import (
@@ -36,6 +37,7 @@ async def analyze_session(request: PostureSessionRequest):
             call_llm=request.call_llm,
             camera_view=request.camera_view,
             pose_backend=request.pose_backend,
+            language=request.language,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -48,6 +50,7 @@ async def analyze_video(
     pose_backend: str | None = Form(None),
     file: UploadFile = File(...),
     call_llm: bool = Form(False),
+    language: str = Form("en"),
     sample_fps: float = Form(8.0),
     max_frames: int = Form(360),
     include_preview: bool = Form(True),
@@ -65,6 +68,7 @@ async def analyze_video(
 
     try:
         normalised_pose_backend = normalise_pose_backend(pose_backend)
+        normalised_language = normalise_language(language)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     require_video_analysis_access(
@@ -118,6 +122,7 @@ async def analyze_video(
             preview_max_frames=preview_max_frames,
             camera_view=camera_view,
             pose_backend=normalised_pose_backend,
+            language=normalised_language,
         )
         analysis = persist_analysis_result(db, workout_session, result)
         result["session_id"] = workout_session.id

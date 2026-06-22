@@ -6,7 +6,6 @@ import { Eye, EyeOff, AlertCircle, CheckCircle, Activity } from "lucide-react";
 import { setSession } from "@/lib/auth";
 import { login, register } from "@/lib/api";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
-import LanguageToggle from "@/components/LanguageToggle";
 import { useI18n } from "@/lib/i18n";
 
 const passwordChecks = [
@@ -119,10 +118,6 @@ export default function RegisterPage() {
             {/* Right — form */}
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem 1.25rem", overflowY: "auto" }}>
                 <div style={{ width: "100%", maxWidth: 380 }}>
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.75rem" }}>
-                        <LanguageToggle />
-                    </div>
-
                     {/* Mobile logo */}
                     <div className="lg:hidden" style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
                         <div style={{ width: 32, height: 32, borderRadius: 6, background: "var(--red)", display: "flex", alignItems: "center", justifyContent: "center" }}>

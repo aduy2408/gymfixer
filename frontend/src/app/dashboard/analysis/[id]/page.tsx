@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import DashboardNav from "@/components/DashboardNav";
 import { fetchWorkout, readLatestAnalysis, StoredAnalysis, VideoAnalysisResult, workoutToStoredAnalysis } from "@/lib/api";
+import { translateFeedbackText } from "@/lib/feedbackText";
 import { formatExerciseName, localeFor, useI18n } from "@/lib/i18n";
 
 const metricStyle: React.CSSProperties = {
@@ -234,7 +235,7 @@ function inferVideoDuration(result: VideoAnalysisResult, repBreakdown: RepBreakd
 }
 
 export default function AnalysisPage() {
-    const { t } = useI18n();
+    const { language, t } = useI18n();
     const params = useParams<{ id: string }>();
     const [analysis, setAnalysis] = useState<StoredAnalysis | null>(() => {
         const cached = readLatestAnalysis();
@@ -301,6 +302,12 @@ export default function AnalysisPage() {
     const correctionReps = buildCorrectionReps(result, repBreakdown);
     const issueCount = countRepIssues(correctionReps);
     const durationSeconds = inferVideoDuration(result, repBreakdown);
+    const coachingContent = localizedCoachingContent(
+        result.llm.recommendations,
+        correctionReps,
+        result,
+        language,
+    );
 
     return (
         <div style={{ display: "flex", minHeight: "100vh", background: "#f7f7f7", fontFamily: "var(--font-ui)" }}>
@@ -386,7 +393,7 @@ export default function AnalysisPage() {
                                                                         />
                                                                     </div>
                                                                     <figcaption style={{ padding: "0.65rem", color: "#555", lineHeight: 1.35 }}>
-                                                                        <span style={{ color: "var(--red)", fontWeight: 800 }}>{t("common.issue")}:</span> {issue}
+                                                                        <span style={{ color: "var(--red)", fontWeight: 800 }}>{t("common.issue")}:</span> {translateFeedbackText(issue, language)}
                                                                     </figcaption>
                                                                 </figure>
                                                             ))}
@@ -427,7 +434,7 @@ export default function AnalysisPage() {
                                                 {result.llm.prompt_chars ? ` · ${t("analysis.prompt")}: ${result.llm.prompt_chars} ${t("analysis.chars")}` : ""}
                                             </p>
                                         )}
-                                        <MarkdownContent content={result.llm.recommendations} emptyText={t("analysis.noCoaching")} />
+                                        <MarkdownContent content={coachingContent} emptyText={t("analysis.noCoaching")} />
                                         {result.llm.error && (
                                             <p style={{ color: "var(--red)", fontSize: "0.8rem", marginTop: "0.75rem" }}>{result.llm.error}</p>
                                         )}
@@ -440,6 +447,57 @@ export default function AnalysisPage() {
             </main>
         </div>
     );
+}
+
+function localizedCoachingContent(
+    content: string | undefined,
+    correctionReps: CorrectionRep[],
+    result: VideoAnalysisResult,
+    language: "en" | "vi",
+) {
+    const raw = content || "";
+    if (language !== "vi") return raw;
+    if (looksVietnamese(raw)) return raw;
+
+    const issues = Array.from(
+        new Set([
+            ...correctionReps.flatMap((rep) => rep.issues || []),
+            ...Object.keys(result.summary.top_feedback || {}),
+        ].filter(isProblemFeedback))
+    ).slice(0, 4);
+
+    if (!issues.length) {
+        return "## Tong quan\nKhong phat hien loi ky thuat lap lai ro rang trong cac khung hinh co the phan tich.\n\n## Can chinh gi o set tiep theo\n1. Giu nhip do cham va co kiem soat.\n2. Dam bao toan bo co the nam trong khung hinh.\n3. Tiep tuc tap trung vao bien do dong tac on dinh.";
+    }
+
+    const translatedIssues = issues.map((issue) => translateFeedbackText(issue, "vi"));
+    const issueAnalysis = translatedIssues
+        .map((issue, index) => (
+            `### ${index + 1}. ${issue}\n` +
+            `- **Van de:** Loi nay xuat hien lap lai trong cac rep da phan tich.\n` +
+            `- **Cach sua:** Tap trung sua diem nay o rep tiep theo, thuc hien cham hon va giu kiem soat trong toan bo bien do.`
+        ))
+        .join("\n\n");
+    const nextAdjustments = translatedIssues
+        .slice(0, 3)
+        .map((issue, index) => `${index + 1}. ${issue}`)
+        .join("\n");
+    const avoidList = translatedIssues.map((issue) => `- ${issue}`).join("\n");
+
+    return (
+        "## Tong quan\n" +
+        `Phan tich ghi nhan ${issues.length} nhom loi ky thuat can uu tien sua. Hay tap trung vao cac loi lap lai thay vi co gang sua qua nhieu thu cung luc.\n\n` +
+        "## Phan tich loi\n" +
+        `${issueAnalysis}\n\n` +
+        "## Can chinh gi o set tiep theo\n" +
+        `${nextAdjustments}\n\n` +
+        "## Can tranh\n" +
+        avoidList
+    );
+}
+
+function looksVietnamese(text: string) {
+    return /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(text);
 }
 
 function MarkdownContent({ content, emptyText }: { content?: string; emptyText: string }) {

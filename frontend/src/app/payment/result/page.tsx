@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle, CircleX, Clock3 } from "lucide-react";
 
-import LanguageToggle from "@/components/LanguageToggle";
 import { fetchSubscription, SubscriptionSummary } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
@@ -46,9 +45,6 @@ function PaymentResultContent() {
 
     return (
         <main style={{ minHeight: "100vh", background: "#f7f7f7", display: "grid", placeItems: "center", padding: "1.5rem" }}>
-            <div style={{ position: "fixed", right: "1.25rem", top: "1.25rem" }}>
-                <LanguageToggle compact />
-            </div>
             <section style={{ width: "100%", maxWidth: 520, background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, padding: "2rem", textAlign: "center" }}>
                 <div style={{ display: "flex", justifyContent: "center", marginBottom: "1rem" }}>
                     {success ? (

@@ -13,27 +13,33 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const enableAnalytics = process.env.NODE_ENV === "production";
+
   return (
     <html lang="en" suppressHydrationWarning>
-      <Script
-        src="https://www.googletagmanager.com/gtag/js?id=G-3CP14K4FVB"
-        strategy="afterInteractive"
-      />
-      <Script id="google-tag-manager" strategy="afterInteractive">
-        {`
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          gtag('js', new Date());
-
-          gtag('config', 'G-3CP14K4FVB');
-        `}
-      </Script>
-      <Script
-        src="https://t.contentsquare.net/uxa/168132bcc36cb.js"
-        strategy="afterInteractive"
-      />
-      <body>
+      <body suppressHydrationWarning>
         <LanguageProvider>{children}</LanguageProvider>
+        {enableAnalytics ? (
+          <>
+            <Script
+              src="https://www.googletagmanager.com/gtag/js?id=G-3CP14K4FVB"
+              strategy="afterInteractive"
+            />
+            <Script id="google-tag-manager" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+
+                gtag('config', 'G-3CP14K4FVB');
+              `}
+            </Script>
+            <Script
+              src="https://t.contentsquare.net/uxa/168132bcc36cb.js"
+              strategy="afterInteractive"
+            />
+          </>
+        ) : null}
       </body>
     </html>
   );

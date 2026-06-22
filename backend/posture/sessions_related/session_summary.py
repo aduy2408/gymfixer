@@ -144,19 +144,28 @@ def build_analysis_quality(frame_log: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def local_recommendations(summary: dict[str, Any]) -> str:
+def local_recommendations(summary: dict[str, Any], *, language: str = "en") -> str:
     if (
         summary.get("exercise") == "romanian_deadlift"
         and not summary.get("frames_analyzed")
         and summary.get("unsupported_view_frames")
     ):
+        if language == "vi":
+            return (
+                "Khong tim thay khung hinh goc ngang co the su dung. Hay quay ro toan than "
+                "va ca hai tay tu goc ngang, sau do tai video len lai."
+            )
         return (
             "No usable side-view frames were found. Record the full body and both hands "
             "from the side, then upload the video again."
         )
     top_feedback = list(summary.get("top_feedback", {}).keys())
     if not top_feedback:
+        if language == "vi":
+            return "Khong phat hien loi tu the dang tin cay trong cac khung hinh da gui."
         return "No reliable posture issues were detected in the submitted frames."
 
     cues = "\n".join(f"- {item}" for item in top_feedback[:5])
+    if language == "vi":
+        return f"Hay tap trung sua cac diem sau o set tiep theo:\n{cues}"
     return f"Focus on these corrections next set:\n{cues}"

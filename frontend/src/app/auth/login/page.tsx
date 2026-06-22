@@ -6,7 +6,6 @@ import { Eye, EyeOff, AlertCircle, Activity } from "lucide-react";
 import { setSession } from "@/lib/auth";
 import { login } from "@/lib/api";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
-import LanguageToggle from "@/components/LanguageToggle";
 import { useI18n } from "@/lib/i18n";
 
 export default function LoginPage() {
@@ -86,10 +85,6 @@ export default function LoginPage() {
             {/* Right — form */}
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem 1.5rem" }}>
                 <div style={{ width: "100%", maxWidth: 420 }}>
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "1rem" }}>
-                        <LanguageToggle />
-                    </div>
-
                     {/* Mobile logo */}
                     <div className="lg:hidden" style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "2rem" }}>
                         <div style={{ width: 32, height: 32, borderRadius: 6, background: "var(--red)", display: "flex", alignItems: "center", justifyContent: "center" }}>

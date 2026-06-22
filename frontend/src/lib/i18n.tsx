@@ -1,12 +1,14 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { getStoredUser } from "@/lib/auth";
 
 export type Language = "en" | "vi";
 
 type Dictionary = Record<string, { en: string; vi: string }>;
 
-const LANGUAGE_KEY = "gf_lang";
+const LANGUAGE_KEY_PREFIX = "gf_lang";
 
 const dictionary: Dictionary = {
   "nav.home": { en: "Home", vi: "Trang chủ" },
@@ -341,6 +343,10 @@ const dictionary: Dictionary = {
   "profile.loading": { en: "Loading profile...", vi: "Đang tải hồ sơ..." },
   "profile.loadError": { en: "Could not load profile.", vi: "Không thể tải hồ sơ." },
   "profile.section.account": { en: "Account", vi: "Tài khoản" },
+  "profile.section.preferences": { en: "Preferences", vi: "Tùy chọn" },
+  "profile.languageCopy": { en: "Choose the language used inside your app workspace.", vi: "Chọn ngôn ngữ sử dụng bên trong không gian làm việc của bạn." },
+  "profile.language.english": { en: "English", vi: "Tiếng Anh" },
+  "profile.language.vietnamese": { en: "Vietnamese", vi: "Tiếng Việt" },
   "profile.section.metrics": { en: "Body Metrics", vi: "Chỉ số cơ thể" },
   "profile.section.goal": { en: "Fitness Goal", vi: "Mục tiêu tập luyện" },
   "profile.section.discovery": { en: "How did you hear about us?", vi: "Bạn biết đến sản phẩm từ đâu?" },
@@ -570,29 +576,46 @@ type I18nContextValue = {
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [language, setLanguageState] = useState<Language>("en");
+  const isAppRoute = isLanguageScopedAppRoute(pathname);
 
   useEffect(() => {
-    const stored = localStorage.getItem(LANGUAGE_KEY);
-    if (stored === "en" || stored === "vi") {
-      document.documentElement.lang = stored;
-      queueMicrotask(() => setLanguageState(stored));
-      return;
-    }
-    document.documentElement.lang = "en";
-  }, []);
+    const syncLanguage = () => {
+      if (!isLanguageScopedAppRoute(window.location.pathname)) {
+        document.documentElement.lang = "en";
+        setLanguageState("en");
+        return;
+      }
+
+      const stored = localStorage.getItem(languageStorageKey());
+      const next = stored === "en" || stored === "vi" ? stored : "en";
+      document.documentElement.lang = next;
+      setLanguageState(next);
+    };
+
+    syncLanguage();
+    window.addEventListener("gymfixer-auth-change", syncLanguage);
+    return () => window.removeEventListener("gymfixer-auth-change", syncLanguage);
+  }, [pathname]);
 
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
 
-  const setLanguage = (next: Language) => {
+  const setLanguage = useCallback((next: Language) => {
+    if (!isAppRoute) {
+      setLanguageState("en");
+      document.documentElement.lang = "en";
+      return;
+    }
+
     setLanguageState(next);
     if (typeof window !== "undefined") {
-      localStorage.setItem(LANGUAGE_KEY, next);
+      localStorage.setItem(languageStorageKey(), next);
       document.documentElement.lang = next;
     }
-  };
+  }, [isAppRoute]);
 
   const value = useMemo<I18nContextValue>(
     () => ({
@@ -600,10 +623,21 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       setLanguage,
       t: (key: string) => dictionary[key]?.[language] || key,
     }),
-    [language]
+    [language, setLanguage]
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+}
+
+function isLanguageScopedAppRoute(pathname: string | null) {
+  const path = pathname || "/";
+  return path.startsWith("/dashboard") || path.startsWith("/onboarding") || path.startsWith("/payment");
+}
+
+function languageStorageKey() {
+  const user = getStoredUser();
+  const owner = user?.id || user?.email || "anonymous";
+  return `${LANGUAGE_KEY_PREFIX}:${owner}`;
 }
 
 export function useI18n() {

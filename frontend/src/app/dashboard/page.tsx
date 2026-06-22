@@ -69,7 +69,7 @@ const labelStyle: React.CSSProperties = {
 
 export default function DashboardPage() {
     const router = useRouter();
-    const { t } = useI18n();
+    const { language, t } = useI18n();
     const fileRef = useRef<HTMLInputElement>(null);
     const [dragOver, setDragOver] = useState(false);
     const [file, setFile] = useState<File | null>(null);
@@ -163,6 +163,7 @@ export default function DashboardPage() {
                 cameraView,
                 poseBackend,
                 callLlm,
+                language,
                 sampleFps: DEFAULT_SAMPLE_FPS,
                 maxFrames: DEFAULT_MAX_FRAMES,
                 includePreview: true,

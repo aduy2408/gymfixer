@@ -3,7 +3,6 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Activity, CheckCircle, ArrowRight } from "lucide-react";
-import LanguageToggle from "@/components/LanguageToggle";
 import { createPayosCheckout } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -192,7 +191,6 @@ export default function PricingPage() {
                             {t("auth.startFreeTrial")}
                         </button>
                     </Link>
-                    <LanguageToggle compact />
                 </div>
             </nav>
 

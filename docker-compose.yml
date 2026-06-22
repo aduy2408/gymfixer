@@ -1,7 +1,10 @@
 
 services:
   backend:
-    image: aduy2408/gymfixer-backend:cpu-mediapipe
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.cpu
+    image: gymfixer-backend:local
     container_name: gymfixer-backend
     ports:
       - "5000:5000"

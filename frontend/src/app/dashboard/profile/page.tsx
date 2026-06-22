@@ -14,7 +14,7 @@ import {
     UserProfile,
 } from "@/lib/api";
 import { setStoredUser } from "@/lib/auth";
-import { localeFor, tierLabel, useI18n } from "@/lib/i18n";
+import { Language, localeFor, tierLabel, useI18n } from "@/lib/i18n";
 import { recordMeaningfulAction } from "@/lib/feedbackPrompt";
 
 const goals = [
@@ -98,7 +98,7 @@ function formatLimit(value: number | null | undefined, t: (key: string) => strin
 }
 
 export default function ProfilePage() {
-    const { t } = useI18n();
+    const { language, setLanguage, t } = useI18n();
     const [form, setForm] = useState({
         name: "",
         email: "",
@@ -277,6 +277,53 @@ export default function ProfilePage() {
                                 <Divider />
 
                                 {/* ── Body Metrics ── */}
+                                {sectionTitle(t("profile.section.preferences"))}
+                                <div>
+                                    <label style={labelStyle}>{t("nav.language")}</label>
+                                    <p style={{ fontSize: "0.78rem", color: "#777", lineHeight: 1.5, marginBottom: "0.7rem" }}>
+                                        {t("profile.languageCopy")}
+                                    </p>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                                        {([
+                                            { value: "en", label: t("profile.language.english") },
+                                            { value: "vi", label: t("profile.language.vietnamese") },
+                                        ] as Array<{ value: Language; label: string }>).map((option) => {
+                                            const active = language === option.value;
+                                            return (
+                                                <button
+                                                    key={option.value}
+                                                    type="button"
+                                                    onClick={() => setLanguage(option.value)}
+                                                    aria-pressed={active}
+                                                    style={{
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "space-between",
+                                                        gap: "0.5rem",
+                                                        border: active ? "1px solid var(--red)" : "1px solid #e8e8e8",
+                                                        borderRadius: 4,
+                                                        background: active ? "rgba(214,0,28,0.06)" : "#fff",
+                                                        color: active ? "var(--red)" : "#333",
+                                                        cursor: "pointer",
+                                                        fontSize: "0.8rem",
+                                                        fontWeight: 800,
+                                                        padding: "0.7rem 0.85rem",
+                                                        textAlign: "left",
+                                                        transition: "border-color 0.15s, background 0.15s, color 0.15s",
+                                                    }}
+                                                >
+                                                    <span>{option.label}</span>
+                                                    <span style={{ fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.08em", color: active ? "var(--red)" : "#999" }}>
+                                                        {option.value}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <Divider />
+
                                 {sectionTitle(t("profile.section.metrics"))}
                                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
                                     {[

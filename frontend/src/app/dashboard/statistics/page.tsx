@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { AlertTriangle, Dumbbell, History, RotateCcw } from "lucide-react";
 import DashboardNav from "@/components/DashboardNav";
 import { AnalyticsSummary, fetchAnalyticsSummary } from "@/lib/api";
+import { translateFeedbackText } from "@/lib/feedbackText";
 import { formatExerciseName, formatStatus, useI18n } from "@/lib/i18n";
 
 const cardStyle: React.CSSProperties = {
@@ -32,7 +33,7 @@ function isProblemFeedback(item: string) {
 }
 
 export default function StatisticsPage() {
-    const { t } = useI18n();
+    const { language, t } = useI18n();
     const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(true);
@@ -170,7 +171,7 @@ export default function StatisticsPage() {
                                                     {group.entries.map(([issue, count]) => (
                                                         <div key={`${group.exercise}-${issue}`}>
                                                             <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", marginBottom: "0.35rem" }}>
-                                                                <p style={{ fontSize: "0.86rem", color: "#444", lineHeight: 1.35 }}>{issue}</p>
+                                                                <p style={{ fontSize: "0.86rem", color: "#444", lineHeight: 1.35 }}>{translateFeedbackText(issue, language)}</p>
                                                                 <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "var(--red)", whiteSpace: "nowrap" }}>{count} {t("stats.repOccurrences")}</span>
                                                             </div>
                                                             <div style={{ height: 7, background: "#f0f0f0", borderRadius: 999, overflow: "hidden" }}>

@@ -24,6 +24,8 @@ POSTURE_LLM_MAX_LOG_FRAMES = int(os.getenv("POSTURE_LLM_MAX_LOG_FRAMES", "120"))
 def build_gemini_posture_prompt(
     summary: dict[str, Any],
     frame_log: list[dict[str, Any]],
+    *,
+    language: str = "en",
 ) -> str:
     coaching_log = [entry for entry in frame_log if entry.get("status") == "ok"]
     log_for_llm = coaching_log
@@ -33,6 +35,57 @@ def build_gemini_posture_prompt(
         log_for_llm,
         max_frames=POSTURE_LLM_MAX_LOG_FRAMES,
     )
+
+    if language == "vi":
+        language_instruction = (
+            "Write the entire coaching response in Vietnamese. Use natural, professional Vietnamese "
+            "for a normal gym user. Keep exercise names understandable; English exercise names are acceptable "
+            "when commonly used. Translate all section headings and labels.\n\n"
+        )
+        section_structure = (
+            "Return Markdown with exactly these sections and structure:\n"
+            "## Tong quan\n"
+            "- Tom tat cac loi form lap lai chinh trong 2-3 cau.\n"
+            "- Neu form nhin chung tot, hay noi ro va chi neu cac diem nho can tinh chinh.\n\n"
+            "## Phan tich loi\n"
+            "- Phan tich 2-4 loi form lap lai quan trong nhat.\n"
+            "- Moi loi dung dung cau truc:\n"
+            "  ### <so>. <Ten loi>\n"
+            "  - **Van de:** Giai thich loi nguoi dung dang mac phai bang ngon ngu de hieu.\n"
+            "  - **Cach sua:** Dua ra mot cach sua ro rang co the ap dung ngay.\n"
+            "- Moi loi can ngan gon. Khong dua thong so ky thuat hay thong ke.\n\n"
+            "## Can chinh gi o set tiep theo\n"
+            "- Dua dung 3 dieu chinh danh so cho set tiep theo.\n"
+            "- Moi dieu chinh phai thuc te, cu the va de ap dung.\n\n"
+            "## Can tranh\n"
+            "- Liet ke 2-4 loi lap lai nguoi dung can tranh o set tiep theo.\n"
+            "- Moi muc ngan gon va truc tiep.\n\n"
+        )
+    else:
+        language_instruction = (
+            "Write the entire coaching response in English.\n\n"
+        )
+        section_structure = (
+            "Return Markdown with exactly these sections and structure:\n"
+            "## Overview\n"
+            "- Summarize the main repeated form mistakes in 2-3 sentences.\n"
+            "- Mention the key issues together at a high level before analyzing them individually.\n"
+            "- Focus on what went wrong, not on technical detection details.\n"
+            "- If the form is mostly good, say so and list only minor issues to refine.\n\n"
+            "## Issue Analysis\n"
+            "- Analyze the 2-4 most important repeated form mistakes.\n"
+            "- For each issue, use this exact structure:\n"
+            "  ### <number>. <Issue name>\n"
+            "  - **Problem:** Explain what the user is doing wrong in plain language.\n"
+            "  - **Correction:** Give one clear correction the user can apply immediately.\n"
+            "- Keep each issue concise. Do not include technical measurements or statistics.\n\n"
+            "## What To Adjust Next\n"
+            "- Give exactly 3 numbered corrections for the next set.\n"
+            "- Each correction must be practical, specific, and easy to apply.\n\n"
+            "## What To Avoid\n\n"
+            "- List 2-4 repeated mistakes the user should avoid in the next set.\n"
+            "- Keep each item short and direct.\n\n"
+        )
 
     return (
         "You are a strength and conditioning coach reviewing a computer-vision "
@@ -47,25 +100,8 @@ def build_gemini_posture_prompt(
         "frame numbers, timestamps, raw measurements, phase counts, or internal detection details. "
         "Keep the response concise, practical, and coaching-focused. "
         "Do not include an 'Easy cues' section. Do not use the heading 'Short explanation'.\n\n"
-        "Return Markdown with exactly these sections:\n"
-        "## Overview\n"
-        "- Summarize the main repeated form mistakes in 2-3 sentences.\n"
-        "- Mention the key issues together at a high level before analyzing them individually.\n"
-        "- Focus on what went wrong, not on technical detection details.\n"
-        "- If the form is mostly good, say so and list only minor issues to refine.\n\n"
-        "## Issue Analysis\n"
-        "- Analyze the 2-4 most important repeated form mistakes.\n"
-        "- For each issue, use this exact structure:\n"
-        "  ### <number>. <Issue name>\n"
-        "  - **Problem:** Explain what the user is doing wrong in plain language.\n"
-        "  - **Correction:** Give one clear correction the user can apply immediately.\n"
-        "- Keep each issue concise. Do not include technical measurements or statistics.\n\n"
-        "## What To Adjust Next\n"
-        "- Give exactly 3 numbered corrections for the next set.\n"
-        "- Each correction must be practical, specific, and easy to apply.\n\n"
-        "## What To Avoid\n"
-        "- List 2-4 repeated mistakes the user should avoid in the next set.\n"
-        "- Keep each item short and direct.\n\n"
+        f"{language_instruction}"
+        f"{section_structure}"
         f"Session summary JSON:\n{json.dumps(summary_for_llm, ensure_ascii=False)}\n\n"
         "Phase segments JSON, analyzed frames only:\n"
         f"{json.dumps(phase_segments, ensure_ascii=False)}\n\n"
