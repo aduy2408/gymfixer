@@ -8,6 +8,7 @@ import {
     FileVideo,
     Film,
     Loader2,
+    Play,
     Upload,
     X,
 } from "lucide-react";
@@ -51,6 +52,7 @@ const exerciseOptions: Array<{ id: ExerciseId; labelKey: string }> = [
 const DEFAULT_MAX_FRAMES = 240;
 const DEFAULT_MISTAKE_FRAMES = 12;
 const DEFAULT_SAMPLE_FPS = 8;
+const DEMO_VIDEO_URL = "/demo_video.mp4";
 
 const cardStyle: React.CSSProperties = {
     background: "#fff",
@@ -390,6 +392,18 @@ export default function DashboardPage() {
                                         {t("dashboard.resultHint")}
                                     </p>
                                 )}
+                            </motion.div>
+                            <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.16 }} style={{ ...cardStyle, padding: "0.8rem" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.55rem" }}>
+                                    <Play size={14} color="var(--navy)" />
+                                    <p style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#999" }}>{t("dashboard.demoVideo")}</p>
+                                </div>
+                                <video
+                                    controls
+                                    preload="metadata"
+                                    src={DEMO_VIDEO_URL}
+                                    style={{ width: "100%", borderRadius: 4, background: "#111", display: "block" }}
+                                />
                             </motion.div>
                         </aside>
                     </div>

@@ -234,6 +234,7 @@ const dictionary: Dictionary = {
   "dashboard.submitting": { en: "Analysing...", vi: "Đang phân tích..." },
   "dashboard.latest": { en: "Latest Result", vi: "Kết quả mới nhất" },
   "dashboard.resultHint": { en: "The result page opens automatically after backend analysis finishes.", vi: "Trang kết quả sẽ tự mở sau khi backend phân tích xong." },
+  "dashboard.demoVideo": { en: "Demo Video", vi: "Video demo" },
   "dashboard.goal": { en: "Goal", vi: "Mục tiêu" },
   "dashboard.exercise.squat": { en: "Squat", vi: "Squat" },
   "dashboard.exercise.lunge": { en: "Lunge", vi: "Lunge" },
