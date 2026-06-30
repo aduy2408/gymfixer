@@ -60,9 +60,15 @@ POSE_BACKEND=mediapipe
 Neu dung Google auth:
 
 ```env
-GOOGLE_CLIENT_ID=your-google-client-id
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_ID=your-google-client-id # dung de nhap vao Supabase Google provider
+SUPABASE_JWT_SECRET=your-supabase-jwt-secret
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
+
+Google OAuth chay qua Supabase Hosted Dashboard: bat Authentication > Providers > Google,
+nhap Google Client ID/Client Secret trong Dashboard, va them redirect URL ve
+`http://localhost:3000/auth/callback` khi chay local.
 
 Neu dung Gemini cho AI coaching hoac weekly planning:
 
@@ -167,6 +173,58 @@ npm run dev
 ```
 
 Mo frontend:
+
+---
+
+## 6. Build va push backend image len Docker Hub
+
+Dang nhap Docker Hub truoc:
+
+```powershell
+docker login
+```
+
+Tu root repo, build va push backend image bang `backend/Dockerfile.cpu`:
+
+```powershell
+$env:DOCKERHUB_USER="your-dockerhub-user"
+npm run docker:push:backend
+```
+
+Mac dinh script se push 2 tag:
+
+- `your-dockerhub-user/gymfixer-backend:latest`
+- `your-dockerhub-user/gymfixer-backend:<git-sha>`
+
+Neu chi muon push `latest`:
+
+```powershell
+$env:DOCKERHUB_USER="your-dockerhub-user"
+$env:PUSH_SHA_TAG="0"
+npm run docker:push:backend
+```
+
+Neu muon doi image name hoac tag:
+
+```powershell
+$env:DOCKERHUB_USER="your-dockerhub-user"
+$env:IMAGE_NAME="gymfixer-backend"
+$env:TAG="latest"
+npm run docker:push:backend
+```
+
+Sau do tren server:
+
+```powershell
+docker pull your-dockerhub-user/gymfixer-backend:latest
+```
+
+Neu server dang chay bang compose, sua `image:` roi cap nhat:
+
+```powershell
+docker compose pull backend
+docker compose up -d backend
+```
 
 ```text
 http://localhost:3000

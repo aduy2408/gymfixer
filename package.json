@@ -15,6 +15,7 @@
     "backend:single": "python -m uvicorn main:app --host 0.0.0.0 --port 5000 --app-dir backend",
     "frontend": "npm --prefix frontend run dev",
     "frontend:prod": "npm --prefix frontend run start",
+    "docker:push:backend": "bash scripts/push-backend-image.sh",
     "tunnel:cloudflare": "cloudflared tunnel --config cloudflared-quick.yml --url http://127.0.0.1:3000",
     "tunnel:ngrok": "ngrok http 3000",
     "share:cloudflare": "npm run build:frontend && concurrently \"npm:backend:single\" \"npm:frontend:prod\" \"npm:tunnel:cloudflare\" --names BACKEND,FRONTEND,CLOUDFLARE --kill-others-on-fail",

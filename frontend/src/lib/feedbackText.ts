@@ -55,6 +55,14 @@ const VI_FEEDBACK: Record<string, string> = {
   "Good hip hinge - keep the bar close and move with control.": "Hip hinge tốt - giữ tạ sát người và di chuyển có kiểm soát.",
   "Good Romanian deadlift position.": "Tư thế Romanian deadlift tốt.",
   "Complete the rep - hinge deeper before returning to standing.": "Hoàn thành rep - hinge sâu hơn trước khi đứng thẳng lại.",
+  "Move fully into frame so your shoulders, elbows, hips, knees, and ankles are visible.": "Di chuyển vào khung hình để thấy rõ vai, khuỷu tay, hông, gối và cổ chân.",
+  "Raise your hips slightly - keep your lower back from sagging.": "Nâng hông lên một chút - tránh để lưng dưới bị võng.",
+  "Lower your hips - keep your body in one straight line.": "Hạ hông xuống một chút - giữ cơ thể thành một đường thẳng.",
+  "Brace your core and keep your shoulders, hips, and knees aligned.": "Siết core và giữ vai, hông, gối thẳng hàng.",
+  "Lengthen through your heels and keep your shoulders, hips, and ankles aligned.": "Đẩy dài qua gót chân và giữ vai, hông, cổ chân thẳng hàng.",
+  "Keep your elbows under your shoulders for a stronger support position.": "Giữ khuỷu tay ngay dưới vai để điểm tựa vững hơn.",
+  "Keep your forearms planted with elbows close to a right angle.": "Giữ cẳng tay áp sàn, khuỷu tay gần góc vuông.",
+  "Good plank form - keep your body straight and core braced.": "Form plank tốt - giữ cơ thể thẳng và siết core.",
 };
 
 function normalizeFeedbackText(text: string) {

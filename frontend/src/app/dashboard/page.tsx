@@ -34,6 +34,7 @@ const exerciseOptions: Array<{ id: ExerciseId; labelKey: string }> = [
     { id: "lunge", labelKey: "dashboard.exercise.lunge" },
     { id: "bicep_curl", labelKey: "dashboard.exercise.bicepCurl" },
     { id: "romanian_deadlift", labelKey: "dashboard.exercise.romanianDeadlift" },
+    { id: "plank", labelKey: "dashboard.exercise.plank" },
 ];
 
 // Camera view selector is intentionally disabled for now. The backend

@@ -92,6 +92,18 @@ def _critical_kp(exercise: str) -> list[int]:
             pose.LEFT_ANKLE.value,
             pose.RIGHT_ANKLE.value,
         ],
+        'plank': [
+            pose.LEFT_SHOULDER.value,
+            pose.RIGHT_SHOULDER.value,
+            pose.LEFT_ELBOW.value,
+            pose.RIGHT_ELBOW.value,
+            pose.LEFT_HIP.value,
+            pose.RIGHT_HIP.value,
+            pose.LEFT_KNEE.value,
+            pose.RIGHT_KNEE.value,
+            pose.LEFT_ANKLE.value,
+            pose.RIGHT_ANKLE.value,
+        ],
         'bicep_curl': [
             pose.LEFT_SHOULDER.value,
             pose.RIGHT_SHOULDER.value,
@@ -124,6 +136,38 @@ def check_visibility(landmarks, exercise: str) -> tuple[bool, list[str]]:
     """
     if not _person_anchor_visible(landmarks):
         return False, ["face"]
+
+    if exercise == 'plank':
+        side_sets = [
+            [
+                mp_pose.PoseLandmark.LEFT_SHOULDER.value,
+                mp_pose.PoseLandmark.LEFT_ELBOW.value,
+                mp_pose.PoseLandmark.LEFT_HIP.value,
+                mp_pose.PoseLandmark.LEFT_KNEE.value,
+                mp_pose.PoseLandmark.LEFT_ANKLE.value,
+            ],
+            [
+                mp_pose.PoseLandmark.RIGHT_SHOULDER.value,
+                mp_pose.PoseLandmark.RIGHT_ELBOW.value,
+                mp_pose.PoseLandmark.RIGHT_HIP.value,
+                mp_pose.PoseLandmark.RIGHT_KNEE.value,
+                mp_pose.PoseLandmark.RIGHT_ANKLE.value,
+            ],
+        ]
+        missing = []
+        for indices in side_sets:
+            side_missing = []
+            for idx in indices:
+                try:
+                    vis = getattr(landmarks[idx], 'visibility', 1.0)
+                    if vis < _VIS_THRESHOLD:
+                        side_missing.append(mp_pose.PoseLandmark(idx).name.lower().replace('_', ' '))
+                except (IndexError, ValueError):
+                    side_missing.append(f"landmark_{idx}")
+            if not side_missing:
+                return True, []
+            missing.extend(side_missing)
+        return False, missing
 
     if exercise in {'bicep_curl', 'romanian_deadlift'}:
         visible_sides = []

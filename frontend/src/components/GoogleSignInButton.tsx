@@ -1,89 +1,37 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { loginWithGoogle } from "@/lib/api";
-import { setSession } from "@/lib/auth";
+import { useState } from "react";
+import { getSupabaseClient, hasSupabaseConfig } from "@/lib/supabase";
 import { useI18n } from "@/lib/i18n";
 
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: {
-            client_id: string;
-            auto_select?: boolean;
-            context?: "signin" | "signup" | "use";
-            use_fedcm_for_prompt?: boolean;
-            callback: (response: { credential?: string }) => void;
-          }) => void;
-          disableAutoSelect: () => void;
-          prompt: () => void;
-        };
-      };
-    };
-  }
-}
-
-export default function GoogleSignInButton({ onSuccess, onError }: { onSuccess: () => void; onError: (message: string) => void }) {
+export default function GoogleSignInButton({ onError }: { onSuccess: () => void; onError: (message: string) => void }) {
   const { t } = useI18n();
-  const initializedRef = useRef(false);
-  const [ready, setReady] = useState(false);
-  const [scriptError, setScriptError] = useState(false);
-  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  const [loading, setLoading] = useState(false);
+  const configured = hasSupabaseConfig();
 
-  useEffect(() => {
-    if (!clientId) return;
-
-    const initialize = () => {
-      if (!window.google || initializedRef.current) return;
-      window.google.accounts.id.initialize({
-        client_id: clientId,
-        auto_select: false,
-        context: "signin",
-        use_fedcm_for_prompt: false,
-        callback: async (response) => {
-          if (!response.credential) return onError(t("auth.googleNoCredential"));
-          try {
-            const data = await loginWithGoogle(response.credential);
-            setSession(data.access_token, data.user);
-            onSuccess();
-          } catch (err) {
-            onError(err instanceof Error ? err.message : t("auth.googleFailed"));
-          }
+  const handleClick = async () => {
+    if (!configured) return onError(t("auth.supabaseMissing"));
+    setLoading(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
-      initializedRef.current = true;
-      setReady(true);
-    };
-
-    if (window.google) {
-      initialize();
-      return;
+      if (error) {
+        setLoading(false);
+        onError(error.message || t("auth.googleFailed"));
+      }
+    } catch (err) {
+      setLoading(false);
+      onError(err instanceof Error ? err.message : t("auth.googleFailed"));
     }
+  };
 
-    const existingScript = document.querySelector<HTMLScriptElement>('script[src="https://accounts.google.com/gsi/client"]');
-    if (existingScript) {
-      existingScript.addEventListener("load", initialize);
-      existingScript.addEventListener("error", () => setScriptError(true));
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    script.onload = initialize;
-    script.onerror = () => setScriptError(true);
-    document.head.appendChild(script);
-  }, [clientId, onError, onSuccess, t]);
-
-  if (!clientId) {
-    return <p className="field-help" style={{ textAlign: "center" }}>{t("auth.googleMissing")}</p>;
-  }
-
-  if (scriptError) {
-    return <p className="alert-error" style={{ justifyContent: "center" }}>{t("auth.googleLoadError")}</p>;
+  if (!configured) {
+    return <p className="field-help" style={{ textAlign: "center" }}>{t("auth.supabaseMissing")}</p>;
   }
 
   const buttonStyle: React.CSSProperties = {
@@ -102,7 +50,7 @@ export default function GoogleSignInButton({ onSuccess, onError }: { onSuccess: 
     fontWeight: 800,
     textTransform: "uppercase",
     letterSpacing: "0.045em",
-    cursor: ready ? "pointer" : "wait",
+    cursor: loading ? "wait" : "pointer",
     transition: "all 0.2s ease",
     boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
   };
@@ -110,11 +58,8 @@ export default function GoogleSignInButton({ onSuccess, onError }: { onSuccess: 
   return (
     <button
       type="button"
-      onClick={() => {
-        window.google?.accounts.id.disableAutoSelect();
-        window.google?.accounts.id.prompt();
-      }}
-      disabled={!ready}
+      onClick={handleClick}
+      disabled={loading}
       className="google-btn"
       style={buttonStyle}
     >
@@ -142,7 +87,7 @@ export default function GoogleSignInButton({ onSuccess, onError }: { onSuccess: 
           fill="#EA4335"
         />
       </svg>
-      <span>{ready ? t("auth.continueGoogle") : t("auth.loadingGoogle")}</span>
+      <span>{loading ? t("auth.redirectingGoogle") : t("auth.continueGoogle")}</span>
     </button>
   );
 }

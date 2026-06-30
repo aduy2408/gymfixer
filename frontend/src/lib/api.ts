@@ -2,7 +2,7 @@
 
 import { getAuthToken } from "@/lib/auth";
 
-export type ExerciseId = "squat" | "lunge" | "bicep_curl" | "romanian_deadlift";
+export type ExerciseId = "squat" | "lunge" | "bicep_curl" | "romanian_deadlift" | "plank";
 export type CameraView = "auto" | "side" | "front" | "three_quarter";
 export type PoseBackend = "mediapipe" | "vitpose";
 export type SubscriptionTier = "free" | "trial" | "paid";
@@ -634,8 +634,8 @@ export async function logout(): Promise<{ message: string }> {
   return parseResponse<{ message: string }>(response, "Could not log out.");
 }
 
-export async function loginWithGoogle(token: string): Promise<AuthResponse> {
-  const response = await fetchWithTimeout(`${apiBase()}/auth/google`, {
+export async function loginWithSupabase(token: string): Promise<AuthResponse> {
+  const response = await fetchWithTimeout(`${apiBase()}/auth/supabase`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token }),

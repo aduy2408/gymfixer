@@ -2,8 +2,7 @@ import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from google.auth.transport import requests
-from google.oauth2 import id_token
+import jwt
 from sqlalchemy.orm import Session
 
 from .database import get_db
@@ -11,10 +10,10 @@ from .models import User, UserProfile
 from .schemas import (
     AuthResponse,
     ForgotPasswordRequest,
-    GoogleToken,
     LoginRequest,
     ResendVerificationRequest,
     ResetPasswordRequest,
+    SupabaseToken,
     UserCreate,
     UserOut,
     UserProfileOut,
@@ -90,6 +89,51 @@ def _get_or_create_profile(db: Session, user: User) -> UserProfile:
     db.flush()
     db.refresh(user)
     return profile
+
+
+def _login_google_identity(
+    db: Session,
+    *,
+    external_sub: str,
+    email: str,
+    name: str,
+    email_verified: bool,
+    event_name: str,
+) -> dict:
+    email = email.strip().lower()
+    if not email or not external_sub or not email_verified:
+        raise HTTPException(status_code=400, detail="Google account email must be verified.")
+
+    user = db.query(User).filter(User.google_sub == external_sub).first()
+    if not user:
+        user = db.query(User).filter(User.email == email).first()
+        if user:
+            user.google_sub = external_sub
+            user.is_verified = True
+            if user.auth_provider != "local":
+                user.auth_provider = "google"
+        else:
+            user = User(
+                name=name or email.split("@")[0],
+                email=email,
+                hashed_password=None,
+                is_verified=True,
+                auth_provider="google",
+                google_sub=external_sub,
+            )
+            db.add(user)
+
+    user.last_login_at = datetime.now(timezone.utc)
+    try:
+        db.flush()
+        log_usage_event(db, event_name=event_name, user_id=user.id)
+        db.commit()
+        db.refresh(user)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Could not complete Google login.")
+
+    return _auth_response(user)
 
 
 @router.post("/register", response_model=UserOut)
@@ -195,55 +239,49 @@ def logout(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     return {"message": "Logged out successfully"}
 
 
-@router.post("/google", response_model=AuthResponse)
-def google_login(token_in: GoogleToken, db: Session = Depends(get_db)):
-    client_id = os.getenv("GOOGLE_CLIENT_ID")
-    if not client_id:
-        raise HTTPException(status_code=500, detail="Google authentication is not configured.")
+@router.post("/supabase", response_model=AuthResponse)
+def supabase_login(token_in: SupabaseToken, db: Session = Depends(get_db)):
+    jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
+    if not jwt_secret:
+        raise HTTPException(status_code=500, detail="Supabase authentication is not configured.")
 
     try:
-        id_info = id_token.verify_oauth2_token(token_in.token, requests.Request(), client_id)
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid Google authentication token.")
+        payload = jwt.decode(
+            token_in.token,
+            jwt_secret,
+            algorithms=["HS256"],
+            options={"verify_aud": False},
+        )
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid Supabase authentication token.")
 
-    email = str(id_info.get("email", "")).strip().lower()
-    google_sub = id_info.get("sub")
-    name = id_info.get("name") or email.split("@")[0]
-    email_verified = bool(id_info.get("email_verified"))
+    app_metadata = payload.get("app_metadata") or {}
+    user_metadata = payload.get("user_metadata") or {}
+    provider = app_metadata.get("provider") or payload.get("provider")
+    if provider != "google":
+        raise HTTPException(status_code=400, detail="Supabase token is not from Google.")
 
-    if not email or not google_sub or not email_verified:
-        raise HTTPException(status_code=400, detail="Google account email must be verified.")
+    email = str(payload.get("email", ""))
+    external_sub = str(payload.get("sub", ""))
+    name = str(
+        user_metadata.get("full_name")
+        or user_metadata.get("name")
+        or user_metadata.get("display_name")
+        or ""
+    )
+    email_verified = bool(
+        payload.get("email_verified")
+        or user_metadata.get("email_verified")
+    )
 
-    user = db.query(User).filter(User.google_sub == google_sub).first()
-    if not user:
-        user = db.query(User).filter(User.email == email).first()
-        if user:
-            user.google_sub = google_sub
-            user.is_verified = True
-            if user.auth_provider != "local":
-                user.auth_provider = "google"
-        else:
-            user = User(
-                name=name,
-                email=email,
-                hashed_password=None,
-                is_verified=True,
-                auth_provider="google",
-                google_sub=google_sub,
-            )
-            db.add(user)
-
-    user.last_login_at = datetime.now(timezone.utc)
-    try:
-        db.flush()
-        log_usage_event(db, event_name="google_login", user_id=user.id)
-        db.commit()
-        db.refresh(user)
-    except Exception:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Could not complete Google login.")
-
-    return _auth_response(user)
+    return _login_google_identity(
+        db,
+        external_sub=external_sub,
+        email=email,
+        name=name,
+        email_verified=email_verified,
+        event_name="google_login",
+    )
 
 
 @router.post("/forgot-password")

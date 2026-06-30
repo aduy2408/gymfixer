@@ -150,7 +150,7 @@ class UserProfileOut(BaseModel):
     updated_at: Optional[datetime] = None
 
 
-class GoogleToken(BaseModel):
+class SupabaseToken(BaseModel):
     token: str
 
 

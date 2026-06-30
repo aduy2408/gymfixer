@@ -62,6 +62,11 @@ function isProblemFeedback(item: string) {
         "neutral spine",
         "chest up",
         "bar close",
+        "raise your hips",
+        "lower your hips",
+        "brace your core",
+        "forearms planted",
+        "elbows under your shoulders",
     ].some((marker) => lower.includes(marker));
 }
 
@@ -69,6 +74,7 @@ type RepBreakdown = NonNullable<VideoAnalysisResult["summary"]["rep_breakdown"]>
 type PreviewFrame = NonNullable<VideoAnalysisResult["preview_frames"]>[number];
 type IssueFrame = { issue: string; frame: PreviewFrame };
 type CorrectionRep = RepBreakdown[number] & { issueFrames: IssueFrame[] };
+type StaticIssue = { issue: string; count: number; frame?: PreviewFrame };
 
 function buildRepBreakdownFromFrameLog(result: VideoAnalysisResult): RepBreakdown {
     const totalReps = result.summary.rep_count || 0;
@@ -220,6 +226,30 @@ function buildCorrectionReps(result: VideoAnalysisResult, repBreakdown: RepBreak
     }).filter((rep) => rep.issueFrames.length > 0);
 }
 
+function buildStaticIssues(result: VideoAnalysisResult): StaticIssue[] {
+    const issueCounts: Record<string, number> = {};
+    for (const [issue, count] of Object.entries(result.summary.top_feedback || {})) {
+        if (isProblemFeedback(issue)) issueCounts[issue] = count;
+    }
+
+    const issueFrames: Record<string, PreviewFrame> = {};
+    for (const frame of result.preview_frames || []) {
+        if (frame.status !== "ok") continue;
+        const issues = frame.problem_feedback?.length
+            ? frame.problem_feedback
+            : (frame.feedback || []).filter(isProblemFeedback);
+        for (const issue of issues) {
+            if (!isProblemFeedback(issue)) continue;
+            issueCounts[issue] = issueCounts[issue] || 1;
+            issueFrames[issue] = issueFrames[issue] || frame;
+        }
+    }
+
+    return Object.entries(issueCounts)
+        .sort(([, a], [, b]) => b - a)
+        .map(([issue, count]) => ({ issue, count, frame: issueFrames[issue] }));
+}
+
 function countRepIssues(reps: CorrectionRep[]) {
     return reps.reduce((total, rep) => total + rep.issueFrames.length, 0);
 }
@@ -300,7 +330,8 @@ export default function AnalysisPage() {
         ? result.summary.rep_breakdown
         : buildRepBreakdownFromFrameLog(result);
     const correctionReps = buildCorrectionReps(result, repBreakdown);
-    const issueCount = countRepIssues(correctionReps);
+    const staticIssues = repBreakdown.length ? [] : buildStaticIssues(result);
+    const issueCount = correctionReps.length ? countRepIssues(correctionReps) : staticIssues.length;
     const durationSeconds = inferVideoDuration(result, repBreakdown);
     const coachingContent = localizedCoachingContent(
         result.llm.recommendations,
@@ -402,6 +433,29 @@ export default function AnalysisPage() {
                                                 </div>
                                             );
                                         })}
+                                    </div>
+                                ) : staticIssues.length > 0 ? (
+                                    <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                                        {staticIssues.map(({ issue, count, frame }) => (
+                                            <figure key={issue} style={{ border: "1px solid #e8e8e8", borderRadius: 4, overflow: "hidden", background: "#fff" }}>
+                                                {frame && (
+                                                    <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", background: "#111" }}>
+                                                        <Image
+                                                            src={frame.image}
+                                                            alt={t("common.issue")}
+                                                            fill
+                                                            unoptimized
+                                                            sizes="(max-width: 768px) 100vw, 320px"
+                                                            style={{ objectFit: "contain" }}
+                                                        />
+                                                    </div>
+                                                )}
+                                                <figcaption style={{ padding: "0.65rem", color: "#555", lineHeight: 1.35 }}>
+                                                    <span style={{ color: "var(--red)", fontWeight: 800 }}>{t("common.issue")}:</span> {translateFeedbackText(issue, language)}
+                                                    {count > 1 && <span style={{ color: "#999", fontSize: "0.75rem", marginLeft: "0.35rem" }}>({count})</span>}
+                                                </figcaption>
+                                            </figure>
+                                        ))}
                                     </div>
                                 ) : (
                                     <p style={{ fontSize: "0.85rem", color: "#888", lineHeight: 1.6 }}>
