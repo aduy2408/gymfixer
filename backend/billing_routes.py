@@ -18,13 +18,16 @@ from usage_events import log_usage_event
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
-PREMIUM_AMOUNT_VND = 59000
 PREMIUM_INTERVAL = "monthly"
 PAYMENT_PROVIDER = "payos"
 
 
 def _env(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
+
+
+def _premium_amount_vnd() -> int:
+    return int(_env("PREMIUM_AMOUNT_VND", "59000"))
 
 
 def _frontend_url() -> str:
@@ -82,7 +85,7 @@ def _activate_subscription(
     subscription = existing or BillingSubscription(user_id=user.id)
     subscription.tier = "paid"
     subscription.status = "active"
-    subscription.amount_vnd = PREMIUM_AMOUNT_VND
+    subscription.amount_vnd = payment.amount_vnd
     subscription.interval = PREMIUM_INTERVAL
     subscription.current_period_start = start
     subscription.current_period_end = end
@@ -101,18 +104,75 @@ def _activate_subscription(
     return subscription
 
 
+def _confirm_payos_payment_from_api(db: Session, *, order_code: int, params: dict[str, Any]) -> str:
+    payment = db.query(Payment).filter(Payment.id == order_code).first()
+    if not payment:
+        return "failed"
+
+    if payment.status == "paid":
+        payment.raw_response_json = {
+            **(payment.raw_response_json or {}),
+            "return_params": params,
+        }
+        db.commit()
+        return "success"
+
+    try:
+        payment_info = _payos_client().payment_requests.get(order_code)
+    except Exception as e:
+        payment.raw_response_json = {
+            **(payment.raw_response_json or {}),
+            "return_params": params,
+            "payos_lookup_error": str(e),
+        }
+        db.commit()
+        return "pending"
+
+    info_status = _get_val(payment_info, "status")
+    payment.raw_response_json = {
+        **(payment.raw_response_json or {}),
+        "return_params": params,
+        "payos_lookup": {
+            "orderCode": _get_val(payment_info, "order_code") or order_code,
+            "amount": _get_val(payment_info, "amount"),
+            "description": _get_val(payment_info, "description"),
+            "status": info_status,
+        },
+    }
+
+    if info_status == "PAID":
+        user = db.query(User).filter(User.id == payment.user_id).first() if payment.user_id else None
+        if not user:
+            db.commit()
+            return "pending"
+        _activate_subscription(db, user=user, payment=payment, paid_at=now_utc())
+        log_usage_event(db, event_name="payment_paid", user_id=user.id, properties={"attempt_type": payment.attempt_type})
+        db.commit()
+        return "success"
+
+    if info_status in {"CANCELLED", "FAILED"}:
+        payment.status = "failed"
+        payment.failed_at = now_utc()
+        db.commit()
+        return "failed"
+
+    db.commit()
+    return "pending"
+
+
 @router.post("/payos/start")
 def start_payos_checkout(
     request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    amount_vnd = _premium_amount_vnd()
     payment = Payment(
         user_id=current_user.id,
         provider=PAYMENT_PROVIDER,
         status="pending",
         attempt_type="one_time",
-        amount_vnd=PREMIUM_AMOUNT_VND,
+        amount_vnd=amount_vnd,
         currency="VND",
         plan_tier="paid",
         interval=PREMIUM_INTERVAL,
@@ -131,7 +191,7 @@ def start_payos_checkout(
 
     payment_request = CreatePaymentLinkRequest(
         order_code=order_code,
-        amount=PREMIUM_AMOUNT_VND,
+        amount=amount_vnd,
         description=f"GymFixer Premium user {current_user.id}",
         cancel_url=cancel_url,
         return_url=return_url,
@@ -150,7 +210,7 @@ def start_payos_checkout(
     payment.vnp_transaction_no = payos_id
     payment.raw_request_json = {
         "order_code": order_code,
-        "amount": PREMIUM_AMOUNT_VND,
+        "amount": amount_vnd,
         "description": payment_request.description,
         "cancel_url": cancel_url,
         "return_url": return_url,
@@ -162,7 +222,7 @@ def start_payos_checkout(
     return {
         "payment_url": checkout_url,
         "payment_id": payment.id,
-        "amount_vnd": PREMIUM_AMOUNT_VND,
+        "amount_vnd": amount_vnd,
     }
 
 
@@ -219,29 +279,7 @@ def payos_return(request: Request, db: Session = Depends(get_db)):
     order_code = params.get("orderCode")
     status = "failed"
     if order_code:
-        payment = db.query(Payment).filter(Payment.id == int(order_code)).first()
-        if payment:
-            try:
-                payment_info = _payos_client().payment_requests.get_payment_link_information(int(order_code))
-                info_status = _get_val(payment_info, "status")
-                if info_status == "PAID":
-                    if payment.status != "paid":
-                        user = db.query(User).filter(User.id == payment.user_id).first()
-                        if user:
-                            _activate_subscription(db, user=user, payment=payment, paid_at=now_utc())
-                            db.commit()
-                    status = "success"
-                else:
-                    if info_status in {"CANCELLED", "FAILED"}:
-                        payment.status = "failed"
-                        payment.failed_at = now_utc()
-                        db.commit()
-                        status = "failed"
-                    else:
-                        status = "pending"
-            except Exception:
-                if params.get("status") == "PAID":
-                    status = "success"
+        status = _confirm_payos_payment_from_api(db, order_code=int(order_code), params=params)
     return RedirectResponse(f"{_frontend_url()}/payment/result?status={status}&txn_ref={order_code}")
 
 

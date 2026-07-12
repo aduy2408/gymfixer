@@ -68,15 +68,18 @@ class MockPaymentLink:
 
 
 class MockPaymentRequests:
-    def __init__(self, link_info=None):
+    def __init__(self, link_info=None, error=None):
         self.link_info = link_info
+        self.error = error
         self.created_data = None
 
     def create(self, payment_data):
         self.created_data = payment_data
         return MockPaymentLink("http://test.payos.vn/checkout", "payos-link-id")
 
-    def get_payment_link_information(self, order_id):
+    def get(self, order_id):
+        if self.error:
+            raise self.error
         return self.link_info
 
 
@@ -91,9 +94,9 @@ class MockWebhooks:
 
 
 class MockPayOS:
-    def __init__(self, verified_data=None, link_info=None):
+    def __init__(self, verified_data=None, link_info=None, lookup_error=None):
         self.webhooks = MockWebhooks(verified_data)
-        self.payment_requests = MockPaymentRequests(link_info)
+        self.payment_requests = MockPaymentRequests(link_info, lookup_error)
 
 
 def test_get_val_helper():
@@ -119,7 +122,11 @@ def test_start_payos_checkout(monkeypatch):
     
     mock_client = MockPayOS()
     monkeypatch.setattr(billing, "_payos_client", lambda: mock_client)
-    monkeypatch.setattr(billing, "_env", lambda name, default="": "test-env" if "PAYOS" in name else default)
+    monkeypatch.setattr(
+        billing,
+        "_env",
+        lambda name, default="": "5000" if name == "PREMIUM_AMOUNT_VND" else ("test-env" if "PAYOS" in name else default),
+    )
     monkeypatch.setattr(billing, "log_usage_event", lambda *args, **kwargs: None)
     
     class FakeRequest:
@@ -128,11 +135,13 @@ def test_start_payos_checkout(monkeypatch):
     res = billing.start_payos_checkout(FakeRequest(), current_user=user, db=db)
     
     assert res["payment_url"] == "http://test.payos.vn/checkout"
-    assert res["amount_vnd"] == 59000
+    assert res["amount_vnd"] == 5000
     assert len(db.added) == 1
     payment = db.added[0]
     assert payment.user_id == 1
     assert payment.provider == "payos"
+    assert payment.amount_vnd == 5000
+    assert payment.raw_request_json["amount"] == 5000
     assert payment.vnp_txn_ref == str(payment.id)
     assert payment.vnp_transaction_no == "payos-link-id"
 
@@ -222,6 +231,7 @@ def test_payos_return_paid(monkeypatch):
     
     monkeypatch.setattr(billing, "_payos_client", lambda: mock_client)
     monkeypatch.setattr(billing, "_frontend_url", lambda: "http://localhost:3000")
+    monkeypatch.setattr(billing, "log_usage_event", lambda *args, **kwargs: None)
     
     class FakeRequest:
         def __init__(self):
@@ -232,6 +242,103 @@ def test_payos_return_paid(monkeypatch):
     assert res.headers["location"] == "http://localhost:3000/payment/result?status=success&txn_ref=100"
     assert payment.status == "paid"
     assert user.subscription_tier == "paid"
+    assert payment.raw_response_json["return_params"]["status"] == "PAID"
+    assert payment.raw_response_json["payos_lookup"]["status"] == "PAID"
+
+
+def test_payos_return_lookup_error_stays_pending(monkeypatch):
+    user = SimpleNamespace(id=1, subscription_tier="free", premium_expires_at=None)
+    payment = Payment(
+        id=100,
+        user_id=1,
+        status="pending",
+        attempt_type="one_time",
+        amount_vnd=59000,
+        vnp_txn_ref="100",
+        raw_request_json={},
+        raw_response_json={},
+    )
+    db = FakeDB({Payment: payment, User: user, BillingSubscription: None})
+
+    mock_client = MockPayOS(lookup_error=Exception("PayOS unavailable"))
+
+    monkeypatch.setattr(billing, "_payos_client", lambda: mock_client)
+    monkeypatch.setattr(billing, "_frontend_url", lambda: "http://localhost:3000")
+
+    class FakeRequest:
+        def __init__(self):
+            self.query_params = {"orderCode": "100", "status": "PAID"}
+
+    res = billing.payos_return(FakeRequest(), db=db)
+
+    assert res.headers["location"] == "http://localhost:3000/payment/result?status=pending&txn_ref=100"
+    assert payment.status == "pending"
+    assert user.subscription_tier == "free"
+    assert payment.raw_response_json["return_params"]["status"] == "PAID"
+    assert payment.raw_response_json["payos_lookup_error"] == "PayOS unavailable"
+
+
+def test_payos_return_pending(monkeypatch):
+    user = SimpleNamespace(id=1, subscription_tier="free", premium_expires_at=None)
+    payment = Payment(
+        id=100,
+        user_id=1,
+        status="pending",
+        attempt_type="one_time",
+        amount_vnd=59000,
+        vnp_txn_ref="100",
+        raw_request_json={},
+        raw_response_json={},
+    )
+    db = FakeDB({Payment: payment, User: user, BillingSubscription: None})
+
+    mock_info = MockWebhookData(100, 59000, "01", "PENDING")
+    mock_client = MockPayOS(link_info=mock_info)
+
+    monkeypatch.setattr(billing, "_payos_client", lambda: mock_client)
+    monkeypatch.setattr(billing, "_frontend_url", lambda: "http://localhost:3000")
+
+    class FakeRequest:
+        def __init__(self):
+            self.query_params = {"orderCode": "100", "status": "PAID"}
+
+    res = billing.payos_return(FakeRequest(), db=db)
+
+    assert res.headers["location"] == "http://localhost:3000/payment/result?status=pending&txn_ref=100"
+    assert payment.status == "pending"
+    assert user.subscription_tier == "free"
+
+
+@pytest.mark.parametrize("payos_status", ["CANCELLED", "FAILED"])
+def test_payos_return_failed_statuses(monkeypatch, payos_status):
+    user = SimpleNamespace(id=1, subscription_tier="free", premium_expires_at=None)
+    payment = Payment(
+        id=100,
+        user_id=1,
+        status="pending",
+        attempt_type="one_time",
+        amount_vnd=59000,
+        vnp_txn_ref="100",
+        raw_request_json={},
+        raw_response_json={},
+    )
+    db = FakeDB({Payment: payment, User: user, BillingSubscription: None})
+
+    mock_info = MockWebhookData(100, 59000, "01", payos_status)
+    mock_client = MockPayOS(link_info=mock_info)
+
+    monkeypatch.setattr(billing, "_payos_client", lambda: mock_client)
+    monkeypatch.setattr(billing, "_frontend_url", lambda: "http://localhost:3000")
+
+    class FakeRequest:
+        def __init__(self):
+            self.query_params = {"orderCode": "100", "status": payos_status}
+
+    res = billing.payos_return(FakeRequest(), db=db)
+
+    assert res.headers["location"] == "http://localhost:3000/payment/result?status=failed&txn_ref=100"
+    assert payment.status == "failed"
+    assert user.subscription_tier == "free"
 
 
 def test_payos_cancel(monkeypatch):
