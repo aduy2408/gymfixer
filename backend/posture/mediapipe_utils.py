@@ -124,6 +124,16 @@ def _critical_kp(exercise: str) -> list[int]:
             pose.LEFT_WRIST.value,
             pose.RIGHT_WRIST.value,
         ],
+        'fly_pec': [
+            pose.LEFT_SHOULDER.value,
+            pose.RIGHT_SHOULDER.value,
+            pose.LEFT_ELBOW.value,
+            pose.RIGHT_ELBOW.value,
+            pose.LEFT_WRIST.value,
+            pose.RIGHT_WRIST.value,
+            pose.LEFT_HIP.value,
+            pose.RIGHT_HIP.value,
+        ],
     }.get(exercise, [])
 
 
@@ -169,33 +179,51 @@ def check_visibility(landmarks, exercise: str) -> tuple[bool, list[str]]:
             missing.extend(side_missing)
         return False, missing
 
-    if exercise in {'bicep_curl', 'romanian_deadlift'}:
+    if exercise in {'bicep_curl', 'romanian_deadlift', 'fly_pec'}:
         visible_sides = []
         missing_by_side = []
-        for side, indices in [
-            ("left", [
-                mp_pose.PoseLandmark.LEFT_SHOULDER.value,
-                *([] if exercise == 'bicep_curl' else [
+        if exercise == 'bicep_curl':
+            side_specs = [
+                ("left", [
+                    mp_pose.PoseLandmark.LEFT_SHOULDER.value,
+                    mp_pose.PoseLandmark.LEFT_ELBOW.value,
+                    mp_pose.PoseLandmark.LEFT_WRIST.value,
+                ]),
+                ("right", [
+                    mp_pose.PoseLandmark.RIGHT_SHOULDER.value,
+                    mp_pose.PoseLandmark.RIGHT_ELBOW.value,
+                    mp_pose.PoseLandmark.RIGHT_WRIST.value,
+                ]),
+            ]
+        elif exercise == 'fly_pec':
+            side_specs = [
+                ("left", [
+                    mp_pose.PoseLandmark.LEFT_SHOULDER.value,
+                    mp_pose.PoseLandmark.LEFT_ELBOW.value,
+                    mp_pose.PoseLandmark.LEFT_WRIST.value,
+                    mp_pose.PoseLandmark.LEFT_HIP.value,
+                ]),
+                ("right", [
+                    mp_pose.PoseLandmark.RIGHT_SHOULDER.value,
+                    mp_pose.PoseLandmark.RIGHT_ELBOW.value,
+                    mp_pose.PoseLandmark.RIGHT_WRIST.value,
+                    mp_pose.PoseLandmark.RIGHT_HIP.value,
+                ]),
+            ]
+        else:
+            side_specs = [
+                ("left", [
+                    mp_pose.PoseLandmark.LEFT_SHOULDER.value,
                     mp_pose.PoseLandmark.LEFT_HIP.value,
                     mp_pose.PoseLandmark.LEFT_KNEE.value,
                 ]),
-                *([
-                    mp_pose.PoseLandmark.LEFT_ELBOW.value,
-                    mp_pose.PoseLandmark.LEFT_WRIST.value,
-                ] if exercise == 'bicep_curl' else []),
-            ]),
-            ("right", [
-                mp_pose.PoseLandmark.RIGHT_SHOULDER.value,
-                *([] if exercise == 'bicep_curl' else [
+                ("right", [
+                    mp_pose.PoseLandmark.RIGHT_SHOULDER.value,
                     mp_pose.PoseLandmark.RIGHT_HIP.value,
                     mp_pose.PoseLandmark.RIGHT_KNEE.value,
                 ]),
-                *([
-                    mp_pose.PoseLandmark.RIGHT_ELBOW.value,
-                    mp_pose.PoseLandmark.RIGHT_WRIST.value,
-                ] if exercise == 'bicep_curl' else []),
-            ]),
-        ]:
+            ]
+        for side, indices in side_specs:
             missing = []
             for idx in indices:
                 try:

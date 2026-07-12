@@ -8,6 +8,7 @@ INCOMPLETE_REP_ISSUES = {
     "squat": "Complete the rep — reach squat depth before standing up.",
     "lunge": "Complete the rep — lower into the lunge before standing up.",
     "romanian_deadlift": "Complete the rep — hinge deeper before returning to standing.",
+    "fly_pec": "Complete the rep — bring the handle forward before reopening.",
 }
 INCOMPLETE_SQUAT_REP_ISSUE = INCOMPLETE_REP_ISSUES["squat"]
 INCOMPLETE_LUNGE_REP_ISSUE = INCOMPLETE_REP_ISSUES["lunge"]
@@ -36,6 +37,10 @@ def build_rep_breakdown(
         "romanian_deadlift": {
             "idle": {"STANDING"},
             "active": {"DESCENDING", "BOTTOM", "ASCENDING"},
+        },
+        "fly_pec": {
+            "idle": {"OPEN"},
+            "active": {"CLOSING", "CLOSED", "OPENING"},
         },
     }
     phases = phase_sets.get(exercise)
@@ -140,7 +145,7 @@ def _add_entry_to_rep(
     phase = entry.get("phase")
     if phase:
         rep["phases"].update([phase])
-        if phase == "BOTTOM":
+        if phase in {"BOTTOM", "CLOSED"}:
             rep["saw_bottom"] = True
 
     problem_feedback = entry.get("problem_feedback")

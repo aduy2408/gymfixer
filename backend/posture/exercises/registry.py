@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from posture.exercises import bicep_curl, deadlift, lunge, plank, pushup, romanian_deadlift, shoulder_press, squat
+from posture.exercises import bicep_curl, deadlift, fly_pec, lunge, plank, pushup, romanian_deadlift, shoulder_press, squat
 
 
 ANGLE_FUNCTIONS = {
@@ -12,6 +12,7 @@ ANGLE_FUNCTIONS = {
     "shoulder_press": shoulder_press.get_angles,
     "bicep_curl": bicep_curl.get_angles,
     "romanian_deadlift": romanian_deadlift.get_angles,
+    "fly_pec": fly_pec.get_angles,
 }
 
 FEEDBACK_FUNCTIONS = {
@@ -23,6 +24,7 @@ FEEDBACK_FUNCTIONS = {
     "shoulder_press": shoulder_press.generate_feedback,
     "bicep_curl": bicep_curl.generate_feedback,
     "romanian_deadlift": romanian_deadlift.generate_feedback,
+    "fly_pec": fly_pec.generate_feedback,
 }
 
 PHASE_DETECTORS = {
@@ -30,4 +32,5 @@ PHASE_DETECTORS = {
     "lunge": lunge.PhaseDetector,
     "bicep_curl": bicep_curl.PhaseDetector,
     "romanian_deadlift": romanian_deadlift.PhaseDetector,
+    "fly_pec": fly_pec.PhaseDetector,
 }
