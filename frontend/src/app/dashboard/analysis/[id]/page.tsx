@@ -87,6 +87,7 @@ function buildRepBreakdownFromFrameLog(result: VideoAnalysisResult): RepBreakdow
         squat: new Set(["DESCENDING", "BOTTOM", "ASCENDING"]),
         lunge: new Set(["DESCENDING", "BOTTOM", "ASCENDING"]),
         romanian_deadlift: new Set(["DESCENDING", "BOTTOM", "ASCENDING"]),
+        fly_pec: new Set(["CLOSING", "CLOSED", "OPENING"]),
     };
     const activePhases = activePhasesByExercise[result.exercise] || activePhasesByExercise.bicep_curl;
     const reps: RepBreakdown = [];

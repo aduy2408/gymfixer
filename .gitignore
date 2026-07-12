@@ -116,6 +116,7 @@ backend-data/
 # Uploaded/test media
 test_video/
 *.mp4
+!frontend/public/demo_video.mp4
 *.mov
 *.avi
 *.mkv

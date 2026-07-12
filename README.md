@@ -147,13 +147,17 @@ GEMINI_MODEL=gemini-3-flash-preview
 GEMINI_MAX_OUTPUT_TOKENS=3000
 POSTURE_LLM_MAX_LOG_FRAMES=60
 
-# VNPay Pay Premium (59,000 VND for one month)
+# PayOS Pay Premium (59,000 VND for one month by default)
 FRONTEND_URL=http://localhost:3000
 BACKEND_PUBLIC_URL=http://localhost:5000
-VNPAY_TMN_CODE=your-vnpay-terminal-code
-VNPAY_HASH_SECRET=your-vnpay-hash-secret
-VNPAY_PAYMENT_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
-VNPAY_RETURN_URL=http://localhost:5000/billing/vnpay/return
+PAYOS_CLIENT_ID=your-payos-client-id
+PAYOS_API_KEY=your-payos-api-key
+PAYOS_CHECKSUM_KEY=your-payos-checksum-key
+
+# Optional PayOS sandbox test amount.
+# Use a public tunnel for BACKEND_PUBLIC_URL if PayOS needs to call local return/webhook URLs.
+PREMIUM_AMOUNT_VND=5000
+# BACKEND_PUBLIC_URL=https://<ngrok-domain>
 
 # Pose/session analysis
 POSE_BACKEND=mediapipe
@@ -280,18 +284,20 @@ Romanian deadlift analysis is MediaPipe-first and side-view only. Its rounded-ba
 
 ### Premium Billing
 
-Premium costs `59,000 VND` for one month. Users can buy another month at any time;
+Premium costs `59,000 VND` for one month by default. Set `PREMIUM_AMOUNT_VND=5000`
+in sandbox to create a small PayOS test payment. Users can buy another month at any time;
 the new period is added after their current expiry date.
 
 ```http
-POST /billing/vnpay/start
-GET  /billing/vnpay/return
-GET  /billing/vnpay/ipn
+POST /billing/payos/start
+GET  /billing/payos/return
+GET  /billing/payos/cancel
+POST /billing/payos/webhook
 ```
 
-Checkout requires a Bearer token. Configure VNPay to call the public IPN URL.
-The return URL is for browser navigation; only a valid signed callback can grant
-Premium access.
+Checkout requires a Bearer token. Configure PayOS credentials in `backend/.env`.
+Use a public `BACKEND_PUBLIC_URL` when testing return/webhook callbacks from
+PayOS against a local backend.
 
 ### Auth
 

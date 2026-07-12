@@ -2,7 +2,7 @@
 
 import { getAuthToken } from "@/lib/auth";
 
-export type ExerciseId = "squat" | "lunge" | "bicep_curl" | "romanian_deadlift" | "plank";
+export type ExerciseId = "squat" | "lunge" | "bicep_curl" | "romanian_deadlift" | "plank" | "fly_pec";
 export type CameraView = "auto" | "side" | "front" | "three_quarter";
 export type PoseBackend = "mediapipe" | "vitpose";
 export type SubscriptionTier = "free" | "trial" | "paid";

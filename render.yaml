@@ -23,13 +23,11 @@ services:
         sync: false
       - key: BACKEND_PUBLIC_URL
         sync: false
-      - key: VNPAY_TMN_CODE
+      - key: PAYOS_CLIENT_ID
         sync: false
-      - key: VNPAY_HASH_SECRET
+      - key: PAYOS_API_KEY
         sync: false
-      - key: VNPAY_PAYMENT_URL
-        value: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
-      - key: VNPAY_RETURN_URL
+      - key: PAYOS_CHECKSUM_KEY
         sync: false
       - key: POSE_BACKEND
         value: mediapipe
